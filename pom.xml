@@ -641,6 +641,9 @@
                             <format>JSON</format>
                         </formats>
                         <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                        <!-- Official feeds also work for fork PRs without repository secrets. -->
+                        <nvdDatafeedUrl>https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz</nvdDatafeedUrl>
+                        <nvdValidForHours>0</nvdValidForHours>
                         <!-- OSS Index requires separate credentials; NVD remains required. -->
                         <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
                     </configuration>

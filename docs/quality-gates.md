@@ -1,6 +1,6 @@
 # Build and dependency quality gates
 
-> **Status:** Draft — GitHub/container and dependency-scan acceptance pending
+> **Status:** CI published; complete workflow and merge-gate acceptance pending
 > **Last reviewed:** 2026-11-06
 
 The PR/default-branch workflow is `.github/workflows/verify.yml`. Its independent
@@ -11,10 +11,17 @@ job requires every job (including the full image matrix) to succeed; failed,
 cancelled or skipped prerequisites cannot produce success. Repository owners must
 require `quality-gate` in branch protection before treating it as a merge gate.
 
-Read-only checks of the supplied `vamegah/order-management-platform` repository
-on 2026-11-05 and 2026-11-06 found no branches, workflows or Actions runs (repository size zero).
-The local workflow has not executed there. Publishing the reviewed sources and
-configuring required checks remain necessary before CI acceptance can close.
+The reviewed sources were published to `vamegah/order-management-platform/main`
+on 2026-11-06 as `0fc7202`. The [first Actions run](https://github.com/vamegah/order-management-platform/actions/runs/42278291122)
+passed the client package, static analysis, packaged payment journey and all ten
+image builds. It failed the tooling/contract jobs because the initial upload
+omitted the published SOAP fixtures, and the external job failed during a Maven
+distribution download. The corrected snapshot includes those fixtures and passes
+all 47 tooling tests and SOAP parity from a separately extracted source archive;
+wrapper downloads now have bounded retries. Dependency analysis failed before
+scanning because of the upstream 13.0.0 empty-API-key bug; the configuration now
+uses official NVD JSON feeds. Complete workflow execution and required checks
+remain necessary before CI acceptance can close.
 
 The required `contract-compatibility` job verifies protobuf descriptors against
 the published v1 fixture and the exact PR base, checks SOAP WSDL/XSD parity and
@@ -153,8 +160,8 @@ above; snapshots do not authenticate arbitrary externally supplied reports.
 
 The job runs under `pull_request`, without secrets or persisted checkout
 credentials. Push/manual runs validate the tooling without a PR-base comparison;
-the job itself still must succeed for `quality-gate`. GitHub execution and a real
-two-revision comparison remain unverified in this Git-free workspace.
+the job itself still must succeed for `quality-gate`. A real two-revision PR
+comparison remains necessary before accepting coverage regression enforcement.
 
 ## Static analysis
 
@@ -175,12 +182,16 @@ Dependency-Check fails on CVSS >= 7.0 and on scanner/update errors. It produces
 suppressions in this initial policy. Existing dependencies may fail the gate;
 configuration alone does not establish a clean dependency inventory.
 
-Set `NVD_API_KEY` as a repository secret to accelerate NVD updates. The plugin reads
-the environment variable directly, avoiding a key in command arguments or POM
-interpolation. Fork PRs without secrets use NVD's unauthenticated API and may take
-longer or fail on authentication/rate limits. CI caches the versioned database while requiring
-online updates. OSS Index is disabled because it requires a separate authenticated
+Updates use the official NVD 2.0 JSON feeds, including annual and modified data,
+over verified HTTPS. These require no credentials and work for fork PRs. This
+avoids the [13.0.0 empty-key API regression](https://github.com/dependency-check/DependencyCheck/issues/8715)
+using the [supported data-feed configuration](https://github.com/dependency-check/DependencyCheck/pull/8680).
+CI caches the versioned database and checks for updates on every scan
+(`nvdValidForHours=0`). The first complete download is larger than an incremental
+update. OSS Index is disabled because it requires a separate authenticated
 service; NVD scanning remains required. No scan error is converted to success.
+An operator choosing the API instead can override `nvdDatafeedUrl` and supply
+`NVD_API_KEY` through the environment; keys must never appear in command arguments.
 
 Official configuration references: [SpotBugs violation checks](https://spotbugs.github.io/spotbugs-maven-plugin/examples/violationChecking.html),
 [CycloneDX aggregate inventory](https://cyclonedx.github.io/cyclonedx-maven-plugin/),
@@ -221,8 +232,8 @@ that client error or a missing CLI as proof that the engine is unavailable. Cont
 permission to access the Docker socket and pull their images.
 
 Local results and remaining integration failures are recorded in the
-implementation report. This workspace has no Git metadata; GitHub job execution,
-branch protection and fresh full-stack acceptance remain unverified.
+implementation report. The source is now published and the workflow has executed;
+complete fresh-stack acceptance and branch protection remain open.
 
 
 The static job also requires nonempty reports for every production/protobuf module

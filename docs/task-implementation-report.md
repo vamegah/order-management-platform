@@ -13,6 +13,11 @@ tasks are checked in `TASKS.md`. Other feature, CI/governance, security, perform
 and production acceptance items remain open. Earlier sections are historical
 checkpoints, superseded by the latest dated evidence.
 
+The source is now published on GitHub. The first default-branch run passes the
+client, static analysis, packaged payment journey and ten image builds, but the
+complete CI gate is still failing. The latest publication continuation below
+records the failures and locally verified corrections.
+
 Docker availability was reassessed during the refund reconciliation continuation:
 the CLI is absent, but the Windows engine pipe is reachable. Earlier statements
 that Docker was unavailable came from incomplete probes. See the latest
@@ -1459,3 +1464,38 @@ and simulator service READMEs. The simulator README explicitly records its
 currently incompatible callback example; that provider journey remains open.
 Production restore/rotation/rollback procedures still require implementation and
 executed evidence; these guides do not substitute for those acceptance records.
+
+## 2026-11-06 initial publication and CI corrections
+
+With explicit user approval, published the reviewed 1,035-file source snapshot
+as `0fc72020ed53203214868f6534f8918edb96e8dc` to
+`vamegah/order-management-platform/main`. Runtime environment files, generated
+TLS identities, private keys, caches and local acceptance artifacts were excluded.
+The [first default-branch run](https://github.com/vamegah/order-management-platform/actions/runs/42278291122)
+passed notification-client, static-analysis, packaged-payment-journey and all ten
+source Dockerfile image builds. Reports and the aggregate production SBOM were
+uploaded by Actions. These results establish actual GitHub execution for those
+jobs; the complete quality gate failed.
+
+The initial publication whitelist omitted `contracts/soap/v1`, which caused seven
+tooling errors and the SOAP parity failure. The corrected snapshot includes the
+published XSD/WSDL and contract policy. All 47 tooling tests and SOAP parity pass
+from an independently extracted source archive, so local untracked files cannot
+mask this failure again. Linux first/repeat certificate setup and the wrapper's
+no-unzip/checksum regressions also pass against the corrected archive.
+
+The external job failed downloading Maven before its image build, despite all
+ten independent image jobs succeeding. Wrapper downloads now prefer curl with
+bounded retries, connection/total timeouts and visible errors; wget fallback is
+also bounded. TLS verification and the pinned distribution checksum are retained.
+
+Dependency-Check 13.0.0 failed before scanning because of its documented empty-key
+API regression. The corrected configuration uses supported official NVD 2.0
+annual/modified feeds without secrets and checks for updates on every scan.
+CVSS >= 7 and scanner errors still fail. No successful vulnerability scan or
+clean dependency inventory is claimed. Follow-up publication, complete default
+and pull-request execution, and required branch checks remain open.
+
+The automatic approval reviewer rejected the follow-up push because the user's
+publication approval covered the original prepared snapshot only. The corrections
+remain committed locally for separate review and approval before public upload.

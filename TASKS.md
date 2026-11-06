@@ -34,6 +34,7 @@ Implementation evidence and current blockers are tracked in [the implementation 
 - [ ] **Add CI workflows.** Build/test the Maven reactor, build containers, run integration tests, and publish reports/artifacts.
   - Acceptance: a GitHub Actions workflow executes on pull requests and the default branch.
   - Continuation: independent verification/static-analysis/dependency/image jobs cover all ten executable modules. Root build contexts and executable jar packaging repaired; GitHub workflow action versions fixed to real published releases (checkout@v4, setup-java@v4, setup-python@v5, upload-artifact@v4, cache@v4, setup-buildx@v3, build-push-action@v6).
+  - GitHub continuation (2026-11-06): the initial snapshot is published on `main`; the first default-branch run passes the client, static analysis, packaged payment journey and all ten image builds. Missing published SOAP fixtures, an external-build Maven download failure and the scanner's upstream empty-key bug prevented the complete gate. Local corrections include the fixtures, bounded download retries and official NVD feeds; all 47 tooling cases and SOAP parity pass from the corrected source archive. Follow-up publication, complete default/PR execution and protected merge checks remain open. See [CI evidence](docs/quality-gates.md).
 
 ## 1. Finish Core Order Lifecycle
 
