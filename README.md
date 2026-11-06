@@ -56,7 +56,8 @@ Production topology and secret/certificate rotation remain separate work.
 
 The [GitHub repository](https://github.com/vamegah/order-management-platform) now
 contains the published baseline and executed workflows. The migration is being
-verified separately before replacing that baseline on `main`.
+verified in [draft PR #1](https://github.com/vamegah/order-management-platform/pull/1)
+before replacing that baseline on `main`.
 
 Development realm logins are `alice` / `alice-dev-password` and `admin` /
 `admin-dev-password`. Keycloak administration uses `.env`. Alice's managed

@@ -130,16 +130,19 @@ management.tracing:
   propagation:
     type: w3c
 
-otel:
-  exporter:
-    otlp:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
-      protocol: grpc
-  resource:
-    attributes:
-      service.name: ${spring.application.name}
-      service.namespace: omp
-      deployment.environment: ${PROMETHEUS_ENV:dev}
+management.opentelemetry:
+  tracing:
+    export:
+      otlp:
+        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+        transport: grpc
+  resource-attributes:
+    service.name: ${spring.application.name}
+    service.namespace: omp
+    deployment.environment: ${PROMETHEUS_ENV:dev}
+
+# Application logs continue through the configured console/Logstash appenders.
+management.logging.export.otlp.enabled: false
 
 # ==============================================================================
 # Logging

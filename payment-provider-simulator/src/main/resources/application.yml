@@ -81,3 +81,5 @@ logging:
     com.example.omp.provider: DEBUG
   pattern:
     console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+# Match the patched Swagger UI webjar selected by the reactor.
+springdoc.swagger-ui.version: 5.34.1

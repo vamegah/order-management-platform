@@ -1541,3 +1541,30 @@ Boot tools-mode launcher/layer extraction. Logs are
 `boot4-complete-unit-package-verification.log` and `boot4-packaging-verification.log`.
 Complete service/container, static, image, vulnerability and PR coverage acceptance remains
 required on the migration revision; see [the migration scope](dependency-security-baseline.md).
+
+## 2026-11-06 approved migration PR and verification repairs
+
+The user explicitly approved publication of the reviewed 75-file migration and
+its necessary verification fixes. Commit `2a8e9e5` is published on
+`ci/security-baseline`; [draft PR #1](https://github.com/vamegah/order-management-platform/pull/1)
+preserves `main`. The [first migration run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
+passes all ten source image builds, strict static analysis, client packaging and
+exact-base SOAP/protobuf compatibility. Its remaining failures are diagnostic
+evidence, not accepted verification.
+
+The HTTP suites reproduce the upstream REST Assured 5.5/Groovy 5 failure. Both
+REST Assured artifacts now select 6.0.1, and an independent real HTTP/JSON probe
+passes on the service classpath. Runtime payment startup additionally exposes a
+missing Jackson 2 auto-configuration dependency hidden by broader test fixtures;
+that dependency is now explicit. The seven existing traced services include
+Boot's dedicated OpenTelemetry integration and current collector/transport
+property bindings. Product HTTP verification also checks incoming W3C trace
+identity and actual Swagger UI resource routing.
+
+The scanner's remaining findings are the bundled DOMPurify 3.4.16 in Swagger UI.
+The selected 5.34.1 webjar has been inspected and contains the vendor-patched
+3.4.17 in both JavaScript bundles. No suppression or policy reduction is added.
+The real PR coverage comparison detects a one-instruction product decrease after
+the JPA API replacement; an invalid-status predicate regression now checks the
+fail-closed behavior and extends coverage without changing the comparison gate.
+Focused container verification and a fresh complete workflow remain required.

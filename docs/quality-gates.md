@@ -23,6 +23,17 @@ scanning because of the upstream 13.0.0 empty-API-key bug; the configuration now
 uses official NVD JSON feeds. Complete workflow execution and required checks
 remain necessary before CI acceptance can close.
 
+Subsequent approved repairs through `b5c95e4` pass every default-branch
+prerequisite except dependency-policy, which completes analysis and rejects
+the old dependency inventory. The separately approved migration is now
+[draft PR #1](https://github.com/vamegah/order-management-platform/pull/1).
+Its [first PR run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
+passes static analysis, the client package, exact-base SOAP/protobuf checks and
+all ten source image builds. Real HTTP/runtime, dependency and exact-base
+coverage diagnostics are being repaired under the unchanged policies; see
+[the security migration](dependency-security-baseline.md). Neither a passing
+aggregate gate nor required branch protection has been established yet.
+
 The required `contract-compatibility` job verifies protobuf descriptors against
 the published v1 fixture and the exact PR base, checks SOAP WSDL/XSD parity and
 version drift, and regenerates/verifies Java protobuf and JAXB clients. See

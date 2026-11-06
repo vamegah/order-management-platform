@@ -37,6 +37,8 @@ external journey, compatibility and vulnerability jobs pass on the new revision.
 | WSS4J | 4.0.2 |
 | Kotlin libraries | 2.4.21 family alignment |
 | Springdoc | 3.2.0, compatible with Boot 4.1 |
+| Swagger UI | 5.34.1, including DOMPurify 3.4.17 |
+| REST Assured / schema validator | 6.0.1, aligned with Groovy 5 |
 | Maven test runners | Surefire/Failsafe 3.5.6 for JUnit 6 |
 
 Boot manages the updated Netty, Jackson, Kafka, logging and telemetry families.
@@ -86,3 +88,43 @@ migration. Any scanner product-identification error must have a narrow,
 documented correction supported by the vendor advisory and artifact contents.
 Production promotion, data restore and certificate rotation remain separate
 backlog acceptance items.
+
+## First migration PR execution
+
+The approved migration is published in [draft PR #1](https://github.com/vamegah/order-management-platform/pull/1).
+Its [first verification run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
+passes all ten source image builds, complete static analysis, the client package
+and exact-base protobuf/SOAP compatibility. The remaining failures are retained
+as diagnostics; this run does not establish migration acceptance.
+
+Real HTTP cases expose the old REST Assured 5.5/Groovy 5 incompatibility described
+in the [upstream migration issue](https://github.com/rest-assured/rest-assured/issues/1846).
+REST Assured and its schema validator are aligned to 6.0.1; an independent real
+HTTP/JSON probe passes with the service's Groovy 5 classpath. The payment runtime
+also needs its own Jackson 2 auto-configuration dependency, rather than relying
+on the wider test classpath to provide its mapper.
+
+Boot's tracing auto-configuration now requires its dedicated integration module.
+The seven existing instrumented services include that module and bind their
+collector endpoint, gRPC transport and resource attributes through the current
+`management.opentelemetry` properties. Existing Prometheus and console/Logstash
+outputs remain configured. HTTP verification includes W3C trace identity in an
+error response and actual Swagger UI bundle routing.
+
+The new dependency report rejects only the two DOMPurify findings in Swagger UI
+5.34.0. The selected 5.34.1 webjar was inspected: both distributed JavaScript
+bundles contain DOMPurify 3.4.17, the [vendor's patched version](https://github.com/cure53/DOMPurify/security/advisories/GHSA-mrv2-3pqr-j5jr).
+The resource routing version is updated with the dependency. A fresh complete
+scan remains required; the findings are not suppressed.
+
+The first exact PR-base coverage comparison detects one fewer covered product
+instruction after replacing the removed JPA specification API. A focused
+invalid-status predicate regression extends the product unit suite and checks
+that an unknown status still denies results. The comparison policy remains
+unchanged.
+
+The focused repair build passes all 83 product cases (32 unit and 51 real
+HTTP/PostgreSQL integration), including trace identity and UI assets, with no
+failures, errors or skips. Its existing 80% coverage gate and both shared-module
+coverage gates pass (`boot4-product-http-migration-verification.log`). Complete
+PR verification still determines acceptance of the repaired migration.

@@ -7,12 +7,42 @@ import com.example.omp.product.AbstractIntegrationTest;
 import com.example.omp.product.TestSecurityConfig;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.TestPropertySource;
 
 /** Consumer HTTP checks using the production filter chain, service and migrated database. */
+@TestPropertySource(
+        properties = {
+            "management.tracing.enabled=true",
+            "management.tracing.export.otlp.enabled=false"
+        })
 class ProductBoundaryIT extends AbstractIntegrationTest {
     private static final String FIRST = "00000000-0000-0000-0000-000000000201";
     private static final String SECOND = "00000000-0000-0000-0000-000000000202";
     private static final String MISSING = "00000000-0000-0000-0000-000000000999";
+
+    @Test
+    void errorResponseRetainsIncomingW3cTraceIdentity() {
+        String traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+        given().auth()
+                .oauth2(TestSecurityConfig.aliceToken())
+                .header("traceparent", "00-" + traceId + "-00f067aa0ba902b7-01")
+                .get("/api/v1/products/" + MISSING)
+                .then()
+                .statusCode(404)
+                .body("traceId", equalTo(traceId));
+    }
+
+    @Test
+    void swaggerUiServesItsConfiguredBundle() {
+        given().get("/swagger-ui/index.html")
+                .then()
+                .statusCode(200)
+                .body(containsString("Swagger UI"));
+        given().get("/swagger-ui/swagger-ui-bundle.js")
+                .then()
+                .statusCode(200)
+                .body(containsString("SwaggerUIBundle"));
+    }
 
     @Test
     void batchPreservesRequestOrderAndOmitsMissingAndDuplicateIds() {
