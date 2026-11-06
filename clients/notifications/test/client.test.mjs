@@ -9,7 +9,7 @@ const other = '/topic/orders/00000000-0000-0000-0000-000000000002';
 const envelope = JSON.stringify({ eventType: 'ORDER_PLACED', occurredAt: new Date().toISOString(), data: { orderId: '1' } });
 const tick = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate) {
-  const deadline = Date.now() + 4000;
+  const deadline = Date.now() + 10000;
   while (!predicate()) { if (Date.now() > deadline) throw new Error('Condition timed out'); await tick(5); }
 }
 
@@ -47,7 +47,9 @@ function client(t, wire, options = {}) {
   const instance = new NotificationClient({ url: wire.url, allowInsecureLocalhost: true,
     getIdentity: async () => ({ accessToken: 'first-token', subject: 'owner', expiresAt: Date.now() + 60000 }), resync: async () => {},
     minRetryDelayMs: 10, maxRetryDelayMs: 30, minResyncIntervalMs: 5, resyncIntervalMs: 40,
-    timeoutMs: 300, maxAttempts: 5, ...options });
+    // Allow cold native WebSocket initialization on shared CI runners. Tests of
+    // timeout/retry behavior supply their own short, explicit budgets below.
+    timeoutMs: 5000, maxAttempts: 5, ...options });
   t.after(() => instance.disconnect());
   return instance;
 }

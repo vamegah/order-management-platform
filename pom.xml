@@ -401,6 +401,22 @@
         </dependencies>
     </dependencyManagement>
 
+    <repositories>
+        <repository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <repository>
+            <!-- Override the obsolete redirect inherited from WSS4J's parent. -->
+            <id>B_shibboleth</id>
+            <name>Shibboleth releases</name>
+            <url>https://build.shibboleth.net/maven/releases/</url>
+            <releases><checksumPolicy>fail</checksumPolicy></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
+
     <!-- =====================================================================
          DEPENDENCIES (inherited by all modules)
          Only things every module genuinely needs. Currently: JUnit 5,
