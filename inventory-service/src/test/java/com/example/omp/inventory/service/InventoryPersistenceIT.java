@@ -13,13 +13,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.*;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /** Committed stock/hold/outbox checks through the production Spring transaction proxies. */
@@ -55,7 +55,7 @@ class InventoryPersistenceIT {
         }
     }
 
-    @MockBean JwtDecoder decoder;
+    @MockitoBean JwtDecoder decoder;
     @Autowired StockLevelRepository stocks;
     @Autowired ReservationRepository reservations;
     @Autowired ReservationHandler unary;

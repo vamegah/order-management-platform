@@ -31,7 +31,7 @@ import org.springframework.kafka.core.KafkaTemplate;
  */
 @AutoConfiguration(
         afterName =
-                "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration")
+                "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration")
 @ConditionalOnClass({KafkaTemplate.class, JpaRepository.class})
 @ConditionalOnBean(OutboxRepository.class)
 @EnableConfigurationProperties(OutboxDrainerProperties.class)

@@ -25,7 +25,7 @@ public final class ProductSpecifications {
      */
     public static Specification<Product> fromFilter(ProductFilter filter) {
         if (filter == null || filter.isEmpty()) {
-            return Specification.where(null);
+            return Specification.unrestricted();
         }
 
         return (root, query, cb) -> {

@@ -13,7 +13,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.ws.config.annotation.EnableWs;
-import org.springframework.ws.config.annotation.WsConfigurerAdapter;
+import org.springframework.ws.config.annotation.WsConfigurer;
 import org.springframework.ws.server.EndpointInterceptor;
 import org.springframework.ws.soap.security.wss4j2.Wss4jSecurityInterceptor;
 import org.springframework.ws.soap.security.wss4j2.callback.SpringSecurityPasswordValidationCallbackHandler;
@@ -26,7 +26,7 @@ import org.springframework.xml.xsd.XsdSchema;
 
 @EnableWs
 @Configuration
-public class WebServiceConfig extends WsConfigurerAdapter {
+public class WebServiceConfig implements WsConfigurer {
 
     public static final String NAMESPACE = "http://legacybank.example.com/ws";
 

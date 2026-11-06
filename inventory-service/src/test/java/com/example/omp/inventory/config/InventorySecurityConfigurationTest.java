@@ -21,12 +21,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
-import org.springframework.boot.autoconfigure.http.HttpMessageConvertersAutoConfiguration;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
+import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
@@ -99,9 +99,11 @@ class InventorySecurityConfigurationTest {
                 .withConfiguration(
                         AutoConfigurations.of(
                                 PropertyPlaceholderAutoConfiguration.class,
-                                JacksonAutoConfiguration.class,
+                                Jackson2AutoConfiguration.class,
                                 HttpMessageConvertersAutoConfiguration.class,
                                 SecurityAutoConfiguration.class,
+                                org.springframework.boot.security.autoconfigure.web.servlet
+                                        .ServletWebSecurityAutoConfiguration.class,
                                 OAuth2ResourceServerAutoConfiguration.class,
                                 WebMvcAutoConfiguration.class))
                 .withUserConfiguration(

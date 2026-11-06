@@ -20,10 +20,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.web.server.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.*;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** Real HTTP and Kafka between independent payment and notification application contexts. */

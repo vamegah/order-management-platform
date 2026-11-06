@@ -12,10 +12,10 @@ import com.example.omp.shared.web.config.SharedWebAutoConfiguration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ProductController.class)
@@ -23,7 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @ActiveProfiles("test")
 class ProductSecurityBoundaryTest {
     @Autowired MockMvc mvc;
-    @MockBean ProductService products;
+    @MockitoBean ProductService products;
 
     @Test
     void anonymousBatchDoesNotReadProducts() throws Exception {

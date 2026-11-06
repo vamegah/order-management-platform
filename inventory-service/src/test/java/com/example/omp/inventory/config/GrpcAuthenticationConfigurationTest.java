@@ -3,19 +3,19 @@ package com.example.omp.inventory.config;
 import static org.assertj.core.api.Assertions.*;
 
 import com.example.omp.proto.inventory.*;
+import com.example.omp.shared.grpc.GrpcAuthenticationAutoConfiguration;
 import io.grpc.*;
 import io.grpc.inprocess.*;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.*;
-import net.devh.boot.grpc.server.autoconfigure.GrpcServerSecurityAutoConfiguration;
 import net.devh.boot.grpc.server.security.interceptors.DefaultAuthenticatingServerInterceptor;
 import net.devh.boot.grpc.server.security.interceptors.ExceptionTranslatingServerInterceptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.*;
@@ -42,8 +42,10 @@ class GrpcAuthenticationConfigurationTest {
                 .withConfiguration(
                         AutoConfigurations.of(
                                 SecurityAutoConfiguration.class,
+                                org.springframework.boot.security.autoconfigure.web.servlet
+                                        .ServletWebSecurityAutoConfiguration.class,
                                 WebMvcAutoConfiguration.class,
-                                GrpcServerSecurityAutoConfiguration.class))
+                                GrpcAuthenticationAutoConfiguration.class))
                 .withUserConfiguration(
                         SecurityConfig.class, Tokens.class, InventoryHttpSecurityConfig.class)
                 .run(

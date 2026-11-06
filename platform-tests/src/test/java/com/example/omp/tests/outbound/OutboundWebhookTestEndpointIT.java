@@ -14,11 +14,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Wired test endpoint (Batch 9.4 file 42).
@@ -33,7 +33,7 @@ class OutboundWebhookTestEndpointIT extends OutboundWebhookBase {
 
     @Autowired TestRestTemplate rest;
 
-    @MockBean JwtDecoder jwtDecoder;
+    @MockitoBean JwtDecoder jwtDecoder;
 
     @Test
     void test_endpoint_publishes_a_synthetic_delivery() throws Exception {

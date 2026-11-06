@@ -25,7 +25,7 @@ import org.springframework.retry.annotation.EnableRetry;
  * that retry on optimistic-lock conflicts ({@code PaymentIntentHandler} and {@code RefundHandler}).
  */
 @SpringBootApplication
-@org.springframework.boot.autoconfigure.domain.EntityScan(
+@org.springframework.boot.persistence.autoconfigure.EntityScan(
         basePackages = {"com.example.omp.payment.domain", "com.example.omp.shared.events.outbox"})
 @org.springframework.data.jpa.repository.config.EnableJpaRepositories(
         basePackages = {

@@ -11,7 +11,7 @@ import org.springframework.kafka.core.KafkaAdmin;
 
 /** Declares domain topics for Boot's configured KafkaAdmin, including its TLS/SASL settings. */
 @AutoConfiguration(
-        afterName = "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration")
+        afterName = "org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration")
 @ConditionalOnClass(KafkaAdmin.class)
 @ConditionalOnBean(KafkaAdmin.class)
 @ConditionalOnProperty(

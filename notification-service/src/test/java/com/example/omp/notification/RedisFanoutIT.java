@@ -9,7 +9,7 @@ import com.example.omp.notification.redis.RedisEventPublisher;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * Integration test: publish to Redis, verify the subscriber dispatches to the {@link
@@ -19,7 +19,7 @@ class RedisFanoutIT extends AbstractNotificationTest {
 
     @Autowired RedisEventPublisher publisher;
 
-    @SpyBean EventDispatcher dispatcher;
+    @MockitoSpyBean EventDispatcher dispatcher;
 
     @Test
     void redisMessageTriggersDispatch() {

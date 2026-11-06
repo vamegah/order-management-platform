@@ -12,8 +12,8 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
@@ -23,6 +23,7 @@ import org.springframework.ws.test.client.MockWebServiceServer;
 import org.springframework.xml.transform.StringSource;
 
 /** Real REST requests through production beans/JAXB/security to a controlled SOAP transport. */
+@org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 @SpringBootTest(
         classes = LegacyBankingAdapterApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,

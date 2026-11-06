@@ -35,8 +35,8 @@ def main():
                 raise ValueError(f"{module.name}: plain reactor jar has no accessible application classes")
         # Layer extraction is disposable and need not enter a synchronized workspace.
         with tempfile.TemporaryDirectory(prefix="omp-packaging-") as output:
-            subprocess.run(["java", "-Djarmode=layertools", "-jar", str(archive),
-                            "extract", "--destination", output], check=True, timeout=60)
+            subprocess.run(["java", "-Djarmode=tools", "-jar", str(archive),
+                            "extract", "--layers", "--launcher", "--destination", output], check=True, timeout=60)
             layers = Path(output)
             for layer in ("dependencies", "spring-boot-loader", "snapshot-dependencies", "application"):
                 if not (layers / layer).is_dir():

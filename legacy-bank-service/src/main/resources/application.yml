@@ -8,6 +8,9 @@ server:
     key-alias: legacy-bank
 
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   application:
     name: legacy-bank-service
 

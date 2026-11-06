@@ -1,12 +1,12 @@
 ﻿# Order Management Platform
 
-A Java 21 / Spring Boot 3.3 reference application combining REST, GraphQL, gRPC,
+A Java 21 / Spring Boot 4.1 reference application combining REST, GraphQL, gRPC,
 WebSocket, webhooks and SOAP in an e-commerce order journey.
 
 ## Current status
 
-The seventeen-module reactor contains ten executable services and shared domain,
-web, event and generated protobuf libraries. [TASKS.md](TASKS.md) tracks remaining
+The eighteen-module reactor contains ten executable services and shared domain,
+web, event, gRPC integration and generated protobuf libraries. [TASKS.md](TASKS.md) tracks remaining
 requirements; [the implementation report](docs/task-implementation-report.md)
 records executed checks. Unchecked requirements remain open.
 
@@ -20,13 +20,14 @@ records executed checks. Unchecked requirements remain open.
 | SOAP | Banking facade/simulator, WS-Security, fault mapping and frozen contracts | Deployed trusted TLS and resilience acceptance |
 | Operations | Compose, telemetry, alerts and CI workflows | Security/performance/recovery evidence and release approval |
 
-The latest local clean reactor passes 999 Java tests; all ten external core
-journeys also pass. Fourteen static-analysis reports have no findings, errors or
-missing classes, and all ten executable packages pass layer checks. The report
-records the focused gateway classpath correction and source-bound evidence.
-GitHub execution, remaining feature work and production acceptance are separate.
-CI defines test, contract, coverage-regression, static-analysis, dependency/SBOM
-and image jobs. GitHub execution and required branch protection need verification.
+Before the current dependency migration, the accepted baseline passed 999 Java
+tests, ten external core journeys, client tests, static analysis and all ten
+image builds on GitHub. Its NVD scan correctly blocks vulnerable dependencies.
+The [security baseline migration](docs/dependency-security-baseline.md) upgrades
+the runtime and preserves the existing transport/JSON contracts. Focused HTTP
+and gRPC integration checks pass; complete migration verification is in progress.
+Remaining feature work, required branch protection and production acceptance are
+tracked separately.
 
 ## Development setup
 
@@ -53,9 +54,9 @@ It uses a deterministic development payment provider. Existing databases and
 realms are not migrated by initialization scripts; see [external e2e setup](docs/external-e2e.md).
 Production topology and secret/certificate rotation remain separate work.
 
-The supplied [GitHub repository](https://github.com/vamegah/order-management-platform)
-currently has no published branches or workflow runs. These setup commands use
-the local source workspace until the reviewed sources are published.
+The [GitHub repository](https://github.com/vamegah/order-management-platform) now
+contains the published baseline and executed workflows. The migration is being
+verified separately before replacing that baseline on `main`.
 
 Development realm logins are `alice` / `alice-dev-password` and `admin` /
 `admin-dev-password`. Keycloak administration uses `.env`. Alice's managed

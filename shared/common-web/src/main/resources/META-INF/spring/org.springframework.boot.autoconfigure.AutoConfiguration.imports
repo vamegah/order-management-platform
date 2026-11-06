@@ -1,1 +1,2 @@
 com.example.omp.shared.web.config.SharedWebAutoConfiguration
+com.example.omp.shared.web.config.FeignJsonAutoConfiguration
