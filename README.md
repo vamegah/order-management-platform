@@ -26,7 +26,7 @@ image builds on GitHub. Its NVD scan correctly blocks vulnerable dependencies.
 The [security baseline migration](docs/dependency-security-baseline.md) upgrades
 the runtime and preserves the existing transport/JSON contracts. Focused HTTP
 and gRPC integration checks pass; complete migration verification is in progress.
-Remaining feature work, required branch protection and production acceptance are
+Remaining feature work and production acceptance are
 tracked separately.
 
 ## Development setup
@@ -56,8 +56,9 @@ Production topology and secret/certificate rotation remain separate work.
 
 The [GitHub repository](https://github.com/vamegah/order-management-platform) now
 contains the published baseline and executed workflows. The migration is being
-verified in [draft PR #1](https://github.com/vamegah/order-management-platform/pull/1)
-before replacing that baseline on `main`.
+verified with follow-up repairs in [draft PR #2](https://github.com/vamegah/order-management-platform/pull/2).
+The initial migration was merged separately; `main` now requires a passing,
+up-to-date `quality-gate`, including for administrators.
 
 Development realm logins are `alice` / `alice-dev-password` and `admin` /
 `admin-dev-password`. Keycloak administration uses `.env`. Alice's managed

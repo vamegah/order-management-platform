@@ -1568,3 +1568,18 @@ The real PR coverage comparison detects a one-instruction product decrease after
 the JPA API replacement; an invalid-status predicate regression now checks the
 fail-closed behavior and extends coverage without changing the comparison gate.
 Focused container verification and a fresh complete workflow remain required.
+
+The focused repair build subsequently passes all 156 shared/product cases:
+37 shared-domain, 36 shared-web and 83 product cases (32 unit and 51 container
+integration). No case fails, errors or skips; all three coverage policies pass.
+The product checks include actual W3C trace identity and Swagger UI JavaScript
+resource routing. Log: `boot4-product-http-migration-verification.log`.
+
+During verification, PR #1 was merged externally as `9bc76d9`, and its source
+branch was deleted. The published repair commit `9315979` is now reviewed in
+[draft PR #2](https://github.com/vamegah/order-management-platform/pull/2).
+Main protection is configured and independently verified: require the actual
+GitHub Actions `quality-gate` check (app ID 15368), up-to-date branches and
+administrator enforcement. Force pushes/deletion are disabled; no additional
+approving-review policy is introduced. A complete successful repair workflow
+and subsequent default-branch verification remain required.

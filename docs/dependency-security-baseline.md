@@ -20,8 +20,10 @@ therefore selects the compatible Boot 4.1 / Cloud 2025.1 generation, following
 the [Boot migration guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide)
 and [Spring Cloud compatibility table](https://cloud.spring.io/).
 
-The migration branch preserves the baseline on `main`. Dependency updates do
-not establish acceptance until the complete test, coverage, packaging, image,
+The initial migration was merged externally during verification; repairs now
+continue in [draft PR #2](https://github.com/vamegah/order-management-platform/pull/2).
+Main requires the up-to-date GitHub Actions `quality-gate`, including for
+administrators. Dependency updates do not establish acceptance until the complete test, coverage, packaging, image,
 external journey, compatibility and vulnerability jobs pass on the new revision.
 
 ## Selected families
@@ -91,7 +93,7 @@ backlog acceptance items.
 
 ## First migration PR execution
 
-The approved migration is published in [draft PR #1](https://github.com/vamegah/order-management-platform/pull/1).
+The approved migration was published in [PR #1](https://github.com/vamegah/order-management-platform/pull/1).
 Its [first verification run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
 passes all ten source image builds, complete static analysis, the client package
 and exact-base protobuf/SOAP compatibility. The remaining failures are retained
