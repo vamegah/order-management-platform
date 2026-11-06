@@ -7,16 +7,16 @@ RUN --mount=type=cache,target=/root/.m2 \
     bash mvnw --batch-mode --no-transfer-progress -pl order-service -am -DskipTests package
 RUN mkdir /layers && cp order-service/target/*-exec.jar /layers/application.jar
 WORKDIR /layers
-RUN java -Djarmode=layertools -jar application.jar extract
+RUN java -Djarmode=tools -jar application.jar extract --layers --launcher --destination /extracted
 
 # Netty's bundled native TLS library requires glibc.
 FROM eclipse-temurin:21-jre-jammy
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --no-create-home app
 WORKDIR /app
-COPY --from=build --chown=app:app /layers/dependencies/ ./
-COPY --from=build --chown=app:app /layers/spring-boot-loader/ ./
-COPY --from=build --chown=app:app /layers/snapshot-dependencies/ ./
-COPY --from=build --chown=app:app /layers/application/ ./
+COPY --from=build --chown=app:app /extracted/dependencies/ ./
+COPY --from=build --chown=app:app /extracted/spring-boot-loader/ ./
+COPY --from=build --chown=app:app /extracted/snapshot-dependencies/ ./
+COPY --from=build --chown=app:app /extracted/application/ ./
 USER app
 EXPOSE 8083
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "org.springframework.boot.loader.launch.JarLauncher"]

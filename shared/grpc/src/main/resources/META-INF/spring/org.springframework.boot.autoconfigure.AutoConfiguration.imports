@@ -1,0 +1,3 @@
+com.example.omp.shared.grpc.GrpcAuthenticationAutoConfiguration
+com.example.omp.shared.grpc.GrpcMetricsOrderingAutoConfiguration
+com.example.omp.shared.grpc.GrpcChannelHealthAutoConfiguration

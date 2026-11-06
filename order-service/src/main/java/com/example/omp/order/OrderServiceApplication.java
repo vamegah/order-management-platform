@@ -4,7 +4,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.cloud.openfeign.EnableFeignClients;
-import org.springframework.retry.annotation.EnableRetry;
 
 /**
  * Main entry point for the order service.
@@ -46,13 +45,12 @@ import org.springframework.retry.annotation.EnableRetry;
  * @see com.example.omp.order.events.OrderEventPublisher
  */
 @org.springframework.scheduling.annotation.EnableScheduling
-@org.springframework.boot.autoconfigure.domain.EntityScan(
+@org.springframework.boot.persistence.autoconfigure.EntityScan(
         basePackages = {"com.example.omp.order.domain", "com.example.omp.shared.events.outbox"})
 @org.springframework.data.jpa.repository.config.EnableJpaRepositories(
         basePackages = {"com.example.omp.order.repository", "com.example.omp.shared.events.outbox"})
 @SpringBootApplication
 @EnableFeignClients
-@EnableRetry
 @ConfigurationPropertiesScan
 public class OrderServiceApplication {
 

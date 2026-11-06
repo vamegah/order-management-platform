@@ -53,7 +53,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * }
  * }</pre>
  */
-@org.springframework.boot.test.autoconfigure.graphql.tester.AutoConfigureGraphQlTester
+@org.springframework.boot.graphql.test.autoconfigure.tester.AutoConfigureGraphQlTester
 @org.springframework.security.test.context.support.WithMockUser(roles = "admin")
 public abstract class AbstractGraphQlTest {
 

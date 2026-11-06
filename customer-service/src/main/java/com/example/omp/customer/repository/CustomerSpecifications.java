@@ -23,7 +23,7 @@ public final class CustomerSpecifications {
      */
     public static Specification<Customer> fromFilter(CustomerFilter filter) {
         if (filter == null || filter.isEmpty()) {
-            return Specification.where(null);
+            return Specification.unrestricted();
         }
 
         return (root, query, cb) -> {

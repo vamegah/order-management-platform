@@ -12,10 +12,10 @@ import com.example.omp.shared.web.config.SharedWebAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest({AddressController.class, CustomerController.class})
@@ -25,7 +25,7 @@ class CustomerSecurityBoundaryTest {
     private static final UUID ALICE = UUID.fromString("00000000-0000-0000-0000-000000000101");
     private static final UUID BOB = UUID.fromString("00000000-0000-0000-0000-000000000102");
     @Autowired MockMvc mvc;
-    @MockBean CustomerService customers;
+    @MockitoBean CustomerService customers;
 
     @Test
     void anonymousCallerCannotReadAddresses() throws Exception {

@@ -1499,3 +1499,45 @@ and pull-request execution, and required branch checks remain open.
 The automatic approval reviewer rejected the follow-up push because the user's
 publication approval covered the original prepared snapshot only. The corrections
 remain committed locally for separate review and approval before public upload.
+
+## 2026-11-06 published baseline and dependency migration
+
+The user subsequently approved the reviewed follow-up and further CI repairs.
+Commits `ec5fcde` and `b5c95e4` are published on `main`; there is no remaining
+publication-approval block. The [latest baseline run](https://github.com/vamegah/order-management-platform/actions/runs/42302324647)
+passes every prerequisite except dependency-policy. This includes actual default
+reactor and external deployed acceptance, SOAP/protobuf contracts, client tests,
+static analysis and all ten image builds. Independently downloaded earlier CI
+artifacts contain 999 passing Java cases and twelve passing external/client
+cases with no failure/error/skip entries.
+
+The official NVD feeds resolve the scanner's empty-key bug. Analysis now completes
+and correctly rejects vulnerable versions under CVSS >= 7. No scan error or
+vulnerability failure is ignored. Some older Spring fixes are enterprise-only,
+so an isolated `ci/security-baseline` branch moves to the compatible Boot 4.1 /
+Cloud 2025.1 generation and patched dependency families. The published baseline
+is preserved while this migration is verified.
+
+All production sources compile after moving Boot APIs, adapting unrestricted JPA
+specifications and SOAP configuration, and updating JSON compatibility and layer
+extraction. The first unit diagnostic exposed Feign codec configuration, missing
+test HTTP infrastructure and the old starter's removed Security voter API. The
+dedicated `shared/grpc` integration replaces only incompatible security/health
+auto-configuration and restores metrics ordering; it does not add a server to
+client-only applications or change mTLS/ownership requirements.
+
+Focused acceptance passes all 36 shared-web cases (including three real HTTP /
+codec precedence / optional-classpath cases) and three gRPC integration cases.
+Real production interceptor discovery authenticates RPCs, rejects missing and
+invalid credentials, clears worker context and records server timers. Channel
+health tracks connectivity and its existing disable setting. Existing shared-web
+85% and new transport-module 80% instruction gates pass. Logs are
+`boot4-shared-integration-verification.log` (web passes; initial transport test
+import fails) and `boot4-shared-grpc-verification.log` (transport passes).
+
+The complete eighteen-module clean unit/package run passes all 776 cases without
+failures, errors or skips in nine minutes. All ten executable packages pass real
+Boot tools-mode launcher/layer extraction. Logs are
+`boot4-complete-unit-package-verification.log` and `boot4-packaging-verification.log`.
+Complete service/container, static, image, vulnerability and PR coverage acceptance remains
+required on the migration revision; see [the migration scope](dependency-security-baseline.md).

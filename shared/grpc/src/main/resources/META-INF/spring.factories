@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=\
+com.example.omp.shared.grpc.GrpcLegacyAutoConfigurationFilter

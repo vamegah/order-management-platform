@@ -17,7 +17,7 @@ public final class OrderSpecifications {
 
     public static Specification<Order> fromFilter(OrderFilter filter) {
         if (filter == null || filter.isEmpty()) {
-            return Specification.where(null);
+            return Specification.unrestricted();
         }
 
         return (root, query, cb) -> {

@@ -16,12 +16,12 @@ import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.*;
-import org.springframework.boot.autoconfigure.data.redis.*;
-import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.data.redis.autoconfigure.*;
+import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
+import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.*;
@@ -46,8 +46,8 @@ class WebSocketBrokerTest {
                 HibernateJpaAutoConfiguration.class,
                 FlywayAutoConfiguration.class,
                 KafkaAutoConfiguration.class,
-                RedisAutoConfiguration.class,
-                RedisRepositoriesAutoConfiguration.class
+                DataRedisAutoConfiguration.class,
+                DataRedisRepositoriesAutoConfiguration.class
             })
     @EnableConfigurationProperties(NotificationProperties.class)
     @Import({
