@@ -1,0 +1,295 @@
+# ==============================================================================
+# Order Management Platform — Prometheus configuration
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/prometheus/prometheus.yml
+# MOUNTED  : /etc/prometheus/prometheus.yml (read-only) into the prometheus
+#            container (both dev and prod).
+#
+# WHAT THIS FILE DOES
+#   Configures:
+#     - Global scrape interval and timeouts.
+#     - External labels (env=dev/prod) applied to every time series.
+#     - Scrape jobs for every component that exposes Prometheus metrics.
+#     - Rule file locations (recording and alerting rules).
+#     - Optional Alertmanager connection (commented; Phase 7).
+#
+# WHAT THIS FILE DOES NOT DO
+#   - Configure retention. That's a CLI flag (--storage.tsdb.retention.time)
+#     set in the compose file.
+#   - Configure remote write to long-term storage. Phase 7.
+#   - Define Grafana dashboards. Those live in
+#     infrastructure/grafana/dashboards/ (Files 16–17).
+#
+# ENVIRONMENT HANDLING
+#   The `env` external label comes from the ${PROMETHEUS_ENV} env var:
+#     - Dev:  PROMETHEUS_ENV=dev (default; set in docker-compose.yml)
+#     - Prod: PROMETHEUS_ENV=prod (set in docker-compose.prod.yml)
+#
+#   Env var substitution in prometheus.yml requires the
+#   --enable-feature=expand-external-labels flag. See the prometheus service
+#   in docker-compose.yml (File 2a) — the flag is already set.
+#
+# TARGETS
+#   Phase 0 scrapes:
+#     - Prometheus itself   (:9090/metrics)
+#     - Traefik             (:8082/metrics — the dedicated metrics entrypoint)
+#     - OTel Collector      (:8888/metrics — the collector's own telemetry)
+#     - Keycloak            (:9000/metrics — Quarkus management port)
+#
+#   Phase 1+ adds:
+#     - Application services (via file_sd_configs)
+#     - postgres_exporter
+#     - kafka_exporter
+#     - redis_exporter
+#
+# REFERENCE
+#   https://prometheus.io/docs/prometheus/latest/configuration/configuration/
+#
+# ==============================================================================
+
+# ==============================================================================
+# GLOBAL
+# ==============================================================================
+# Defaults inherited by every scrape config. Individual jobs can override.
+# ==============================================================================
+global:
+  # How often to scrape targets. 15s is Prometheus's default and the industry
+  # standard. Frequent enough for real-time dashboards, not so frequent that
+  # storage explodes.
+  scrape_interval: 15s
+
+  # How often to evaluate alerting and recording rules. Slightly longer than
+  # the scrape interval so newly-scraped samples are considered.
+  evaluation_interval: 15s
+
+  # Timeout for a single scrape. Must be less than scrape_interval, or
+  # scrapes queue up. 10s is Prometheus's default and generous for local
+  # targets.
+  scrape_timeout: 10s
+
+  # Labels applied to EVERY time series and alert this Prometheus emits.
+  # These help when multiple Prometheus instances write to a shared backend
+  # or when a single Grafana instance queries multiple Prometheus data
+  # sources.
+  #
+  # ${PROMETHEUS_ENV} is expanded at startup. The default `-dev` is set in
+  # the compose file for local use; prod overrides it.
+  external_labels:
+    env: ${PROMETHEUS_ENV:-dev}
+    prometheus: omp-prometheus
+
+# ==============================================================================
+# RULE FILES
+# ==============================================================================
+# Files containing recording and alerting rules. Prometheus evaluates them
+# every evaluation_interval.
+#
+# The rules/ directory is mounted read-only from
+# infrastructure/prometheus/rules/. Adding a rule file requires a reload:
+#   curl -X POST http://localhost:9090/-/reload
+# (Requires --web.enable-lifecycle, which is set in File 2a.)
+#
+# Phase 0 ships one rules file: infrastructure.yml (see File 15a).
+# ==============================================================================
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# ==============================================================================
+# ALERTING
+# ==============================================================================
+# Alertmanager endpoints. Prometheus sends firing alerts here; Alertmanager
+# deduplicates and routes them to receivers (Slack, email, PagerDuty).
+#
+# Phase 0 does NOT run Alertmanager. Alerts are visible in Prometheus's
+# /alerts UI and in Grafana (via the ALERTS time series), but no
+# notifications are sent.
+#
+# Phase 7 will:
+#   1. Add an alertmanager service to the compose files.
+#   2. Uncomment the block below.
+#   3. Configure routes and receivers in infrastructure/alertmanager/*.yml.
+# ==============================================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# ==============================================================================
+# SCRAPE CONFIGS
+# ==============================================================================
+# Each entry defines one job: a set of targets plus options for scraping them.
+# Targets are the internal Docker hostnames of the services (same network as
+# Prometheus).
+# ==============================================================================
+scrape_configs:
+
+  # ----------------------------------------------------------------------------
+  # Prometheus itself
+  # ----------------------------------------------------------------------------
+  # Self-scrape. Provides metrics on Prometheus's own health: scrape durations,
+  # sample ingestion rate, rule evaluation time, storage size, etc.
+  #
+  # Essential for detecting:
+  #   - Target scrape failures (up == 0)
+  #   - Rule evaluation slowdowns
+  #   - Storage getting close to its limit
+  # ----------------------------------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: prometheus
+          tier: observability
+
+  # ----------------------------------------------------------------------------
+  # Traefik
+  # ----------------------------------------------------------------------------
+  # Traefik exposes Prometheus metrics on the `metrics` entrypoint (:8082),
+  # configured in File 14 (traefik.prod.yml).
+  #
+  # Note: dev also uses :8082 for this — File 13 was amended to add a
+  # dedicated metrics entrypoint (see File 13-amend, presented with File 15).
+  #
+  # Metrics include:
+  #   - traefik_entrypoint_requests_total{entrypoint, code, method}
+  #   - traefik_entrypoint_request_duration_seconds_bucket
+  #   - traefik_service_requests_total{service, code, method}
+  #   - traefik_service_request_duration_seconds_bucket
+  #   - traefik_router_* (if addRoutersLabels is on; off in prod)
+  # ----------------------------------------------------------------------------
+  - job_name: traefik
+    static_configs:
+      - targets:
+          - traefik:8082
+        labels:
+          service: traefik
+          tier: ingress
+    # Traefik's /metrics path is the standard Prometheus exposition endpoint.
+    metrics_path: /metrics
+
+  # ----------------------------------------------------------------------------
+  # OTel Collector — self-telemetry
+  # ----------------------------------------------------------------------------
+  # The collector exposes its OWN metrics on :8888. These include:
+  #   - otelcol_receiver_accepted_spans (spans received from services)
+  #   - otelcol_exporter_sent_spans (spans sent to Tempo)
+  #   - otelcol_exporter_send_failed_spans (backpressure / errors)
+  #   - otelcol_processor_batch_batch_send_size (batch sizes)
+  #
+  # Essential for detecting:
+  #   - Collector dropping data (accepted > sent, sustained)
+  #   - Export failures (send_failed_spans increasing)
+  #
+  # NOTE: This scrapes the collector's SELF-telemetry. Metrics RECEIVED from
+  # services (via OTLP) may also be exposed separately if the collector's
+  # pipeline includes a `prometheus` exporter on a different port. File 20
+  # (otel-collector.yml) will define that; if so, we'll add a second scrape
+  # job here.
+  # ----------------------------------------------------------------------------
+  - job_name: otel-collector
+    static_configs:
+      - targets:
+          - otel-collector:8888
+        labels:
+          service: otel-collector
+          tier: observability
+    metrics_path: /metrics
+
+  # ----------------------------------------------------------------------------
+  # Keycloak
+  # ----------------------------------------------------------------------------
+  # Keycloak runs on Quarkus, which exposes metrics on its management port
+  # (:9000 by default when KC_HEALTH_ENABLED and KC_METRICS_ENABLED are set).
+  #
+  # Metrics include:
+  #   - keycloak_logins (successful logins)
+  #   - keycloak_failed_login_attempts (with reason labels)
+  #   - keycloak_refresh_tokens
+  #   - keycloak_client_logins
+  #   - Plus JVM/HTTP metrics from Quarkus.
+  #
+  # File 12 (realm import) enables KC_METRICS_ENABLED; File 2a's environment
+  # sets the management port.
+  #
+  # NOTE: Keycloak's metrics endpoint is on :9000, not the main :8080 port.
+  # This is Quarkus's convention for management endpoints.
+  # ----------------------------------------------------------------------------
+  - job_name: keycloak
+    static_configs:
+      - targets:
+          - keycloak:9000
+        labels:
+          service: keycloak
+          tier: auth
+    metrics_path: /metrics
+
+# ==============================================================================
+# FILE-BASED SERVICE DISCOVERY
+# ==============================================================================
+# A placeholder for Phase 1+. Prometheus watches a directory for YAML files
+# listing targets, and adds/removes them automatically as the files change.
+#
+# Phase 1 will create files like:
+#   infrastructure/prometheus/targets/order-service.yml
+#   infrastructure/prometheus/targets/customer-service.yml
+# each containing a list of scrape targets for a service.
+#
+# This avoids editing prometheus.yml every time a new service is added.
+#
+# The directory is mounted read-only from infrastructure/prometheus/targets/.
+# We'll create that directory with a .gitkeep file so the mount point exists.
+#
+# The block below is UNCOMMENTED so file_sd is available from day one — it's
+# a no-op when the directory is empty.
+# ==============================================================================
+  - job_name: omp-services
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/*.yml
+        refresh_interval: 30s
+
+    # Relabeling rules: adjust labels on discovered targets.
+    # Default labels come from the target file. We normalize here so every
+    # service has consistent `service` and `tier` labels.
+    relabel_configs:
+      # Preserve the `service` label from the target file if provided.
+      # (relabel_configs with action=keep would filter; we use replace to
+      # normalize.)
+      - source_labels: [__meta_filepath]
+        regex: '.*/targets/(.+)-targets\.yml'
+        target_label: discovered_from
+        replacement: '$1'
+
+      # Every target discovered this way gets tier=app by default.
+      # Individual targets can override with a `tier` label in their file.
+      - target_label: tier
+        replacement: app
+
+# ==============================================================================
+# OPERATIONAL NOTES
+# ==============================================================================
+#
+# RELOADING CONFIG
+#   Prometheus reads this file at startup. To reload without restarting:
+#     curl -X POST http://localhost:9090/-/reload
+#   Requires --web.enable-lifecycle (set in File 2a's prometheus command).
+#
+# VERIFYING TARGETS
+#   In the Prometheus UI (http://prometheus.localhost), go to Status → Targets.
+#   Every job above should show "UP" with a recent scrape time.
+#
+#   If a target shows "DOWN":
+#     - Check the target is running: docker compose ps
+#     - Check it's on the same Docker network as Prometheus: docker network inspect omp_edge
+#     - Check the /metrics endpoint directly:
+#         docker compose exec prometheus wget -qO- http://<target>:<port>/metrics
+#
+# VERIFYING RULES
+#   In the Prometheus UI, go to Status → Rules. Every rule file should be
+#   loaded with no errors. See File 15a for the rule definitions.
+#
+# ==============================================================================
+# END OF prometheus.yml
+# ==============================================================================

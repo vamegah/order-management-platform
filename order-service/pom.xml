@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- =====================================================================
+         PARENT
+         ===================================================================== -->
+    <parent>
+        <groupId>com.example.omp</groupId>
+        <artifactId>order-management-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!-- =====================================================================
+         MODULE COORDINATES
+         ===================================================================== -->
+    <artifactId>order-service</artifactId>
+    <name>Order Service</name>
+    <description>
+        REST API for order management. Orchestrates product, customer,
+        inventory, and payment services to fulfill orders.
+
+        Exposes /api/v1/orders and sub-resources. Calls:
+          - product-service    via Feign (REST)
+          - customer-service   via Feign (REST)
+          - inventory-service  via gRPC
+          - payment-service    via gRPC
+
+        Publishes order lifecycle events to Kafka. Does not consume events.
+    </description>
+
+    <!-- =====================================================================
+         DEPENDENCIES
+         ===================================================================== -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             Internal shared modules
+             ================================================================ -->
+
+        <!-- Value objects: Money (used on Order, OrderLine). -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Web utilities: PageResponse, ProblemDetails, etc. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-web</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- gRPC service stubs: InventoryServiceGrpc, PaymentServiceGrpc,
+             and their message types (Reservation, Payment, Money, etc.). -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-proto</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Kafka event base classes and order event records:
+             KafkaEventPublisher, TransactionEventScheduler, OrderEvents.*. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- ================================================================
+             Spring Boot starters
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Spring Cloud — Feign clients and load balancing
+             ================================================================ -->
+
+        <!-- Declarative HTTP clients for calling product-service and
+             customer-service via Feign interfaces. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- Client-side load balancing. Integrates with Feign so that
+             when a service has multiple replicas, calls are distributed
+             round-robin (or via any configured strategy). -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             gRPC clients
+             ================================================================ -->
+
+        <!-- Client-side starter. Provides @GrpcClient injection and
+             manages gRPC channels to the target services. This is the
+             CLIENT starter (net.devh:grpc-client-spring-boot-starter),
+             not the server one. -->
+        <dependency>
+            <groupId>net.devh</groupId>
+            <artifactId>grpc-client-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- Netty-based gRPC transport. Required at runtime; the starter
+             does not bundle a transport. The "shaded" variant packages
+             Netty under a distinct namespace to avoid version conflicts
+             with Spring Boot's own Netty. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+        </dependency>
+
+        <!-- Note: grpc-protobuf and grpc-stub are NOT declared here.
+             They are brought transitively by omp-shared-proto, which is
+             the correct place for them (the generated stubs depend on
+             those APIs). -->
+
+        <!-- ================================================================
+             Kafka producer
+             ================================================================ -->
+
+        <!-- KafkaTemplate for publishing events; auto-configured by
+             Spring Boot from spring.kafka.* properties. -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- Kafka clients library. Transitive via spring-kafka, declared
+             explicitly for clarity and to insulate against future changes
+             in Spring Kafka's transitive graph. -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Resilience4j — circuit breakers and retries
+             ================================================================ -->
+
+        <!-- Spring Boot 3 integration. Auto-configures Resilience4j
+             aspects so @CircuitBreaker and @Retry annotations work. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
+        <!-- Circuit breaker implementation. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+        </dependency>
+
+        <!-- Retry implementation. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+        </dependency>
+
+        <!-- Micrometer binding for Resilience4j. Exposes metrics like
+             resilience4j_circuitbreaker_state and
+             resilience4j_circuitbreaker_calls_total on /actuator/prometheus.
+             Required for the OMP — Order Service dashboard. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Persistence — drivers and migrations
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Observability
+             ================================================================ -->
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             API documentation
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Test dependencies
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- The client starter constructs its in-process channel factory even
+             for network clients. This is required in the executable application
+             as well as by the in-process tests. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-inprocess</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- gRPC testing utilities: ServerInterceptor test harness,
+             StreamRecorder for capturing server-streaming responses, etc. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Kafka test support. Provides @EmbeddedKafka for
+             integration tests that verify event publication without a
+             running Kafka broker. -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- =====================================================================
+         BUILD
+         ===================================================================== -->
+    <build>
+        <plugins>
+
+            <!-- ============================================================
+                 Spring Boot Maven Plugin — executable jar packaging
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Surefire — unit tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Failsafe — integration tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 JaCoCo — 80% coverage enforcement
+                 ============================================================
+                 Excludes:
+                   - OrderServiceApplication (main class)
+                   - DTOs (records; no logic)
+                   - Config classes (annotations only)
+                   - Client wrappers, Feign interfaces, gRPC stubs, and
+                     Kafka factories (framework glue; the logic they call
+                     is tested by integration tests)
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/example/omp/order/OrderServiceApplication.class</exclude>
+                                <exclude>com/example/omp/order/dto/**</exclude>
+                                <exclude>com/example/omp/order/config/**</exclude>
+                                <exclude>com/example/omp/order/clients/**</exclude>
+                                <exclude>com/example/omp/order/events/**</exclude>
+                            </excludes>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

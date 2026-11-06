@@ -1,0 +1,165 @@
+# ==============================================================================
+# GraphQL Gateway — base configuration
+# ==============================================================================
+# The gateway is different from the Phase 1 services:
+#   - No datasource, no JPA, no Flyway. It owns no data.
+#   - It's a pure aggregation layer over the REST services.
+#   - Spring GraphQL handles the HTTP API; the schema is in
+#     src/main/resources/graphql/schema.graphqls (added in Batch 6.2).
+# ==============================================================================
+
+spring:
+  application:
+    name: graphql-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  task:
+    execution:
+      pool:
+        core-size: 8
+        max-size: 32
+        queue-capacity: 128
+
+  # ----------------------------------------------------------------------------
+  # GraphQL
+  # ----------------------------------------------------------------------------
+  # Spring GraphQL auto-configures a /graphql endpoint.
+  #
+  # - schema.locations: where .graphqls files live.
+  # - graphiql: the browser query editor (dev only; disabled in prod).
+  # - rsocket: disabled (WebSocket subscriptions arrive in Phase 4).
+  # ----------------------------------------------------------------------------
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: true
+      path: /graphiql
+    schema:
+      printer:
+        enabled: true   # logs the schema at startup
+      introspection:
+        enabled: true  # GraphiQL needs this; disabled in prod
+    rsocket:
+      server:
+        # Disabled in Phase 2. WebSocket-based subscriptions come in Phase 4.
+        mapping-path: /rsocket
+        transport: websocket
+        # enabled: false  (default)
+
+  # ----------------------------------------------------------------------------
+  # OAuth2 / JWT — same as Phase 1 services
+  # ----------------------------------------------------------------------------
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://keycloak.localhost/realms/omp}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://keycloak:8080/realms/omp/protocol/openid-connect/certs}
+
+# ==============================================================================
+# Server
+# ==============================================================================
+server:
+  port: ${SERVER_PORT:8000}
+  shutdown: graceful
+  error:
+    include-message: always
+
+# ==============================================================================
+# Downstream services
+# ==============================================================================
+# The gateway calls all three Phase 1 services via Feign. URLs are internal
+# Docker DNS names; the auth forwarding interceptor propagates the caller's JWT.
+# ==============================================================================
+omp:
+  clients:
+    product-service:
+      url: ${PRODUCT_SERVICE_URL:http://product-service:8081}
+    customer-service:
+      url: ${CUSTOMER_SERVICE_URL:http://customer-service:8082}
+    order-service:
+      url: ${ORDER_SERVICE_URL:http://order-service:8083}
+
+# ==============================================================================
+# Feign client configuration
+# ==============================================================================
+spring.cloud.openfeign:
+  client:
+    config:
+      default:
+        connectTimeout: 1000
+        readTimeout: 3000
+        loggerLevel: basic
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+
+# ==============================================================================
+# Actuator
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# OpenTelemetry tracing
+# ==============================================================================
+management.tracing:
+  sampling:
+    probability: ${TRACING_SAMPLE_RATE:1.0}
+  propagation:
+    type: w3c
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: grpc
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+      service.namespace: omp
+      deployment.environment: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+logging:
+  level:
+    root: INFO
+    com.example.omp: INFO
+    org.springframework.graphql: INFO
+
+# ==============================================================================
+# CORS (used by shared/web's CorsProperties — see Batch 5.1)
+# ==============================================================================
+app:
+  cors:
+    allowed-origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://web.localhost"
+  pagination:
+    # Not used by the gateway (GraphQL has its own pagination via Relay spec),
+    # but the shared auto-config requires the properties to bind.
+    default-size: 20
+    max-size: 100
+    allowed-sort-fields:
+      - createdAt

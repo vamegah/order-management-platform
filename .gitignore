@@ -1,0 +1,329 @@
+# ==============================================================================
+# Order Management Platform — .gitignore
+# ------------------------------------------------------------------------------
+# Rules for what should NEVER be committed to this repository.
+#
+# PRINCIPLES
+#   1. Secrets before convenience. When in doubt, ignore.
+#   2. Whitelist .env.example templates explicitly — the only .env* files
+#      that ARE committed.
+#   3. Ignore build output everywhere; never ignore build scripts or source.
+#   4. Keep sections alphabetically stable within category — easier to scan.
+#
+# WHEN ADDING A NEW RULE
+#   - Put it in the correct section.
+#   - Add a one-line comment explaining WHY if the rule is non-obvious.
+#   - Test with: git check-ignore -v <path>
+#
+# ==============================================================================
+
+# ==============================================================================
+# 1. ENVIRONMENT FILES
+# ------------------------------------------------------------------------------
+# Any file that might contain runtime configuration or secrets.
+# We ignore ALL .env* variants, then explicitly un-ignore the templates.
+#
+# The pattern below catches: .env, .env.local, .env.prod, .env.backup,
+# .env.prod.bak, .env.2024-11-01, .env.old, .env.save, etc.
+# ==============================================================================
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Explicit belt-and-suspenders for the two templates (some tools treat
+# `!.env.example` as a no-op when the parent directory is ignored).
+!.env.*.example
+
+# ==============================================================================
+# 2. SECRET MATERIAL
+# ------------------------------------------------------------------------------
+# Files that are definitionally secrets. Even if they appear in a subdirectory
+# with an innocuous name, they should never be committed.
+#
+# Docker secrets are mounted from /etc/omp/secrets/ on the host, so they
+# should never appear in the repo tree — but if someone dumps them here for
+# debugging, this list ensures they don't get committed.
+# ==============================================================================
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+
+# SSH / TLS artefacts
+id_rsa
+id_ed25519
+*.crt.local
+
+# Common secret directories
+secrets/
+.secrets/
+private/
+.private/
+credentials/
+.credentials/
+
+# pgBackRest cipher / repo keys
+*.cipher
+pgbackrest.*.key
+
+# Kafka SCRAM / SASL credential files
+kafka-credentials.json
+*.sasl
+*.scram
+
+# Keycloak realm exports (may contain client secrets)
+# NOTE: We DO commit infrastructure/keycloak/import/*.json — those are
+# hand-authored realm definitions with placeholder secrets. If you export
+# a realm from a running Keycloak, that export MUST NOT be committed.
+keycloak-export-*.json
+*-realm-export.json
+
+# ==============================================================================
+# 3. JAVA / MAVEN BUILD OUTPUT
+# ------------------------------------------------------------------------------
+# Maven target directories and compiled artifacts. Never commit compiled code.
+#
+# IMPORTANT: Do NOT ignore the Maven wrapper (.mvn/wrapper/, mvnw, mvnw.cmd).
+# The wrapper is what makes builds reproducible across machines without a
+# system Maven install. It is intentionally committed.
+# ==============================================================================
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# Maven-specific
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar.orig
+dependency-reduced-pom.xml
+
+# Maven build logs
+build.log
+mvn.log
+*.mvn.log
+
+# ==============================================================================
+# 4. IDE / EDITOR
+# ==============================================================================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse / STS
+.classpath
+.project
+.settings/
+.apt_generated/
+.factorypath
+.springBeans
+.sts4-cache/
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# Vim / Neovim
+*.swp
+*.swo
+*.swn
+.*.sw?
+.vim/
+.nvim/
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime
+*.sublime-workspace
+*.sublime-project
+
+# Helix
+.helix/
+
+# ==============================================================================
+# 5. OS METADATA
+# ==============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon?
+.fseventsd/
+.Spotlight-V100/
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+.nfs*
+
+# ==============================================================================
+# 6. DOCKER / LOCAL RUNTIME
+# ------------------------------------------------------------------------------
+# Docker Compose creates named volumes managed by Docker (not in the repo),
+# but some tooling and debugging flows create files in the repo tree.
+# ==============================================================================
+# Bind-mounted data (if someone switches to bind mounts for debugging)
+data/
+.docker/
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# Local Docker secrets dump (if someone runs `docker secret inspect --pretty`
+# and pipes to a file — should never be committed)
+docker-secrets-*.txt
+
+# Traefik ACME state if bind-mounted for debugging
+acme.json
+
+# ==============================================================================
+# 7. LOGS AND COVERAGE
+# ==============================================================================
+*.log
+logs/
+*.log.gz
+*.log.[0-9]*
+
+# JaCoCo
+jacoco.exec
+*.exec
+jacoco-report/
+
+# Test reports (Surefire/Failsafe write to target/ which is already ignored,
+# but some CI setups dump copies here)
+surefire-reports/
+failsafe-reports/
+test-output/
+
+# Coverage summary artefacts some tools write
+coverage/
+.nyc_output/
+
+# ==============================================================================
+# 8. TEMPORARY / SCRATCH
+# ==============================================================================
+tmp/
+temp/
+.tmp/
+.scratch/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.old
+*.save
+*.swp
+
+# Node (future GraphQL gateway, frontend, tooling)
+node_modules/
+.pnpm-store/
+.pnp.*
+.yarn/cache
+.yarn/install-state.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python (future tooling, scripting)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ==============================================================================
+# 9. ARCHIVE / BACKUP FILES
+# ==============================================================================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.rar
+*.7z
+
+# But DO commit reproducible archive producers (e.g. Makefile targets, scripts)
+
+# ==============================================================================
+# 10. METADATA FILES THAT MUST BE COMMITTED (documented here for clarity)
+# ------------------------------------------------------------------------------
+# The following are intentionally NOT ignored. Listed here so future
+# contributors don't accidentally add rules for them:
+#
+#   .mvn/wrapper/maven-wrapper.jar   — Maven wrapper binary (reproducible builds)
+#   .mvn/wrapper/maven-wrapper.properties
+#   mvnw                              — Maven wrapper script (Unix)
+#   mvnw.cmd                          — Maven wrapper script (Windows)
+#   .env.example                      — Dev env template (safe, no secrets)
+#   .env.prod.example                 — Prod env template (safe, no secrets)
+#   .vscode/settings.json             — Shared VS Code settings (un-ignored above)
+#   .vscode/extensions.json           — Recommended extensions
+#   .vscode/launch.json               — Shared debug configs
+#   .vscode/tasks.json                — Shared build tasks
+#   pom.xml                           — Maven build definition
+#   Dockerfile, docker-compose*.yml   — Infrastructure definitions
+#   infrastructure/**                 — All infra configs (Postgres, Keycloak, etc.)
+#   docs/**                           — Documentation and runbooks
+#
+# If you find yourself adding an ignore rule for any of the above, STOP and
+# ask why. There is almost certainly a better solution.
+# ==============================================================================
+# Notification client generated verification artifacts
+clients/notifications/*-results.xml
+clients/notifications/client-sbom.json
+
+# Local development identities: publishing only their certificates breaks fresh setup
+/infrastructure/tls/ca/
+/infrastructure/tls/order-service/
+/infrastructure/tls/inventory-service/
+/infrastructure/tls/payment-service/
+
+# Keep the shared editor policy reachable even when the parent is globally ignored
+!/.vscode/
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/extensions.json
+!/.vscode/launch.json
+!/.vscode/tasks.json

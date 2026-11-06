@@ -1,0 +1,478 @@
+# ==============================================================================
+# Order Management Platform — Loki configuration
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/loki/loki-config.yml
+# MOUNTED  : /etc/loki/config.yml (read-only) into the loki container
+# USED BY  : docker-compose.yml (loki service)
+#            via: command: ["-config.file=/etc/loki/config.yml"]
+#
+# WHAT LOKI DOES
+#   Loki is a horizontally-scalable, highly-available, multi-tenant log
+#   aggregation system inspired by Prometheus. Unlike Elasticsearch, Loki
+#   indexes only metadata (labels), not the log content itself. This makes
+#   it dramatically cheaper to run — the trade-off is that full-text search
+#   over log bodies is slower.
+#
+#   In our stack, Loki receives logs from Promtail (see File 18a), which
+#   tails Docker's json-file logs. Grafana queries Loki as a datasource
+#   (see File 16).
+#
+# SINGLE-NODE vs CLUSTERED
+#   Loki can run as a single process (monolithic) or as multiple microservice
+#   processes (distributor, ingester, querier, compactor). We run MONOLITHIC
+#   in Phase 0 — one process handles everything. This is correct for a
+#   single-host deployment and dramatically simpler to operate.
+#
+#   The config below still has sections for each component (ingester,
+#   querier, etc.) because Loki's config format requires them, but they all
+#   apply to the single running process.
+#
+# STORAGE
+#   Phase 0 uses FILESYSTEM storage, backed by the `loki-data` named volume.
+#   This is correct for single-node. For a multi-node or high-volume
+#   deployment, migrate to S3 (or equivalent) by replacing the `filesystem`
+#   blocks with `s3` blocks — the structure of this file makes that a
+#   contained change.
+#
+# RETENTION
+#   Default retention is 30 days (720h), configured in limits_config. The
+#   compactor enforces retention by deleting chunks past their age.
+#   IMPORTANT: retention only works if `compactor.retention_enabled: true`.
+#   Without it, Loki stores logs forever and the disk fills.
+#
+# REFERENCES
+#   https://grafana.com/docs/loki/latest/configure/
+#   https://grafana.com/docs/loki/latest/configuration/examples/
+#
+# ==============================================================================
+
+# ==============================================================================
+# AUTH
+# ==============================================================================
+# Loki is multi-tenant by design. Every log line belongs to a "tenant"
+# (identified by the X-Scope-OrgID header). With auth disabled, all logs go
+# to the tenant named "fake".
+#
+# Dev:   auth_enabled: false — no auth, single tenant "fake".
+# Prod:  auth_enabled: true  — Promtail sends X-Scope-OrgID: <tenant>.
+#        For our single-tenant use case, we'd still use one tenant name,
+#        but the auth machinery would be enabled so external access is
+#        controlled.
+# ==============================================================================
+auth_enabled: false
+
+# ==============================================================================
+# SERVER
+# ==============================================================================
+# HTTP and gRPC listener configuration.
+#
+# - http_listen_port 3100 — Loki's main API (query, push, ready, metrics).
+# - grpc_listen_port 9095 — inter-component communication (unused in
+#   monolithic mode, but required by the config schema).
+#
+# The `log_level` controls Loki's own logs, not the logs it stores.
+# ==============================================================================
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+  log_level: info
+
+  # Graceful shutdown timeout. Loki flushes in-flight writes to chunks
+  # before exiting. 30s is generous and prevents truncated chunks on
+  # `docker compose stop`.
+  graceful_shutdown_timeout: 30s
+
+  # HTTP server settings. Timeouts are generous because some queries
+  # (large log searches) can take a while.
+  http_server_read_timeout: 60s
+  http_server_write_timeout: 60s
+  http_server_idle_timeout: 120s
+
+# ==============================================================================
+# COMMON
+# ==============================================================================
+# Settings shared across all components (distributor, ingester, etc.). In
+# monolithic mode, these apply globally.
+# ==============================================================================
+common:
+  # Path prefix for all of Loki's working state. Individual components
+  # specify subdirectories (e.g., /loki/ingester, /loki/compactor).
+  path_prefix: /loki
+
+  # Storage backend for chunks (log data) and index. We use filesystem,
+  # backed by the `loki-data` volume.
+  #
+  # Alternatives (Phase 7+):
+  #   storage:
+  #     s3:
+  #       endpoint: s3.amazonaws.com
+  #       bucketnames: omp-loki
+  #       region: us-east-1
+  #       access_key_id: ...
+  #       secret_access_key: ...
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+  # Replication factor. In monolithic mode with a single instance, it must
+  # be 1 (there's nowhere to replicate to).
+  replication_factor: 1
+
+  # Ring configuration — how Loki's components discover each other. In
+  # monolithic mode, all components are in one process and discover each
+  # other via an in-memory ring.
+  ring:
+    kvstore:
+      store: inmemory
+    instance_addr: 127.0.0.1
+    instance_port: 9095
+
+# ==============================================================================
+# SCHEMA CONFIG
+# ==============================================================================
+# Maps time periods to index formats. Loki uses this to know which schema
+# version applies to data written at any given time. Fresh deployments
+# have one entry; upgrades append new entries as schema versions change.
+#
+# - store: tsdb       — Loki's modern index (recommended for all new deploys).
+# - object_store: filesystem — chunks live on disk (matches `common.storage`).
+# - schema: v13       — current schema version (Loki 3.0+).
+# - period: 24h       — the index is split into daily files. This is the
+#                       standard and rarely changed.
+# ==============================================================================
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# ==============================================================================
+# STORAGE CONFIG
+# ==============================================================================
+# Backing stores for different data types. Must be consistent with
+# `common.storage` above. This section is verbose because Loki uses it to
+# configure the TSDB index builder in detail.
+# ==============================================================================
+storage_config:
+  tsdb_shipper:
+    # Where the TSDB index files live.
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+
+  # Filesystem backend for chunks. Matches `common.storage.filesystem`.
+  filesystem:
+    directory: /loki/chunks
+
+# ==============================================================================
+# LIMITS CONFIG
+# ==============================================================================
+# Per-tenant limits. In monolithic mode with one tenant ("fake"), these
+# apply globally.
+#
+# TUNING PHILOSOPHY
+#   Loki is sensitive to "stream explosion" — a stream is a unique
+#   combination of labels. If a label has high cardinality (e.g., a
+#   request_id), Loki creates a new stream per value, and performance
+#   collapses. Limits below bound this.
+#
+#   Similarly, ingestion rate limits prevent a misbehaving client from
+#   filling the disk. These are the most important limits to get right.
+# ==============================================================================
+limits_config:
+
+  # --------------------------------------------------------------------------
+  # Retention
+  # --------------------------------------------------------------------------
+  # Logs older than this are eligible for deletion. The compactor enforces
+  # this (see compactor.retention_enabled below).
+  #
+  # 720h = 30 days. Matches LOKI_RETENTION_PERIOD in .env.prod.example.
+  #
+  # Common values:
+  #   168h  (7 days)   — small dev/test
+  #   720h  (30 days)  — typical production
+  #   2160h (90 days)  — compliance-heavy
+  #   8760h (1 year)   — expensive, rare
+  retention_period: 720h
+
+  # --------------------------------------------------------------------------
+  # Out-of-order rejection
+  # --------------------------------------------------------------------------
+  # Reject samples that arrive with timestamps too far in the past. Loki is
+  # not a backfill system — allowing arbitrary-age samples would break the
+  # index and waste storage on data that will be immediately deleted.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h  # 1 week
+
+  # --------------------------------------------------------------------------
+  # Ingestion rate limits
+  # --------------------------------------------------------------------------
+  # Maximum sustained ingestion rate per tenant, in MB/s.
+  # 10 MB/s = ~864 GB/day at sustained max, but real workloads are bursty
+  # and much lower. 10 MB/s is generous for dev and small prod.
+  ingestion_rate_mb: 10
+
+  # Maximum burst size above the sustained rate.
+  # 20 MB = 2x the ingestion rate, allowing short bursts.
+  ingestion_burst_size_mb: 20
+
+  # Maximum number of active streams per tenant. Each unique label
+  # combination is a stream. This is the CRITICAL limit — it prevents
+  # stream explosion.
+  #
+  # With our Phase 0 label scheme (see File 18a's promtail-config.yml),
+  # each container produces one stream. With ~15 containers, we'll have
+  # ~15 streams. Even at 100x growth, we're well under this.
+  max_streams_per_user: 5000
+
+  # Maximum size of a single log line (in bytes). Lines longer than this
+  # are truncated.
+  max_line_size: 256kb
+
+  # Maximum size of a single label value. Bounds label cardinality.
+  max_label_value_length: 2048
+
+  # Maximum number of labels per stream.
+  max_label_names_per_series: 15
+
+  # --------------------------------------------------------------------------
+  # Query limits
+  # --------------------------------------------------------------------------
+  # Maximum time range a single query can span.
+  # 721h = ~30 days (matches retention_period).
+  max_query_length: 721h
+
+  # How far in the future a query can ask about. Guards against
+  # clock-skew nonsense.
+  max_query_lookback: 720h
+
+  # Maximum parallel sub-queries for a single user. Bounds CPU usage from
+  # one expensive query.
+  max_query_parallelism: 32
+
+  # Maximum log lines returned per query. Matches Grafana's datasource
+  # config (File 16: maxLines=5000) — beyond this, Grafana wouldn't
+  # display them anyway.
+  max_entries_limit_per_query: 5000
+
+  # Maximum number of unique series (label combinations) returned by a
+  # query. Prevents a broad label match from overwhelming the querier.
+  max_query_series: 500
+
+  # --------------------------------------------------------------------------
+  # Cardinality and metadata
+  # --------------------------------------------------------------------------
+  # Prevent clients from sending labels that would explode cardinality.
+  # Loki rejects ingestion if a stream would violate these.
+  #
+  # allow_structured_metadata is the OTel convention: logs sent via OTLP
+  # carry structured metadata (trace_id, span_id) that must be preserved
+  # but not indexed as labels. Enabled here for Phase 1+ compatibility.
+  allow_structured_metadata: true
+
+  # --------------------------------------------------------------------------
+  # Retention stream (Phase 7+)
+  # --------------------------------------------------------------------------
+  # Per-stream retention rules. Not enabled in Phase 0. When we need
+  # different retention for different log types (e.g., audit logs kept
+  # longer than debug logs), we add entries here.
+  #
+  # retention_stream:
+  #   - selector: '{tier="auth"}'
+  #     priority: 1
+  #     period: 2160h  # 90 days for auth logs
+
+# ==============================================================================
+# COMPACTOR
+# ==============================================================================
+# The compactor is responsible for two things:
+#   1. Merging small chunks into larger ones (reduces index overhead).
+#   2. Enforcing retention (deleting chunks past `retention_period`).
+#
+# CRITICAL: `retention_enabled` MUST be true, or Loki stores logs forever
+# and the disk fills. This is the single most common Loki misconfiguration.
+# ==============================================================================
+compactor:
+  working_directory: /loki/compactor
+
+  # Enforce retention. Without this, logs are never deleted.
+  retention_enabled: true
+
+  # Where delete requests are tracked. Must be set for retention to work.
+  # In filesystem mode, it's the same volume.
+  delete_request_store: filesystem
+
+  # How often the compactor runs. 10 minutes is the default. It's a
+  # background job; no need to be aggressive.
+  compaction_interval: 10m
+
+  # How long to retain delete requests before applying them. This is a
+  # safety window: between the request and the actual deletion, the request
+  # can be cancelled. 0 means "delete immediately" (safe for our use case
+  # where deletions are entirely system-driven, not user-triggered).
+  delete_request_cancel_period: 0s
+
+  # Retention interval — how often retention is enforced. 1h is fine.
+  retention_delete_delay: 1h
+
+# ==============================================================================
+# INGESTER
+# ==============================================================================
+# The ingester receives log entries from distributors, buffers them in
+# memory, and flushes them to chunks in the object store.
+# ==============================================================================
+ingester:
+  # How long to keep chunks in memory before flushing to storage. Shorter =
+  # more I/O; longer = more memory. 1h is standard.
+  chunk_idle_period: 1h
+
+  # Maximum time a chunk can remain open, even under active writes. Bounds
+  # memory. 2h is generous.
+  max_chunk_age: 2h
+
+  # Target chunk size. Larger = fewer chunks, more efficient queries, more
+  # memory. 1.5MB is the Loki default.
+  chunk_target_size: 1572864
+
+  # Flush chunk if this many entries accumulate, regardless of time.
+  chunk_block_size: 262144
+
+  # How often to flush chunks to storage. 30s is fine.
+  flush_check_period: 30s
+
+  # Number of chunks to keep in memory before flushing. Prevents one
+  # tenant from hogging memory.
+  concurrent_flushes: 32
+
+  # Lifecycle: what happens when a chunk's time window passes.
+  # `chunk_retain_period` — how long to keep a flushed chunk in memory
+  # for in-flight queries. 15m is standard.
+  chunk_retain_period: 15m
+
+# ==============================================================================
+# QUERIER
+# ==============================================================================
+# The querier serves read requests: given a query and time range, it finds
+# the relevant chunks, decompresses them, and returns matching log lines.
+# ==============================================================================
+querier:
+  # Maximum time queriers wait for ingesters to respond. Generous because
+  # ingesters may be flushing to storage during the query.
+  query_ingesters_within: 3h
+
+  # Enable the "engine" (the newer query planner). Recommended for Loki 3+.
+  engine:
+    timeout: 5m
+    max_look_back_period: 720h
+
+# ==============================================================================
+# QUERY RANGE
+# ==============================================================================
+# The query_range component serves range queries from Grafana. It splits
+# the query window into sub-queries and parallelizes them across queriers.
+# ==============================================================================
+query_range:
+  # How long results are cached. Longer = less CPU, staleness for
+  # frequently-changing data. Logs don't change, so caching is safe.
+  align_queries_with_step: true
+
+  # Maximum number of retries for a failed sub-query. Handles transient
+  # errors gracefully.
+  max_retries: 5
+
+  # Result cache — stores the answers to common queries. Optional but
+  # meaningfully reduces CPU for repeated dashboard queries. Enabled with
+  # in-memory cache (dev-friendly).
+  cache_results: true
+
+  results_cache:
+    cache:
+      # In-memory cache for dev. Not shared across replicas; fine for a
+      # single-node deployment.
+      # For prod with multiple Loki instances, use memcached or Redis.
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+        ttl: 1h
+
+# ==============================================================================
+# TABLE MANAGER
+# ==============================================================================
+# Manages the TSDB index lifecycle: retention, compaction. Required section
+# for Loki's config schema even in monolithic mode.
+# ==============================================================================
+table_manager:
+  retention_deletes_enabled: false
+  retention_period: 0s
+
+# ==============================================================================
+# RUNTIME CONFIG (unused, but Loki expects the section)
+# ==============================================================================
+# Runtime config allows some settings to be changed via a file without
+# restarting Loki. We don't use it in Phase 0.
+# ==============================================================================
+runtime_config:
+  file: /etc/loki/runtime-config.yml
+
+# ==============================================================================
+# ANALYTICS
+# ==============================================================================
+# Loki periodically reports anonymous usage stats. Disabled — consistent
+# with the other components.
+# ==============================================================================
+analytics:
+  reporting_enabled: false
+
+# ==============================================================================
+# TRACING (Loki emitting its own traces)
+# ==============================================================================
+# Loki can trace its own operations. We don't enable this in Phase 0 — the
+# observability-of-observability story is covered by Loki's Prometheus
+# metrics, which Prometheus scrapes via /metrics.
+# ==============================================================================
+
+# ==============================================================================
+# OPERATIONAL NOTES
+# ==============================================================================
+#
+# VERIFYING LOKI IS UP
+#   curl http://localhost:3100/ready
+#   Expected: "ready"
+#
+# VERIFYING INGESTION
+#   After starting the stack and running some traffic, query Loki's own
+#   metrics to confirm logs are arriving:
+#     curl -s http://localhost:3100/metrics | grep loki_distributor_lines_received_total
+#
+#   Expected: a positive number.
+#
+# QUERYING LOGS (via API)
+#   curl -s "http://localhost:3100/loki/api/v1/query_range" \
+#     --data-urlencode 'query={container="omp-traefik-1"}' \
+#     --data-urlencode 'limit=10'
+#
+#   Or use Grafana Explore (which uses the same API).
+#
+# RETENTION TROUBLESHOOTING
+#   If disk usage grows without bound:
+#     1. Check compactor is running: docker compose logs loki | grep -i compactor
+#     2. Verify retention_enabled: true in the compactor section (above).
+#     3. Check retention_period is set in limits_config.
+#     4. Manually trigger compaction via the compactor's HTTP endpoint if
+#        needed: see Loki docs for /compactor/run.
+#
+# COMMON MISTAKES
+#   - Forgetting `compactor.retention_enabled: true` → logs are never deleted.
+#   - High-cardinality labels (request_id, user_id) → stream explosion.
+#     Check with: curl http://localhost:3100/metrics | grep loki_ingester_memory_streams
+#   - Setting `reject_old_samples: false` in production → allows backfill
+#     from misconfigured clients, breaking retention.
+#
+# ==============================================================================
+# END OF loki-config.yml
+# ==============================================================================

@@ -1,0 +1,76 @@
+# ==============================================================================
+# Alertmanager configuration — Order Management Platform
+# ------------------------------------------------------------------------------
+# Dev: routes all alerts to a local webhook receiver (logged only).
+# Prod overlay: replace the webhook receiver with real Slack/PagerDuty/email
+# receivers and set ALERTMANAGER_SLACK_WEBHOOK_URL / ALERTMANAGER_PAGERDUTY_KEY.
+#
+# Reload without restart:
+#   curl -X POST http://localhost:9093/-/reload
+# ==============================================================================
+
+global:
+  # How long to wait before re-sending a resolved alert.
+  resolve_timeout: 5m
+
+# ==============================================================================
+# ROUTING
+# ==============================================================================
+route:
+  # Default receiver for alerts that don't match any child route.
+  receiver: dev-webhook
+
+  # Group alerts by alertname + service so one notification covers all
+  # instances of the same alert on the same service.
+  group_by: [alertname, service]
+
+  # Wait this long to collect more alerts into the same group before firing.
+  group_wait: 30s
+
+  # How long to wait before sending a new notification for an already-firing
+  # group (e.g. after a new alert joins the group).
+  group_interval: 5m
+
+  # How long to wait before re-sending a notification for an unchanged group.
+  repeat_interval: 4h
+
+  routes:
+    # Critical alerts page immediately with no grouping delay.
+    - matchers:
+        - severity = critical
+      receiver: dev-webhook
+      group_wait: 0s
+      repeat_interval: 1h
+
+    # Kafka / outbox lag alerts go to their own group.
+    - matchers:
+        - alertname =~ "Kafka.*|Outbox.*|WebhookDlq.*"
+      receiver: dev-webhook
+      group_by: [alertname]
+
+# ==============================================================================
+# INHIBITION
+# ==============================================================================
+# Suppress warning-level alerts when a critical alert is already firing for
+# the same service. Avoids alert storms when a service is completely down.
+inhibit_rules:
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: [service]
+
+# ==============================================================================
+# RECEIVERS
+# ==============================================================================
+receivers:
+  # Dev receiver: POST to a local echo endpoint (or any webhook URL).
+  # Replace with Slack/PagerDuty/email in production.
+  - name: dev-webhook
+    webhook_configs:
+      - url: ${ALERTMANAGER_WEBHOOK_URL:-http://localhost:5001/alerts}
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        # In dev, failures are logged but don't block alert delivery.
+        max_alerts: 50

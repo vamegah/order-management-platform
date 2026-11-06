@@ -1,0 +1,2 @@
+com.example.omp.shared.events.outbox.OutboxModuleAutoConfiguration
+com.example.omp.shared.events.TopicProvisioner

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for product-service.
+
+  Default behavior: write one JSON object per log line to stdout.
+  Promtail tails stdout and ships the JSON to Loki, where the fields are
+  directly queryable (no regex needed).
+
+  Override: set LOG_FORMAT=text to switch to human-readable output.
+  Useful for running the service locally without the full Docker stack.
+
+  Trace correlation: Micrometer Tracing puts trace_id and span_id into the
+  SLF4J MDC. The logstash encoder includes MDC fields automatically, so
+  every log line carries its trace context. See File 16's Loki datasource
+  for how Grafana turns these into clickable links to Tempo.
+-->
+<configuration>
+
+  <springProperty scope="context" name="serviceName"
+                  source="spring.application.name" defaultValue="unknown"/>
+  <springProperty scope="context" name="envName"
+                  source="PROMETHEUS_ENV" defaultValue="local"/>
+
+  <!-- Read the log format from an env var, defaulting to JSON. -->
+  <property name="LOG_FORMAT" value="${LOG_FORMAT:-json}"/>
+
+  <!-- ========================================================================
+       JSON appender — the default
+       ======================================================================== -->
+  <appender name="json" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <!-- Custom fields attached to every line. -->
+      <customFields>{"service":"${serviceName}","env":"${envName}"}</customFields>
+
+      <!-- Include MDC properties (trace_id, span_id) as top-level JSON fields. -->
+      <includeMdc>true</includeMdc>
+      <includeContext>false</includeContext>
+      <includeCallerData>false</includeCallerData>
+
+      <!-- Field name for the timestamp. ISO 8601 UTC. -->
+      <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSSXXX</timestampPattern>
+      <timeZone>UTC</timeZone>
+
+      <!-- Rename @timestamp to timestamp (cleaner in Loki queries). -->
+      <fieldNames>
+        <timestamp>timestamp</timestamp>
+        <message>message</message>
+        <logger>logger</logger>
+        <thread>thread</thread>
+        <levelValue>[ignore]</levelValue>
+      </fieldNames>
+
+      <!-- Uppercase level (INFO, DEBUG, WARN, ERROR). -->
+      <shortenedLoggerNameLength>40</shortenedLoggerNameLength>
+    </encoder>
+  </appender>
+
+  <!-- ========================================================================
+       Text appender — opt-in for local debugging
+       ======================================================================== -->
+  <appender name="text" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{ISO8601} [%thread] %-5level [%X{trace_id:-},%X{span_id:-}] %logger{40} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- ========================================================================
+       Conditional root appender selection
+       ======================================================================== -->
+  <root level="INFO">
+    <appender-ref ref="${LOG_FORMAT}"/>
+  </root>
+
+</configuration>

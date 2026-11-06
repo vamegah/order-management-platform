@@ -1,0 +1,56 @@
+# ==============================================================================
+# Inventory Service — Docker build context exclusions
+# ==============================================================================
+# Same pattern as Phase 1's services. Excludes build output, IDE files,
+# git metadata, and any local environment files.
+# ==============================================================================
+
+# Build output
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven
+.mvn/timing.properties
+dependency-reduced-pom.xml
+
+# Source and configuration not needed at runtime
+src/test/
+README.md
+*.md
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (never in the image)
+.env
+.env.*
+!.env.example
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Logs, temp
+*.log
+logs/
+tmp/

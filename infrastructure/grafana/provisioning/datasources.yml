@@ -1,0 +1,341 @@
+# ==============================================================================
+# Order Management Platform — Grafana datasource provisioning
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/grafana/provisioning/datasources.yml
+# MOUNTED  : /etc/grafana/provisioning/datasources/datasources.yml (read-only)
+#            via the mount in docker-compose.yml:
+#              - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+#
+# WHAT THIS FILE DOES
+#   Registers the three observability data sources with Grafana at startup:
+#     - Prometheus (metrics)  — isDefault: true
+#     - Loki       (logs)
+#     - Tempo      (traces)
+#
+#   Configures cross-datasource links so dashboards can pivot between them:
+#     - Prometheus exemplars → Tempo traces
+#     - Loki derived fields  → Tempo traces
+#     - Tempo traces         → Loki logs (via trace_id)
+#     - Tempo traces         → Prometheus metrics (via service.name)
+#
+#   These links are what make observability *unified* rather than three
+#   disconnected tools. A slow metric can lead to a specific trace, which can
+#   lead to the logs for that request.
+#
+# WHAT THIS FILE DOES NOT DO
+#   - Configure Grafana alerting. Prometheus handles rules (File 15a);
+#     Alertmanager (Phase 7) handles routing. Grafana is visualization only.
+#   - Configure authentication. Data sources are on the internal Docker
+#     network and need no auth between them.
+#   - Delete datasources. All UIDs are stable; no deletions required.
+#
+# PROVISIONING BEHAVIOUR
+#   Grafana reads this file at startup. Changes require a Grafana restart
+#   (unlike dashboards, which reload automatically):
+#       docker compose restart grafana
+#
+#   Provisioned datasources CANNOT be edited or deleted in the Grafana UI.
+#   This is intentional — it prevents configuration drift. To make changes,
+#   edit this file and restart.
+#
+# REFERENCES
+#   https://grafana.com/docs/grafana/latest/administration/provisioning/#data-sources
+#   https://grafana.com/docs/grafana/latest/datasources/prometheus/
+#   https://grafana.com/docs/grafana/latest/datasources/loki/
+#   https://grafana.com/docs/grafana/latest/datasources/tempo/
+#
+# ==============================================================================
+
+apiVersion: 1
+
+# ==============================================================================
+# DELETION LIST (unused, documented for future use)
+# ==============================================================================
+# Grafana removes any datasource listed here at startup. Useful when renaming
+# or replacing a datasource.
+#
+# We leave this empty. All datasources have stable UIDs that match their
+# names — renaming would require updating every dashboard. When that happens
+# (rarely), list the old UID here, apply, then remove the entry.
+# ==============================================================================
+deleteDatasources: []
+
+# ==============================================================================
+# DATASOURCES
+# ==============================================================================
+datasources:
+
+  # ============================================================================
+  # PROMETHEUS — metrics (default datasource)
+  # ============================================================================
+  # The primary datasource for time-series metrics. isDefault: true means
+  # panels that don't specify a datasource use Prometheus.
+  #
+  # EXEMPLARS
+  #   Prometheus can store exemplars — sample values annotated with a
+  #   trace_id from the corresponding trace. When enabled, Grafana shows
+  #   a small dot on the graph at each exemplar; clicking it opens the
+  #   trace in Tempo.
+  #
+  #   Exemplar support requires:
+  #     - The application to attach trace_id to Prometheus samples.
+  #     - OpenMetrics format on the /metrics endpoint.
+  #     - `exemplarTraceIdDestinations` here, pointing at Tempo.
+  #
+  #   Phase 1+ services will emit exemplars via Micrometer's
+  #   PrometheusMeterRegistry with the `otel` exemplar sampler.
+  # ============================================================================
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+    # JSON data source config — datasource-specific settings.
+    jsonData:
+      # How to display timestamps.
+      timeInterval: 15s
+
+      # HTTP method for queries. POST is required for large queries that
+      # exceed URL length limits.
+      httpMethod: POST
+
+      # Trace-to-metrics linking. Grafana can jump from a Tempo trace to
+      # Prometheus metrics filtered by the trace's service name. Used by
+      # the "Metrics" tab in Tempo's trace view.
+      #
+      # Actually, this is set on the TEMPO datasource (tracesToMetrics),
+      # not here. Listing Prometheus's role: it's the target of Tempo's
+      # link, and it's the source of exemplar links to Tempo.
+
+      # Exemplar → Tempo trace linking.
+      # When a Prometheus sample has an exemplar with a `trace_id`, Grafana
+      # renders a small marker on the graph. Clicking it opens the trace.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+          # The URL template. ${__value.raw} is the exemplar's value; here
+          # it's the trace_id we want to open.
+          urlDisplayLabel: "View trace in Tempo"
+
+      # Prometheus version compatibility. Affects how queries are
+      # constructed.
+      prometheusType: Prometheus
+      prometheusVersion: 2.55.0
+
+      # Cache level. `High` caches query results; useful for frequently
+      # viewed dashboards.
+      cacheLevel: High
+
+  # ============================================================================
+  # LOKI — logs
+  # ============================================================================
+  # Log aggregation and querying. Logs are ingested from Docker's json-file
+  # driver (File 2a's logging config) and from services that push directly
+  # via the OTel Collector (Phase 1+).
+  #
+  # DERIVED FIELDS
+  #   Loki can extract fields from log lines and turn them into links. We
+  #   extract `trace_id` from structured log lines and make it clickable,
+  #   jumping to the corresponding trace in Tempo.
+  #
+  #   This requires services to log `trace_id` in a known format. Our services
+  #   (Phase 1+) will emit logs with a `trace_id` field via Micrometer Tracing
+  #   + Logback MDC. In JSON logs, it's a top-level field; in plain text, it's
+  #   inside a `[trace_id=...]` prefix.
+  # ============================================================================
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+
+    jsonData:
+      # Maximum lines returned per query. Prevents a query from pulling
+      # millions of log lines into the browser.
+      maxLines: 5000
+
+      # Derived fields — extracted at query time and rendered as clickable
+      # links or labels.
+      derivedFields:
+        # Extract trace_id from log lines and link to Tempo.
+        #
+        # The regex matches `trace_id=<hex>` in the log line, capturing
+        # the hex portion. Update the regex if the log format changes.
+        #
+        # Both JSON and plain-text formats are supported:
+        #   JSON:  {"trace_id": "abc123", ...}
+        #   Plain: ... [trace_id=abc123] ...
+        #
+        # The matcher regex below works for plain-text format. JSON logs
+        # are auto-parsed by Loki's JSON pipeline — for those, use the
+        # `traceID` field directly.
+        - name: TraceID
+          matcherRegex: 'trace_id=([a-f0-9]+)'
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+
+        # Extract the OpenTelemetry `trace_id` from JSON-encoded logs.
+        # JSON logs are parsed by Loki's `| json` pipeline; the field
+        # becomes `traceID` and is directly usable.
+        - name: TraceIDJSON
+          matcherRegex: '"trace_id":"([a-f0-9]+)"'
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+
+  # ============================================================================
+  # TEMPO — distributed traces
+  # ============================================================================
+  # Trace storage and querying. Spans arrive via OTel Collector → Tempo.
+  #
+  # CROSS-LINKS
+  #   Tempo can link to:
+  #     - Loki (logs for the same trace_id, at the same time range)
+  #     - Prometheus (metrics for the same service, at the same time range)
+  #
+  #   These are the reverse of the links set up on Loki and Prometheus. With
+  #   all three directions configured, the three tools become one.
+  #
+  # SEARCH
+  #   Grafana's Tempo datasource supports two search modes:
+  #     - TraceQL (Tempo's query language, powerful)
+  #     - Search by tags (simple, fast)
+  #
+  #   Default is TraceQL. The UI exposes both.
+  # ============================================================================
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+
+    jsonData:
+      # ---- Trace → logs (Loki) ----
+      # From a trace, jump to Loki showing log lines for that trace_id
+      # during the trace's time range.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'
+        # Map the trace's service.name to Loki's `service` label.
+        # Log lines must have a `service` label matching the trace's
+        # service.name (Phase 1+ services will tag logs this way).
+        tags:
+          - key: 'service.name'
+            value: 'service'
+          - key: 'k8s.pod.name'
+            value: 'pod'
+        # Filter logs by trace_id. This is the tightest correlation —
+        # logs strictly belonging to this trace.
+        filterByTraceID: true
+        filterBySpanID: false
+
+      # ---- Trace → metrics (Prometheus) ----
+      # From a trace, jump to Prometheus showing metrics for the same
+      # service during the trace's time range.
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: 'service.name'
+            value: 'service'
+        queries:
+          - name: 'Request rate'
+            query: 'sum(rate(traefik_service_requests_total{service="$${__tags.service}"}[5m]))'
+          - name: 'Error rate'
+            query: 'sum(rate(traefik_service_requests_total{service="$${__tags.service}", code=~"5.."}[5m]))'
+
+      # ---- Service graph ----
+      # Grafana can render a service dependency graph from traces (which
+      # service calls which). Requires Tempo's metrics generator, which
+      # is not enabled in Phase 0. Placeholder for Phase 7.
+      serviceMap:
+        datasourceUid: prometheus
+
+      # ---- Node graph ----
+      # Render a node graph from span relationships. Enabled by default.
+      nodeGraph:
+        enabled: true
+
+      # ---- Loki correlation ----
+      # Deprecated in favor of tracesToLogsV2 above, but kept for
+      # compatibility with older dashboard JSON.
+      lokiSearch:
+        datasourceUid: loki
+
+      # ---- Search mode ----
+      # TraceQL is Tempo's query language (Tempo 2.0+). Default.
+      search:
+        hide: false
+
+      # ---- Trace ID time shift ----
+      # Traces may arrive slightly after the metrics that reference them.
+      # Shift the search window forward to catch them.
+      traceQuery:
+        timeShiftEnabled: true
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'
+
+      # ---- Span bar ----
+      # Show a bar graph of span durations above the trace view.
+      spanBar:
+        type: 'Tag'
+        tag: 'http.status_code'
+
+# ==============================================================================
+# DATASOURCE DEPENDENCIES
+# ==============================================================================
+# The cross-links above reference UIDs (prometheus, loki, tempo). If a UID
+# changes, the links break silently. The dependencies are:
+#
+#   Prometheus (uid: prometheus)
+#     ← referenced by: Tempo's tracesToMetrics, dashboard panels
+#
+#   Loki (uid: loki)
+#     ← referenced by: Tempo's tracesToLogsV2, Loki's derived fields (self)
+#
+#   Tempo (uid: tempo)
+#     ← referenced by: Prometheus's exemplar links, Loki's derived fields,
+#                      dashboard panels
+#
+# Renaming a UID requires updating:
+#   - This file (all references).
+#   - Every dashboard JSON in infrastructure/grafana/dashboards/.
+#   - Any saved Grafana UI state that references the old UID.
+#
+# Rule: don't change UIDs.
+#
+# ==============================================================================
+# OPERATIONAL NOTES
+# ==============================================================================
+#
+# APPLYING CHANGES
+#   Grafana reads datasource provisioning only at startup. To apply changes:
+#     docker compose restart grafana
+#
+#   To verify:
+#     Open http://grafana.localhost → Connections → Data sources
+#     Each of the three sources should show "working" (green checkmark).
+#
+# COMMON ISSUES
+#   "Data source is not working"
+#     - Verify the backend service is up: docker compose ps
+#     - Verify the URL resolves from inside Grafana:
+#         docker compose exec grafana wget -qO- http://prometheus:9090/-/healthy
+#     - Check Grafana logs: docker compose logs grafana | grep -i datasource
+#
+#   Dashboards show "Datasource not found"
+#     - A panel references a UID that doesn't match one of our three.
+#     - Fix the dashboard JSON to use `prometheus`, `loki`, or `tempo`.
+#
+#   Exemplar links don't work
+#     - Prometheus must have exemplar support (2.26+, we run 2.55).
+#     - Applications must emit exemplars (Phase 1+).
+#     - The exemplar's `trace_id` label must match the reference here.
+#
+# ==============================================================================
+# END OF datasources.yml
+# ==============================================================================

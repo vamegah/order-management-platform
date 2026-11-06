@@ -1,0 +1,229 @@
+# ==============================================================================
+# Inventory Service — base configuration
+# ==============================================================================
+# This service differs from Phase 1's REST services in two ways:
+#   1. There is no Tomcat. The primary interface is gRPC on port 9091.
+#   2. Management endpoints (actuator) run on a SEPARATE HTTP port (9092)
+#      so they don't require a web stack.
+#
+# Everything else (JPA, Flyway, security, OTel) follows the same patterns.
+# ==============================================================================
+
+spring:
+  application:
+    name: payment-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        compression.type: snappy
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/omp?currentSchema=payments,public}
+    username: ${SPRING_DATASOURCE_USERNAME:payments_svc}
+    password: ${SPRING_DATASOURCE_PASSWORD:local-dev-payment-password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Smaller pool than REST services: inventory RPCs are fast and
+      # mostly queries. 8 connections is generous for Phase 3.
+      maximum-pool-size: 8
+      minimum-idle: 2
+      keepalive-time: 300000
+      connection-timeout: 5000
+      validation-timeout: 3000
+      pool-name: payment-service-hikari
+
+  # ----------------------------------------------------------------------------
+  # JPA / Hibernate
+  # ----------------------------------------------------------------------------
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payments
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.batch_size: 25
+        order_inserts: true
+        order_updates: true
+        format_sql: false
+    open-in-view: false
+
+  # ----------------------------------------------------------------------------
+  # Flyway
+  # ----------------------------------------------------------------------------
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: payments
+    default-schema: payments
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+
+  # ----------------------------------------------------------------------------
+  # OAuth2 / JWT
+  # ----------------------------------------------------------------------------
+  # The resource-server starter provides the JwtDecoder bean. The gRPC
+  # interceptor uses it to validate tokens from gRPC metadata.
+  # ----------------------------------------------------------------------------
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://keycloak.localhost/realms/omp}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://keycloak:8080/realms/omp/protocol/openid-connect/certs}
+
+  # ----------------------------------------------------------------------------
+  # No `server:` block. There is no Tomcat.
+  # ----------------------------------------------------------------------------
+
+
+payment:
+  provider: ${PAYMENT_PROVIDER:noop}
+  stripe:
+    api-key: ${STRIPE_API_KEY:}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    api-version: 2024-06-20
+    timeout-seconds: 15
+    max-network-retries: 2
+    webhook-tolerance-seconds: 300
+
+banking:
+  adapter:
+    url: ${BANKING_ADAPTER_URL:http://localhost:8087}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      bankingAdapter:
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        slowCallRateThreshold: 60
+        slowCallDurationThreshold: 3s
+  retry:
+    instances:
+      bankingAdapter:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - com.example.omp.payment.client.BankingUnavailableException
+  timelimiter:
+    instances:
+      bankingAdapter:
+        timeoutDuration: 6s
+
+omp:
+  kafka:
+    provision-topics: true
+    default-partitions: 3
+    default-replication-factor: 1
+    retention-hours: 168
+    min-insync-replicas: 1
+
+  # ----------------------------------------------------------------------------
+  # Datasource — the `inventory` schema
+  # ----------------------------------------------------------------------------
+# ==============================================================================
+# gRPC server
+# ==============================================================================
+# Configured via grpc-spring-boot-starter.
+#
+# PORT 9093: the gRPC server. Reachable by other services on the app network.
+# REFLECTION: enabled in dev so `grpcurl` can list services. Disabled in prod.
+# ==============================================================================
+grpc:
+  server:
+    port: ${GRPC_PORT:9093}
+    enable-reflection: ${GRPC_REFLECTION_ENABLED:true}
+    security:
+      enabled: ${GRPC_MTLS_ENABLED:true}
+      certificate-chain: file:${TLS_CERT_PATH:/etc/tls/tls.crt}
+      private-key: file:${TLS_KEY_PATH:/etc/tls/tls.key}
+      trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/ca.crt}
+      client-auth: REQUIRE
+    # The server will register any bean annotated with @GrpcService.
+
+    # Max inbound message size. Default is 4 MB. Inventory messages are tiny
+    # (a few hundred bytes); leave default.
+
+    # Keepalive: how the server probes clients to detect dead connections.
+    # Defaults are fine for Phase 3.
+
+# ==============================================================================
+# Management HTTP (actuator)
+# ==============================================================================
+# Runs on a separate HTTP server (Spring Boot's "management port"). This
+# server is NOT the same as a Tomcat; it's a lightweight embedded HTTP
+# server started specifically for actuator endpoints.
+# ==============================================================================
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9094}
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# OpenTelemetry tracing
+# ==============================================================================
+# Same as Phase 1. gRPC calls are automatically traced by grpc-spring-boot-
+# starter's Micrometer integration. The traceparent header is propagated
+# via gRPC metadata.
+# ==============================================================================
+management.tracing:
+  sampling:
+    probability: ${TRACING_SAMPLE_RATE:1.0}
+  propagation:
+    type: w3c
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: grpc
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+      service.namespace: omp
+      deployment.environment: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+logging:
+  level:
+    root: INFO
+    com.example.omp: INFO
+    net.devh.boot.grpc: INFO
+    io.grpc: INFO
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"

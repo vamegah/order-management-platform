@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.example.omp</groupId>
+        <artifactId>order-management-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!-- =====================================================================
+         MODULE COORDINATES
+         ===================================================================== -->
+    <artifactId>graphql-gateway</artifactId>
+    <name>GraphQL Gateway</name>
+    <description>
+        GraphQL gateway that aggregates product-service, customer-service,
+        and order-service behind a single schema.
+
+        Exposes /graphql and (in dev) /graphiql. No database of its own.
+        Calls the three REST services via Feign. Uses DataLoader to batch
+        cross-service lookups.
+    </description>
+
+    <!-- =====================================================================
+         DEPENDENCIES
+         ===================================================================== -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             Internal shared modules
+             ================================================================ -->
+
+        <!-- Web utilities: PageResponse (for GraphQL page wrappers),
+             ProblemDetails (for the exception handler), and the shared
+             auto-configuration. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-web</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Note: omp-shared-domain is NOT declared. The gateway doesn't use
+             Money, Email, or PhoneNumber. If a future batch needs them, add
+             the dependency then. -->
+
+        <!-- ================================================================
+             Spring Boot starters
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring GraphQL: schema-first runtime, @QueryMapping,
+             @SchemaMapping, GraphQlTester, GraphiQL dev UI. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-graphql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Spring Cloud — Feign clients for the three REST services
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+        </dependency>
+
+        <!-- Micrometer binding exposes resilience4j_* metrics on
+             /actuator/prometheus, used by the OMP — GraphQL Gateway
+             dashboard. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Observability
+             ================================================================ -->
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
+
+        <!-- Note: no persistence dependencies. No JPA, no Flyway, no
+             PostgreSQL driver. The gateway has no database of its own. -->
+
+        <!-- Note: no springdoc-openapi. GraphQL has built-in schema
+             introspection. GraphiQL is the interactive UI. -->
+
+        <!-- ================================================================
+             Test dependencies
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring GraphQL test support: GraphQlTester and @GraphQlTest
+             for testing resolvers without a full HTTP stack. -->
+        <dependency>
+            <groupId>org.springframework.graphql</groupId>
+            <artifactId>spring-graphql-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- =====================================================================
+         BUILD
+         ===================================================================== -->
+    <build>
+        <plugins>
+
+            <!-- ============================================================
+                 Spring Boot Maven Plugin — executable jar packaging
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Surefire — unit tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Failsafe — integration tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 JaCoCo — 80% coverage enforcement
+                 ============================================================
+                 Excludes:
+                   - GraphqlGatewayApplication (main class)
+                   - dto/**        (client-side DTO records)
+                   - config/**     (Spring configuration)
+                   - clients/**    (Feign interfaces)
+                   - graphql/type/**   (GraphQL output records)
+                   - graphql/scalar/** (scalar configurations)
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/example/omp/gateway/GraphqlGatewayApplication.class</exclude>
+                                <exclude>com/example/omp/gateway/dto/**</exclude>
+                                <exclude>com/example/omp/gateway/config/**</exclude>
+                                <exclude>com/example/omp/gateway/clients/**</exclude>
+                                <exclude>com/example/omp/gateway/graphql/type/**</exclude>
+                                <exclude>com/example/omp/gateway/graphql/scalar/**</exclude>
+                            </excludes>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>static-analysis</id>
+            <dependencies>
+                <!-- GraphQL bytecode references these nullability annotations during analysis. -->
+                <dependency>
+                    <groupId>org.jetbrains</groupId>
+                    <artifactId>annotations</artifactId>
+                    <version>26.0.2</version>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
+</project>

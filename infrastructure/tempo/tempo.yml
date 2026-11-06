@@ -1,0 +1,572 @@
+# ==============================================================================
+# Order Management Platform — Tempo configuration
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/tempo/tempo.yml
+# MOUNTED  : /etc/tempo.yml (read-only) into the tempo container
+# USED BY  : docker-compose.yml (tempo service)
+#            via: command: ["-config.file=/etc/tempo.yml"]
+#
+# WHAT TEMPO DOES
+#   Tempo is a distributed tracing backend. It stores spans emitted by
+#   applications (via OpenTelemetry), and serves queries from Grafana:
+#     - Direct trace ID lookup ("show me trace abc123").
+#     - TraceQL queries (by service, duration, span attributes).
+#     - Search by tags (service name, HTTP status, etc.).
+#
+#   In our stack:
+#     - Applications emit spans via OpenTelemetry SDK (Phase 1+).
+#     - OTel Collector receives spans and forwards them to Tempo (File 20).
+#     - Grafana queries Tempo via the datasource (File 16).
+#     - The "OMP — Overview" dashboard (File 17c) monitors the OTel
+#       Collector pipeline's health, not Tempo's contents.
+#
+# SINGLE-NODE vs CLUSTERED
+#   Tempo runs MONOLITHIC in Phase 0 — one process handles all roles
+#   (distributor, ingester, querier, compactor). Correct for a single host.
+#   The config below has sections for each role, all applied to the one
+#   running process.
+#
+# STORAGE
+#   Local filesystem, backed by the `tempo-data` named volume (declared in
+#   File 2a). Correct for single-node. Multi-node deployments would use S3
+#   or equivalent — the structure of this file makes that migration
+#   contained.
+#
+# RETENTION
+#   7 days (168h). Shorter than logs (30 days) because traces are more
+#   voluminous — one request generates dozens of spans with attributes.
+#   7 days covers typical incident investigation and weekly trend analysis.
+#   Matches TEMPO_RETENTION_PERIOD in .env.prod.example.
+#
+# OTLP ONLY — NO JAEGER, NO ZIPKIN
+#   Tempo can receive traces in three protocols: OTLP (modern), Jaeger
+#   (legacy), and Zipkin (legacy). We enable ONLY OTLP, because our
+#   services use OpenTelemetry SDKs and the OTel Collector forwards via
+#   OTLP. No legacy protocols needed.
+#
+# METRICS GENERATOR — DISABLED
+#   Tempo 2.x+ can derive Prometheus metrics from incoming traces (latency
+#   histograms, service dependency graphs). Enabled in Phase 7 when traces
+#   are flowing and the added value justifies the config complexity.
+#
+# REFERENCES
+#   https://grafana.com/docs/tempo/latest/configuration/
+#   https://grafana.com/docs/tempo/latest/configuration/#complete-configuration
+#
+# ==============================================================================
+
+# ==============================================================================
+# SERVER
+# ==============================================================================
+# Tempo's HTTP server. Serves:
+#   - Query API (used by Grafana's Tempo datasource).
+#   - Health and readiness endpoints.
+#   - Metrics in Prometheus format (Tempo's own telemetry).
+#
+# Port 3200 matches Grafana's datasource URL (File 16: http://tempo:3200).
+# ==============================================================================
+server:
+  http_listen_port: 3200
+
+  # gRPC port for Tempo's internal gRPC API (not the OTLP gRPC receiver —
+  # that's separate). Used by the distributor/ingester in microservices
+  # mode. In monolithic mode, it's mostly unused, but Tempo requires the
+  # port to be configured.
+  grpc_listen_port: 9095
+
+  log_level: info
+  log_format: logfmt
+
+  # Graceful shutdown timeout. Tempo flushes in-flight spans to blocks
+  # before exiting. 30s is standard.
+  graceful_shutdown_timeout: 30s
+
+# ==============================================================================
+# MEMBERLIST
+# ==============================================================================
+# Memberlist is Tempo's gossip protocol for cluster membership and the
+# distributed ring. In monolithic mode, it's a single-node ring.
+#
+# We disable the cluster join and bind memberlist to localhost-only. The
+# ring uses an in-memory KV store (see ingester.lifecycler below).
+# ==============================================================================
+memberlist:
+  # Nothing to join in single-node mode.
+  join_members: []
+
+  # Bind to all interfaces inside the container. The port isn't exposed
+  # externally, so this is safe.
+  bind_addr:
+    - "0.0.0.0"
+  bind_port: 7946
+
+  # Advertise localhost — nothing else should be trying to reach us.
+  advertise_addr: "127.0.0.1"
+
+# ==============================================================================
+# DISTRIBUTOR
+# ==============================================================================
+# The distributor receives spans and forwards them to the appropriate
+# ingester (based on trace ID hashing). In monolithic mode, the
+# distributor and ingester are the same process, so this is nearly a no-op.
+#
+# The primary configuration here is the list of receivers. We enable OTLP
+# only.
+# ==============================================================================
+distributor:
+
+  # Receivers — protocols Tempo accepts spans on.
+  receivers:
+
+    # --------------------------------------------------------------------------
+    # OTLP gRPC receiver
+    # --------------------------------------------------------------------------
+    # Standard OpenTelemetry transport over gRPC. Used by the OTel
+    # Collector's `otlp` exporter (default transport).
+    #
+    # Port 4317 matches the OTel Collector's port on its own side; these
+    # are different containers, so the port numbers are independent. We
+    # keep them consistent (4317 everywhere) for clarity.
+    #
+    # The endpoint is empty string, which means "listen on all interfaces
+    # on the configured port." The port is 4317 by default.
+    # --------------------------------------------------------------------------
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+
+        # ----------------------------------------------------------------------
+        # OTLP HTTP receiver
+        # ----------------------------------------------------------------------
+        # Alternative OTLP transport over HTTP. Some clients prefer this
+        # (easier to debug with curl). Port 4318 matches the OTel
+        # Collector's HTTP port on its own side.
+        #
+        # We enable both gRPC and HTTP for flexibility. In practice, OTel
+        # Collector will use gRPC.
+        # ----------------------------------------------------------------------
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  # Log received spans? Very noisy. Off.
+  log_received_spans:
+    enabled: false
+
+  # Log discarded spans (rate limited, invalid, etc.)? Useful for
+  # debugging. On, but at a low rate limit.
+  log_discarded_spans:
+    enabled: true
+    include_all_attributes: false
+
+# ==============================================================================
+# INGESTER
+# ==============================================================================
+# The ingester receives spans from the distributor, buffers them in memory,
+# and flushes them to storage in "blocks." Each block contains the spans of
+# one or more traces.
+#
+# TUNING
+#   - trace_idle_period: how long a trace stays open waiting for late spans.
+#   - max_block_duration: how long a block can accumulate spans.
+#   - max_block_bytes: how large a block can grow.
+#
+#   When any threshold is hit, the block is flushed to the backend.
+#   Smaller values = faster queries but more storage overhead.
+# ==============================================================================
+ingester:
+
+  # How long a trace's spans stay in memory waiting for stragglers.
+  # Traces rarely arrive in order; the first span might arrive seconds
+  # before the last. 30s is a common default.
+  trace_idle_period: 30s
+
+  # Max time a block stays open. Bounds memory usage.
+  max_block_duration: 5m
+
+  # Max bytes in a block. Bounds block size on disk.
+  max_block_bytes: 100_000_000  # 100 MB
+
+  # How often to check for traces ready to flush. 10s is standard.
+  flush_check_period: 10s
+
+  # Flush to storage at this queue depth to prevent memory growth under
+  # sustained high throughput.
+  complete_block_timeout: 15m
+
+  # Number of concurrent flushes. Higher = more CPU, faster flushing.
+  concurrent_flushes: 2
+
+  # Number of blocks to keep in memory for query serving (recently
+  # flushed blocks are still hot). 2 is standard.
+  flush_all_on_shutdown: false
+
+  # --------------------------------------------------------------------------
+  # Write-ahead log
+  # --------------------------------------------------------------------------
+  # Before spans are flushed to a block, they're written to a WAL on disk.
+  # This provides durability: if Tempo crashes before flushing, the WAL
+  # lets it recover in-flight traces.
+  # --------------------------------------------------------------------------
+  wal:
+    path: /var/tempo/wal
+
+    # How often the WAL is truncated after a successful flush. Keep the WAL
+    # small.
+    ingestion_time_range_slack: 0s
+
+  # --------------------------------------------------------------------------
+  # Lifecycler and ring
+  # --------------------------------------------------------------------------
+  # In monolithic mode, the ingester is the only one. The ring is trivially
+  # single-node and uses an in-memory KV store.
+  # --------------------------------------------------------------------------
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+
+    # Use the hostname as the ring token owner. In single-node, this is
+    # just an identity.
+    address: "127.0.0.1"
+
+    # Port for the ring's HTTP interface.
+    port: 9095
+
+    # Grace period on shutdown for the ring to reflect our exit.
+    final_sleep: 0s
+
+    # Token identity in the ring.
+    tokens_file_path: ""
+
+# ==============================================================================
+# COMPACTOR
+# ==============================================================================
+# Merges small blocks into larger ones and deletes blocks past retention.
+#
+# CRITICAL: block_retention MUST be set, or traces accumulate forever and
+# the disk fills. Same trap as Loki's compactor (File 18).
+# ==============================================================================
+compactor:
+
+  compaction:
+
+    # --------------------------------------------------------------------------
+    # Retention
+    # --------------------------------------------------------------------------
+    # 168h = 7 days. Matches TEMPO_RETENTION_PERIOD in .env.prod.example.
+    #
+    # Deletion is enforced by the compactor: it scans for blocks older than
+    # this and removes them.
+    # --------------------------------------------------------------------------
+    block_retention: 168h
+
+    # How often to run compaction. 30m is standard.
+    compaction_window: 1h
+
+    # Compact traces into larger blocks to reduce index overhead.
+    # Tenants are compacted separately (we have one tenant).
+    compacted_block_retention: 1h
+
+    # How many blocks to compact in parallel. Higher = faster, more CPU.
+    max_compaction_objects: 6
+
+    # Max total size of a compacted block. Prevents one giant block.
+    max_block_bytes: 100_000_000_000  # 100 GB
+
+    # Keep the WAL blocks (uncompacted) for this long after compaction.
+    # Safety window for crash recovery.
+    retention_concurrency: 10
+
+  # Ring configuration for the compactor (single-node in Phase 0).
+  ring:
+    kvstore:
+      store: inmemory
+    instance_addr: "127.0.0.1"
+    instance_port: 9095
+
+# ==============================================================================
+# QUERIER
+# ==============================================================================
+# Serves queries from Grafana:
+#   - Trace ID lookup (from ingester memory or backend storage).
+#   - TraceQL queries (backend storage, with search optimization).
+#   - Tag search (index lookups).
+# ==============================================================================
+querier:
+
+  # Max time to wait for a query to complete across ingesters and storage.
+  query_timeout: 30s
+
+  # Max time to wait for ingesters to respond. If a query spans recently-
+  # ingested data, ingesters are the source. 5s is standard.
+  query_ingesters_until: 5m
+
+  # Number of concurrent queries to allow. Higher = more throughput, more
+  # CPU. 20 is a common default.
+  max_concurrent_queries: 20
+
+  # Search:
+  #   Recent traces are in ingester memory. Older traces are in storage.
+  #   Search will query both, and merge results.
+  search:
+    # Search all blocks. For very large deployments, this can be slow; use
+    # a smaller value to limit query cost.
+    max_duration: 0s   # 0 = unlimited
+    prefer_self: 0
+
+  # --------------------------------------------------------------------------
+  # Trace-by-ID
+  # --------------------------------------------------------------------------
+  # Direct trace lookups go straight to the ingesters first (fast path).
+  # Then fall back to storage.
+  # --------------------------------------------------------------------------
+  trace_by_id:
+    query_timeout: 10s
+
+# ==============================================================================
+# QUERY FRONTEND
+# ==============================================================================
+# The query frontend sits in front of queriers, providing:
+#   - Query queuing (prevents overload).
+#   - Query splitting (breaks long time ranges into chunks).
+#   - Response caching.
+#
+# Grafana connects to the query frontend (:3200) — this is the entry point
+# for all queries.
+# ==============================================================================
+query_frontend:
+
+  # How many concurrent requests to accept. Higher = more throughput, more
+  # CPU.
+  max_outstanding_per_tenant: 2000
+
+  # Cache for trace ID lookups. Trace IDs are immutable — the same query
+  # always returns the same result. Caching is safe and effective.
+  search:
+    # How long to keep search results cached.
+    cache_control:
+      max_age: 30s   # short, because searches are freshness-sensitive
+
+  # Trace ID lookups can be cached longer.
+  trace_by_id:
+    # Cache results for this long. 30s is fine — a trace ID lookup is
+    # usually repeated within seconds during investigation.
+    query_shards: 1
+
+  # Preferred response format for TraceQL queries. `json` is what Grafana
+  # expects.
+  response_format: json
+
+# ==============================================================================
+# STORAGE
+# ==============================================================================
+# Defines the trace backend (block storage). Must be consistent with
+# `common.storage` if that section exists. Here it's the top-level source
+# of truth.
+#
+# Local filesystem backed by the `tempo-data` volume (mounted at /var/tempo).
+# ==============================================================================
+storage:
+
+  trace:
+
+    # --------------------------------------------------------------------------
+    # Local filesystem backend
+    # --------------------------------------------------------------------------
+    # Blocks (compacted trace data) are written to this path. The path is
+    # inside the `tempo-data` volume.
+    #
+    # For prod-scale deployments, replace with S3:
+    #   backend: s3
+    #   s3:
+    #     bucket: omp-tempo
+    #     endpoint: s3.amazonaws.com
+    #     region: us-east-1
+    # --------------------------------------------------------------------------
+    backend: local
+    local:
+      path: /var/tempo/traces
+
+    # --------------------------------------------------------------------------
+    # WAL
+    # --------------------------------------------------------------------------
+    # Duplicate of the ingester WAL path. Must agree with
+    # `ingester.wal.path`.
+    # --------------------------------------------------------------------------
+    wal:
+      path: /var/tempo/wal
+
+    # --------------------------------------------------------------------------
+    # Block pooling — cache for recently written blocks.
+    # --------------------------------------------------------------------------
+    # Keeps hot blocks in memory, avoiding disk reads for recent traces.
+    # Bounds the cache size.
+    # --------------------------------------------------------------------------
+    pool:
+      max_workers: 100
+      queue_depth: 10000
+
+    # --------------------------------------------------------------------------
+    # Block retention
+    # --------------------------------------------------------------------------
+    # How often to scan for blocks older than `block_retention` (see the
+    # compactor section). Enforced by the compactor.
+    # --------------------------------------------------------------------------
+    blocklist_poll: 5m
+
+    # The blocklist is an index of all blocks. Cached for fast lookups.
+    blocklist_poll_tenant_index_builders: 2
+    blocklist_poll_stale_tenant_index: 0
+
+    # --------------------------------------------------------------------------
+    # Cache backend (in-memory for Phase 0)
+    # --------------------------------------------------------------------------
+    # Caches block metadata for faster queries. In-memory is fine for a
+    # single node.
+    # --------------------------------------------------------------------------
+    cache: inmemory
+    cache_min_compaction_level: 2
+    cache_max_block_age: 48h
+
+# ==============================================================================
+# OVERRIDES
+# ==============================================================================
+# Per-tenant limits and defaults. With auth disabled (Phase 0), all requests
+# use the "default" tenant.
+# ==============================================================================
+overrides:
+
+  # The default tenant applies to all requests.
+  defaults:
+
+    # --------------------------------------------------------------------------
+    # Ingestion limits
+    # --------------------------------------------------------------------------
+    # Max bytes per trace. Prevents one pathological trace from consuming
+    # memory.
+    max_bytes_per_trace: 5_000_000  # 5 MB
+
+    # Max bytes per tag. Bounds index size.
+    max_bytes_per_tag_values_query: 1_000_000  # 1 MB
+
+    # --------------------------------------------------------------------------
+    # Rate limits
+    # --------------------------------------------------------------------------
+    # Max ingestion rate per tenant (bytes/sec). With only OTel Collector
+    # sending, this is bounded by collector throughput.
+    ingestion_rate_limit_bytes: 15_000_000   # 15 MB/s
+    ingestion_burst_size_bytes: 20_000_000   # 20 MB
+
+    # Max spans per second per tenant.
+    max_spans_per_tenant: 100_000
+
+    # --------------------------------------------------------------------------
+    # Query limits
+    # --------------------------------------------------------------------------
+    # Max time range for a single query.
+    max_search_duration: 168h  # 7 days — matches retention
+
+    # Max number of blocks touched by a query. Bounds query cost.
+    max_blocks_per_query: 500
+
+# ==============================================================================
+# USAGE REPORTING
+# ==============================================================================
+# Tempo periodically reports anonymous usage stats. Disabled — consistent
+# with all our other components.
+# ==============================================================================
+usage_report:
+  reporting_enabled: false
+
+# ==============================================================================
+# METRICS GENERATOR (DISABLED — Phase 7)
+# ==============================================================================
+# Generates Prometheus metrics from traces:
+#   - traces_spanmetrics_* — latency histograms per service/operation
+#   - traces_service_graph_* — service dependency graph
+#
+# Requires:
+#   - A `metrics_generator` block enabled below.
+#   - Prometheus accepting remote writes (File 2a already sets
+#     --web.enable-remote-write-receiver).
+#
+# Uncomment and configure in Phase 7 when traces are flowing.
+# ==============================================================================
+# metrics_generator:
+#   registry:
+#     external_labels: {}
+#   storage:
+#     path: /var/tempo/generator/wal
+#     remote_write:
+#       - url: http://prometheus:9090/api/v1/write
+#         send_exemplars: true
+#   traces_storage:
+#     path: /var/tempo/generator/traces
+#   processor:
+#     service_graphs:
+#       dimensions: []
+#     span_metrics:
+#       dimensions: []
+#   processor:
+#     service_graphs:
+#       max_items: 10000
+#       wait: 10s
+#     span_metrics:
+#       histogram_buckets: [.002, .004, .008, .016, .032, .064, .128, .256, .512, 1.024, 2.048, 4.096, 8.192, 16.384]
+
+# ==============================================================================
+# OPERATIONAL NOTES
+# ==============================================================================
+#
+# VERIFYING TEMPO IS UP
+#   curl http://localhost:3200/ready
+#   Expected: "ready"
+#
+# VERIFYING INGESTION
+#   Tempo doesn't expose ingestion counters directly on an HTTP endpoint
+#   like Loki does. Check via:
+#     docker compose logs tempo | grep -i "received\|trace"
+#
+#   Or via Prometheus:
+#     tempo_distributor_spans_received_total
+#
+#   (Requires Prometheus to scrape Tempo — Phase 7 will add a scrape job.)
+#
+# QUERYING A TRACE BY ID (via API)
+#   curl -s http://localhost:3200/api/traces/<trace_id> | jq .
+#
+#   Or use Grafana Explore (which is the primary UI).
+#
+# RETENTION TROUBLESHOOTING
+#   If disk usage grows without bound:
+#     1. Check the compactor is running: docker compose logs tempo | grep -i compactor
+#     2. Verify `compactor.compaction.block_retention: 168h` (above).
+#     3. Verify the `storage.trace.backend` and `path` are correct.
+#     4. Check `tempo_compactor_blocks_deleted_total` in Prometheus (Phase 7).
+#
+# MEMORY TROUBLESHOOTING
+#   If Tempo uses too much memory:
+#     - Reduce `ingester.max_block_bytes`.
+#     - Reduce `ingester.max_block_duration`.
+#     - Check for a runaway service sending huge traces (rejected by
+#       `max_bytes_per_trace`).
+#
+# OTLP RECEIVER VERIFICATION
+#   The OTel Collector connects to Tempo via OTLP. Verify with:
+#     docker compose logs otel-collector | grep -i tempo
+#   Look for successful exports; errors indicate connectivity issues.
+#
+# SCALING TO S3
+#   When migrating from local to S3 storage:
+#     1. Change `storage.trace.backend` to `s3`.
+#     2. Add an `s3` block with bucket, region, credentials.
+#     3. Remove the `local` block.
+#     4. Restart Tempo.
+#     Historical local blocks can be migrated to S3 via Tempo's
+#     `tempo-cli` tools.
+#
+# ==============================================================================
+# END OF tempo.yml
+# ==============================================================================

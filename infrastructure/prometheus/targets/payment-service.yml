@@ -1,0 +1,15 @@
+# ==============================================================================
+# Prometheus scrape target — payment-service
+# ------------------------------------------------------------------------------
+# The target port is 9094 — the MANAGEMENT HTTP port (not 9093, the gRPC
+# port). Prometheus scrapes HTTP; gRPC's binary framing isn't compatible
+# with the Prometheus exposition format. The management port exposes the
+# same /actuator/prometheus endpoint as other services.
+# ==============================================================================
+
+- targets:
+    - payment-service:9094
+  labels:
+    service: payment-service
+    tier: app
+    __metrics_path__: /actuator/prometheus

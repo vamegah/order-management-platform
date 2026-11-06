@@ -1,0 +1,61 @@
+# ==============================================================================
+# GraphQL schema configuration
+# ------------------------------------------------------------------------------
+# Tuning for spring-graphql. The schema itself is in schema.graphqls.
+#
+# REFERENCE
+#   https://docs.spring.io/spring-graphql/reference/
+# ==============================================================================
+
+spring:
+  graphql:
+    # --------------------------------------------------------------------------
+    # Schema inspection
+    # --------------------------------------------------------------------------
+    # Print the schema to the log at startup. Useful for confirming that the
+    # .graphqls file was parsed correctly.
+    schema:
+      printer:
+        enabled: true
+
+      # ------------------------------------------------------------------------
+      # Introspection
+      # ------------------------------------------------------------------------
+      # Introspection lets clients query the schema itself (e.g., GraphiQL
+      # uses this to build its autocomplete). Disable in prod to reduce
+      # surface area.
+      introspection:
+        enabled: true    # overridden to false in prod
+
+    # --------------------------------------------------------------------------
+    # Query execution
+    # --------------------------------------------------------------------------
+    graphql:
+      # The HTTP path for the GraphQL endpoint.
+      path: /graphql
+
+      # ------------------------------------------------------------------------
+      # Error handling
+      # ------------------------------------------------------------------------
+      # Include the underlying exception message in GraphQL errors.
+      # In prod, this is overridden to false to avoid leaking implementation
+      # details.
+      exception-handlers:
+        data-fetcher-exception-handler:
+          enabled: true
+
+    # --------------------------------------------------------------------------
+    # GraphiQL (dev query editor)
+    # --------------------------------------------------------------------------
+    graphiql:
+      enabled: true       # overridden to false in prod
+      path: /graphiql
+
+    # --------------------------------------------------------------------------
+    # RSocket (for subscriptions — Phase 4)
+    # --------------------------------------------------------------------------
+    rsocket:
+      server:
+        mapping-path: /rsocket
+        transport: websocket
+        # Phase 4 will enable this. Default is disabled.

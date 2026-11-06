@@ -1,0 +1,219 @@
+# ==============================================================================
+# Product Service — base configuration
+# ==============================================================================
+# Shared by every environment. Environment-specific overrides live in:
+#   application-local.yml  — developer laptop
+#   application-test.yml   — automated tests
+#   application-prod.yml   — production
+#
+# Active profile is set via SPRING_PROFILES_ACTIVE (default: local).
+# ==============================================================================
+
+spring:
+  application:
+    name: product-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # ----------------------------------------------------------------------------
+  # Datasource
+  # ----------------------------------------------------------------------------
+  # Defaults point at the local Docker Postgres (available from any container
+  # on the `data` network). Overridden in prod by SPRING_DATASOURCE_URL, which
+  # the compose overlay sets from environment variables.
+  # ----------------------------------------------------------------------------
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/omp?currentSchema=products,public}
+    username: ${SPRING_DATASOURCE_USERNAME:products_svc}
+    password: ${SPRING_DATASOURCE_PASSWORD:local-dev-products-password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Connection pool. 10 is fine for a single instance of a service at
+      # modest load; increase when scaling.
+      maximum-pool-size: 10
+      minimum-idle: 2
+      # Keepalive ensures connections don't go stale against Postgres's
+      # idle_session_timeout (15 minutes in prod). See File 9.
+      keepalive-time: 300000
+      connection-timeout: 5000
+      validation-timeout: 3000
+      # Name the pool so it appears in Postgres's pg_stat_activity.
+      pool-name: product-service-hikari
+
+  # ----------------------------------------------------------------------------
+  # JPA / Hibernate
+  # ----------------------------------------------------------------------------
+  jpa:
+    # Flyway owns the schema. Hibernate validates entities match tables at
+    # startup, but never modifies the schema.
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        # Use the PostgreSQL dialect explicitly (Hibernate 6+ usually infers
+        # this, but explicit is safer).
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Batch inserts/updates to reduce round trips.
+        jdbc.batch_size: 25
+        order_inserts: true
+        order_updates: true
+        # Quote identifiers that might be reserved words.
+        globally_quoted_identifiers: false
+        # Generate comments from Javadoc on entities (nice for pgAdmin).
+        format_sql: false
+    open-in-view: false
+
+  # ----------------------------------------------------------------------------
+  # Flyway
+  # ----------------------------------------------------------------------------
+  # Runs migrations from src/main/resources/db/migration at startup. The
+  # connection is the same as the datasource. Migrations are versioned
+  # (V1__..., V2__...) and immutable once applied.
+  #
+  # `baseline-on-migrate` is enabled so that a database with existing data
+  # (e.g., during a recovery) can be brought under Flyway control without
+  # errors. In a fresh deployment it has no effect.
+  # ----------------------------------------------------------------------------
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+
+  # ----------------------------------------------------------------------------
+  # OAuth2 / JWT
+  # ----------------------------------------------------------------------------
+  # Keycloak is the issuer. The resource-server starter validates JWTs against
+  # Keycloak's public keys (fetched from the JWKS endpoint).
+  #
+  # issuer-uri is per-realm; the realm name is `omp` (see File 12).
+  # ----------------------------------------------------------------------------
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://keycloak.localhost/realms/omp}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://keycloak:8080/realms/omp/protocol/openid-connect/certs}
+
+# ==============================================================================
+# Server
+# ==============================================================================
+# Port 8081 — the service listens on this port inside the container. Traefik
+# routes external traffic to it. Dev compose exposes only the container port
+# (not published to the host).
+# ==============================================================================
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ==============================================================================
+# Actuator
+# ==============================================================================
+# The observability endpoints:
+#   /actuator/health       — liveness/readiness probes
+#   /actuator/info         — version, build time
+#   /actuator/prometheus   — Prometheus metrics
+#
+# Everything else is disabled to reduce attack surface.
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  # Custom metrics tags applied to every Prometheus metric.
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${PROMETHEUS_ENV:dev}
+  # Distribution of HTTP request durations for Prometheus histograms.
+  observations:
+    http:
+      server:
+        requests:
+          autotime:
+            enabled: true
+
+# ==============================================================================
+# OpenTelemetry tracing
+# ==============================================================================
+# Micrometer Tracing bridges to the OTel SDK, which exports spans via OTLP
+# to the OTel Collector (see File 20's config).
+#
+# Sample rate is 100% in dev (see every trace). Prod overrides to 10%.
+# ==============================================================================
+management.tracing:
+  sampling:
+    probability: ${TRACING_SAMPLE_RATE:1.0}
+  propagation:
+    type: w3c
+
+otel:
+  exporter:
+    otlp:
+      # OTel Collector's OTLP gRPC endpoint.
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: grpc
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+      service.namespace: omp
+      deployment.environment: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+# The Logback config (logback-spring.xml) writes structured JSON to stdout,
+# which Promtail ships to Loki. The `level` here is the root logger; per-
+# package levels are set in the profile files.
+# ==============================================================================
+logging:
+  level:
+    root: INFO
+    com.example.omp: INFO
+    org.springframework.web: INFO
+  # Include MDC fields (trace_id, span_id, tenant) in log lines.
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+
+# ==============================================================================
+# Springdoc / OpenAPI
+# ==============================================================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: false
+
+# Added in Batch 1.4
+app:
+  cors:
+    allowed-origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://web.localhost"
+  pagination:
+    default-size: 20
+    max-size: 100
+    allowed-sort-fields:
+      - createdAt
+      - updatedAt
+      - name
+      - sku

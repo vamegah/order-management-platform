@@ -1,0 +1,170 @@
+// ==============================================================================
+// Payment Service — gRPC API
+// ------------------------------------------------------------------------------
+// Defines the gRPC service for payment intents, transactions, and refunds.
+// Called by order-service and by the eventual webhook handler.
+//
+// DESIGN NOTES
+//   - The service tracks payment intents locally. The actual charge is made
+//     by an external provider (Stripe, etc.) whose integration is out of scope
+//     for Phase 3.
+//   - Amounts are Money messages (see common/money.proto).
+//   - All methods require a JWT in gRPC metadata.
+//
+// ERROR MODEL
+//   Same as inventory.proto. Additional cases:
+//   FAILED_PRECONDITION  — attempting to confirm a cancelled payment, or
+//                          refund a payment that hasn't succeeded.
+//
+// VERSIONING
+//   This package is `omp.payment` (v1). Breaking changes go in a new package.
+// ==============================================================================
+
+syntax = "proto3";
+
+package omp.payment;
+
+import "common/money.proto";
+
+option java_package = "com.example.omp.proto.payment";
+option java_multiple_files = true;
+option java_outer_classname = "PaymentProto";
+
+// ==============================================================================
+// Service definition
+// ==============================================================================
+
+service PaymentService {
+
+  // Creates a payment intent for an order. Records the intent; the actual
+  // charge is made later (via an external provider) and confirmed by
+  // ConfirmPayment.
+  rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (Payment);
+
+  // Fetches a payment by ID.
+  rpc GetPayment(GetPaymentRequest) returns (Payment);
+
+  // Privileged recovery lookup; requires order.reconcile scope.
+  rpc FindPaymentsByOrder(FindPaymentsByOrderRequest) returns (FindPaymentsByOrderResponse);
+
+  // Confirms a payment after the external provider succeeds.
+  // Idempotent if called with the same provider_reference.
+  rpc ConfirmPayment(ConfirmPaymentRequest) returns (Payment);
+
+  // Cancels a pending payment intent (before external confirmation).
+  rpc CancelPayment(CancelPaymentRequest) returns (Payment);
+
+  // Refunds a completed payment. Supports full and partial refunds.
+  rpc RefundPayment(RefundPaymentRequest) returns (Refund);
+
+  // Streams payment events for a customer or order. Server-side push.
+  //
+  // Use case: order-service subscribes to payment state changes to
+  // update order status.
+  rpc StreamPaymentEvents(StreamPaymentEventsRequest) returns (stream PaymentEvent);
+}
+
+// ==============================================================================
+// Messages — payment intents and confirmations
+// ==============================================================================
+
+message CreatePaymentIntentRequest {
+  string order_id = 1;
+  string customer_id = 2;
+  omp.common.Money amount = 3;
+  // Optional idempotency key. If provided, a duplicate request with the
+  // same key returns the existing intent.
+  string idempotency_key = 4;
+}
+
+message GetPaymentRequest {
+  string payment_id = 1;
+}
+
+message ConfirmPaymentRequest {
+  string payment_id = 1;
+  // Reference from the external provider (e.g., Stripe's payment_intent id).
+  string provider_reference = 2;
+}
+
+message CancelPaymentRequest {
+  string payment_id = 1;
+  string reason = 2;
+}
+
+message Payment {
+  string id = 1;
+  string order_id = 2;
+  string customer_id = 3;
+  omp.common.Money amount = 4;
+  PaymentStatus status = 5;
+  // Set after confirmation. Empty for pending payments.
+  string provider_reference = 6;
+  int64 created_at_epoch_millis = 7;
+  int64 updated_at_epoch_millis = 8;
+  // Full state-transition history, most recent first.
+  repeated PaymentEvent events = 9;
+}
+
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_CONFIRMED = 2;
+  PAYMENT_STATUS_CANCELLED = 3;
+  PAYMENT_STATUS_REFUNDED = 4;
+  PAYMENT_STATUS_PARTIALLY_REFUNDED = 5;
+  PAYMENT_STATUS_FAILED = 6;
+}
+
+// ==============================================================================
+// Messages — refunds
+// ==============================================================================
+
+message RefundPaymentRequest {
+  string payment_id = 1;
+  // Amount to refund. If not set or equal to the original amount, a full
+  // refund is processed.
+  omp.common.Money amount = 2;
+  string reason = 3;
+  string idempotency_key = 4;
+}
+
+message Refund {
+  string id = 1;
+  string payment_id = 2;
+  omp.common.Money amount = 3;
+  RefundStatus status = 4;
+  string reason = 5;
+  int64 created_at_epoch_millis = 6;
+}
+
+enum RefundStatus {
+  REFUND_STATUS_UNSPECIFIED = 0;
+  REFUND_STATUS_PENDING = 1;
+  REFUND_STATUS_COMPLETED = 2;
+  REFUND_STATUS_FAILED = 3;
+}
+
+// ==============================================================================
+// Messages — server-streaming events
+// ==============================================================================
+
+message StreamPaymentEventsRequest {
+  // Filter by order_id. If empty, streams all events (subject to auth).
+  string order_id = 1;
+  // Filter by customer_id. If empty, streams all events.
+  string customer_id = 2;
+}
+
+message PaymentEvent {
+  string payment_id = 1;
+  string order_id = 2;
+  // From and to status. `from` may be UNSPECIFIED for the initial event.
+  PaymentStatus from_status = 3;
+  PaymentStatus to_status = 4;
+  // Optional reason, e.g., "customer refund request".
+  string reason = 5;
+  int64 occurred_at_epoch_millis = 6;
+}
+message FindPaymentsByOrderRequest { string order_id = 1; }
+message FindPaymentsByOrderResponse { repeated Payment payments = 1; }

@@ -1,0 +1,170 @@
+{
+  "uid": "omp-graphql-gateway",
+  "title": "OMP — GraphQL Gateway",
+  "tags": ["omp", "service", "graphql-gateway"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": false,
+  "graphTooltip": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "Environment",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(up{job=\"omp-services\"}, env)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    { "id": 1, "type": "row", "title": "RED Metrics", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0} },
+
+    { "id": 2, "type": "timeseries", "title": "Request Rate",
+      "description": "HTTP request rate to /graphql.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
+      "targets": [
+        { "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"graphql-gateway\",env=~\"$env\"}[5m]))",
+          "legendFormat": "req/s" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 3, "type": "timeseries", "title": "Error Rate (HTTP)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
+      "targets": [
+        { "refId": "A",
+          "expr": "100 * sum(rate(http_server_requests_seconds_count{application=\"graphql-gateway\",env=~\"$env\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"graphql-gateway\",env=~\"$env\"}[5m])), 0.001)",
+          "legendFormat": "5xx %" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 30, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 4, "type": "timeseries", "title": "HTTP Latency Percentiles",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 9},
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m])))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m])))", "legendFormat": "p99" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "never"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "red", "value": 2}]}}, "overrides": []}
+    },
+
+    { "id": 10, "type": "row", "title": "GraphQL Operations", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 17} },
+
+    { "id": 11, "type": "timeseries", "title": "GraphQL Request Rate by Outcome",
+      "description": "Query and mutation rate, split by success vs. failure.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
+      "targets": [
+        { "refId": "A",
+          "expr": "sum by (outcome) (rate(graphql_request_seconds_count{application=\"graphql-gateway\",env=~\"$env\"}[5m]))",
+          "legendFormat": "{{outcome}}" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 12, "type": "timeseries", "title": "GraphQL Error Rate",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
+      "targets": [
+        { "refId": "A",
+          "expr": "sum(rate(graphql_request_seconds_count{application=\"graphql-gateway\",env=~\"$env\",outcome=\"failure\"}[5m]))",
+          "legendFormat": "errors/s" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 30, "showPoints": "never"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "red", "value": 5}]}}, "overrides": []}
+    },
+
+    { "id": 13, "type": "timeseries", "title": "GraphQL Execution Latency",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 26},
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le) (rate(graphql_request_seconds_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(graphql_request_seconds_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m])))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(graphql_request_seconds_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m])))", "legendFormat": "p99" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 20, "type": "row", "title": "DataLoader", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 34} },
+
+    { "id": 21, "type": "timeseries", "title": "DataLoader Load Rate",
+      "description": "How often DataLoaders are invoked. Each load represents a batched downstream call.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 35},
+      "targets": [
+        { "refId": "A",
+          "expr": "sum by (name) (rate(graphql_dataloader_load_total{application=\"graphql-gateway\",env=~\"$env\"}[5m]))",
+          "legendFormat": "{{name}}" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 22, "type": "heatmap", "title": "DataLoader Batch Size Distribution",
+      "description": "Distribution of batch sizes. Larger batches indicate better deduplication.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 35},
+      "targets": [
+        { "refId": "A",
+          "expr": "sum by (le, name) (rate(graphql_dataloader_batch_size_bucket{application=\"graphql-gateway\",env=~\"$env\"}[5m]))",
+          "format": "heatmap",
+          "legendFormat": "{{name}}" }
+      ],
+      "options": {
+        "calculate": false,
+        "color": { "mode": "spectrum" }
+      }
+    },
+
+    { "id": 30, "type": "row", "title": "Downstream Health", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 43} },
+
+    { "id": 31, "type": "timeseries", "title": "Feign Call Rate per Downstream",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
+      "targets": [
+        { "refId": "A",
+          "expr": "sum by (client) (rate(feign_Client_Request_Total{application=\"graphql-gateway\",env=~\"$env\"}[5m]))",
+          "legendFormat": "{{client}}" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 32, "type": "timeseries", "title": "Circuit Breaker State",
+      "description": "0 = closed, 1 = open, 2 = half-open.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
+      "targets": [
+        { "refId": "A",
+          "expr": "resilience4j_circuitbreaker_state{application=\"graphql-gateway\",env=~\"$env\"}",
+          "legendFormat": "{{name}}" }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 2, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 30, "showPoints": "never"}}, "overrides": []}
+    },
+
+    { "id": 40, "type": "row", "title": "Links", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 52} },
+
+    { "id": 41, "type": "text", "title": "",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 53},
+      "options": {
+        "mode": "markdown",
+        "content": "## Quick Links\n\n- [**GraphiQL**](http://graphql-gateway.localhost/graphiql) — interactive query editor (dev only)\n- [**GraphQL Endpoint**](http://graphql-gateway.localhost/graphql) — the API itself\n- [**Explore in Grafana**](/explore) — ad-hoc queries"
+      }
+    }
+  ]
+}

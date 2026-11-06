@@ -1,0 +1,296 @@
+# ==============================================================================
+# Product Service — base configuration
+# ==============================================================================
+# Shared by every environment. Environment-specific overrides live in:
+#   application-local.yml  — developer laptop
+#   application-test.yml   — automated tests
+#   application-prod.yml   — production
+#
+# Active profile is set via SPRING_PROFILES_ACTIVE (default: local).
+# ==============================================================================
+
+spring:
+  application:
+    name: order-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # ----------------------------------------------------------------------------
+  # JPA / Hibernate
+  # ----------------------------------------------------------------------------
+  jpa:
+    # Flyway owns the schema. Hibernate validates entities match tables at
+    # startup, but never modifies the schema.
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        # Use the PostgreSQL dialect explicitly (Hibernate 6+ usually infers
+        # this, but explicit is safer).
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Batch inserts/updates to reduce round trips.
+        jdbc.batch_size: 25
+        order_inserts: true
+        order_updates: true
+        # Quote identifiers that might be reserved words.
+        globally_quoted_identifiers: false
+        # Generate comments from Javadoc on entities (nice for pgAdmin).
+        format_sql: false
+    open-in-view: false
+
+  # ----------------------------------------------------------------------------
+  # Flyway
+  # ----------------------------------------------------------------------------
+  # Runs migrations from src/main/resources/db/migration at startup. The
+  # connection is the same as the datasource. Migrations are versioned
+  # (V1__..., V2__...) and immutable once applied.
+  #
+  # `baseline-on-migrate` is enabled so that a database with existing data
+  # (e.g., during a recovery) can be brought under Flyway control without
+  # errors. In a fresh deployment it has no effect.
+  # ----------------------------------------------------------------------------
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+
+  # ----------------------------------------------------------------------------
+  # OAuth2 / JWT
+  # ----------------------------------------------------------------------------
+  # Keycloak is the issuer. The resource-server starter validates JWTs against
+  # Keycloak's public keys (fetched from the JWKS endpoint).
+  #
+  # issuer-uri is per-realm; the realm name is `omp` (see File 12).
+  # ----------------------------------------------------------------------------
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://keycloak.localhost/realms/omp}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://keycloak:8080/realms/omp/protocol/openid-connect/certs}
+
+
+  # ----------------------------------------------------------------------------
+  # Datasource
+  # ----------------------------------------------------------------------------
+  # Defaults point at the local Docker Postgres (available from any container
+  # on the `data` network). Overridden in prod by SPRING_DATASOURCE_URL, which
+  # the compose overlay sets from environment variables.
+  # ----------------------------------------------------------------------------
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/omp?currentSchema=orders,public}
+    username: ${SPRING_DATASOURCE_USERNAME:orders_svc}
+    password: ${SPRING_DATASOURCE_PASSWORD:local-dev-orders-password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      keepalive-time: 300000
+      connection-timeout: 5000
+      validation-timeout: 3000
+      pool-name: orders-service-hikari
+
+  # ==============================================================================
+# Feign clients
+# ==============================================================================
+# Configures the HTTP clients that order-service uses to call product-service
+# and customer-service.
+#
+# - Connect/read timeouts are shorter than defaults so that a hanging
+#   downstream doesn't cascade into order-service slowness.
+# - Retries are disabled by default; specific operations opt in via Feign's
+#   retry annotation when idempotency allows.
+# - The `AuthForwardingInterceptor` (Batch 3.3) forwards the caller's JWT
+#   and the current trace context.
+# ==============================================================================
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 5000
+        loggerLevel: basic
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+
+# ==============================================================================
+# Client endpoint configuration
+# ==============================================================================
+# Where to find the services order-service depends on. Docker DNS resolves
+# these names inside the compose network. In prod, the same names resolve
+# to load-balanced endpoints.
+#
+# These URLs are consumed by @FeignClient(name = "...") annotations in
+# Batch 3.3's client interfaces.
+# ==============================================================================
+omp:
+  clients:
+    product-service:
+      url: ${PRODUCT_SERVICE_URL:http://product-service:8081}
+    customer-service:
+      url: ${CUSTOMER_SERVICE_URL:http://customer-service:8082}
+
+
+# ==============================================================================
+# gRPC clients
+# ==============================================================================
+# Order-service calls inventory-service and payment-service via gRPC.
+# The `grpc-client-spring-boot-starter` manages channels per target.
+#
+# DNS targets can be resolved again after a downstream container is replaced or
+# was unavailable at startup. TLS matches the servers' required client identity.
+#
+# default-deadline: max time for a single call. Longer than the server-side
+# timeout on the same call. If the deadline fires, the client gets
+# DEADLINE_EXCEEDED and the mapper translates to a domain exception.
+# ==============================================================================
+grpc:
+  client:
+    inventory-service:
+      address: ${INVENTORY_GRPC_URL:dns:///inventory-service:9091}
+      negotiation-type: TLS
+      default-deadline: 3000ms
+      security:
+        client-auth-enabled: true
+        certificate-chain: file:${TLS_CERT_PATH:/etc/tls/tls.crt}
+        private-key: file:${TLS_KEY_PATH:/etc/tls/tls.key}
+        trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/ca.crt}
+        authority-override: inventory-service
+    payment-service:
+      address: ${PAYMENT_GRPC_URL:dns:///payment-service:9093}
+      negotiation-type: TLS
+      default-deadline: 5000ms
+      security:
+        client-auth-enabled: true
+        certificate-chain: file:${TLS_CERT_PATH:/etc/tls/tls.crt}
+        private-key: file:${TLS_KEY_PATH:/etc/tls/tls.key}
+        trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/ca.crt}
+        authority-override: payment-service
+
+
+# ==============================================================================
+# Server
+# ==============================================================================
+# Port 8083 — the service listens on this port inside the container. Traefik
+# routes external traffic to it. Dev compose exposes only the container port
+# (not published to the host).
+# ==============================================================================
+server:
+  port: ${SERVER_PORT:8083}
+  shutdown: graceful
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ==============================================================================
+# Actuator
+# ==============================================================================
+# The observability endpoints:
+#   /actuator/health       — liveness/readiness probes
+#   /actuator/info         — version, build time
+#   /actuator/prometheus   — Prometheus metrics
+#
+# Everything else is disabled to reduce attack surface.
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  # Custom metrics tags applied to every Prometheus metric.
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${PROMETHEUS_ENV:dev}
+  # Distribution of HTTP request durations for Prometheus histograms.
+  observations:
+    http:
+      server:
+        requests:
+          autotime:
+            enabled: true
+
+# ==============================================================================
+# OpenTelemetry tracing
+# ==============================================================================
+# Micrometer Tracing bridges to the OTel SDK, which exports spans via OTLP
+# to the OTel Collector (see File 20's config).
+#
+# Sample rate is 100% in dev (see every trace). Prod overrides to 10%.
+# ==============================================================================
+management.tracing:
+  sampling:
+    probability: ${TRACING_SAMPLE_RATE:1.0}
+  propagation:
+    type: w3c
+
+otel:
+  exporter:
+    otlp:
+      # OTel Collector's OTLP gRPC endpoint.
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: grpc
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+      service.namespace: omp
+      deployment.environment: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+# The Logback config (logback-spring.xml) writes structured JSON to stdout,
+# which Promtail ships to Loki. The `level` here is the root logger; per-
+# package levels are set in the profile files.
+# ==============================================================================
+logging:
+  level:
+    root: INFO
+    com.example.omp: INFO
+    org.springframework.web: INFO
+  # Include MDC fields (trace_id, span_id, tenant) in log lines.
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+
+# ==============================================================================
+# Springdoc / OpenAPI
+# ==============================================================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: false
+
+# Added in Batch 1.4
+app:
+  cors:
+    allowed-origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://web.localhost"
+  pagination:
+    default-size: 20
+    max-size: 100
+    allowed-sort-fields:
+      - createdAt
+      - updatedAt
+      - total.amount
+      - status

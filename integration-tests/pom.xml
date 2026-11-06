@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- =====================================================================
+         PARENT
+         ===================================================================== -->
+    <parent>
+        <groupId>com.example.omp</groupId>
+        <artifactId>order-management-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!-- =====================================================================
+         MODULE COORDINATES
+         =====================================================================
+         Test-only module. No src/main. Produces an empty jar, which is
+         never deployed. The purpose is to hold end-to-end tests that
+         exercise the full running stack.
+         ===================================================================== -->
+    <artifactId>integration-tests</artifactId>
+    <name>Integration Tests</name>
+    <description>
+        End-to-end tests that exercise the running platform (all services)
+        over HTTP, WebSocket, and gRPC.
+
+        No compile-time dependency on service code. Tests validate the
+        public API of each service and the cross-service interactions,
+        not internal classes.
+
+        These tests require the full stack to be running:
+            docker compose up -d
+            mvn verify -Pe2e -pl integration-tests
+
+        By default, the e2e tag is excluded from `mvn verify`.
+    </description>
+
+    <!-- =====================================================================
+         DEPENDENCIES
+         ===================================================================== -->
+    <dependencies>
+
+        <!-- ================================================================
+             Internal shared modules
+             ================================================================ -->
+
+        <!-- gRPC service stubs and messages. Used by e2e tests to inspect
+             inventory and payment state directly (e.g., verify that a
+             reservation was created after an order was placed). -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-proto</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Event types and topic constants. Used by e2e tests that
+             verify event publication or parse WebSocket payloads. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Note: omp-shared-domain is not needed. The tests use REST
+             Assured's JSON path expressions and proto message types;
+             they don't instantiate the platform's domain value objects. -->
+
+        <!-- Note: omp-shared-web is not needed. The tests use REST
+             Assured for HTTP assertions, not the platform's
+             PageResponse/ProblemDetails wrappers. -->
+
+        <!-- ================================================================
+             Test framework
+             ================================================================ -->
+
+        <!-- JUnit 5, AssertJ, Mockito, Spring Test. Test-scoped; not
+             needed at runtime. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             REST client for HTTP-based tests
+             ================================================================ -->
+
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             gRPC client — direct, no Spring integration
+             ================================================================
+             The integration-tests module builds ManagedChannels manually
+             (see the GrpcClientFactory support class). This avoids
+             spinning up a Spring context purely to inject gRPC stubs.
+             ================================================================ -->
+
+        <!-- Netty-based transport for ManagedChannel. Compile scope
+             because the tests build channels at runtime. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Kafka client — consume events to verify publication
+             ================================================================
+             We use raw KafkaConsumer from kafka-clients, not Spring's
+             @KafkaListener. No Spring context needed.
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             WebSocket / STOMP client for real-time tests
+             ================================================================
+             Provides WebSocketStompClient, SockJsClient, and the
+             WebSocket/SockJS transports.
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             JSON parsing for WebSocket payloads
+             ================================================================
+             WebSocket payloads are JSON envelopes. Jackson is brought
+             transitively via spring-boot-starter-websocket, but we
+             declare it explicitly since the tests bind payloads to
+             typed records. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- =====================================================================
+         BUILD
+         ===================================================================== -->
+    <build>
+        <plugins>
+
+            <!-- ============================================================
+                 Surefire — explicitly skip. This module has only *IT.java
+                 files, which surefire is configured (in the parent) to
+                 exclude. Setting skipTests here is defense in depth: no
+                 scenario should cause surefire to run anything in this
+                 module.
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skipTests>true</skipTests>
+                </configuration>
+            </plugin>
+
+            <!-- ============================================================
+                 Failsafe — runs *IT.java. The parent's failsafe config
+                 already includes **/*IT.java. Activated here so the
+                 module runs its tests during `verify`.
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                </configuration>
+            </plugin>
+
+            <!-- Note: no spring-boot-maven-plugin. This module isn't
+                 executable. The jar produced is empty and never
+                 deployed.
+
+                 Note: no jacoco-maven-plugin. Coverage of test code is
+                 meaningless; there's no production code in this module.
+
+                 Note: no <dependencies> for Testcontainers, WireMock, or
+                 Spring Boot Testcontainers — this module runs against
+                 the real running stack, not stubs. -->
+
+        </plugins>
+    </build>
+
+</project>

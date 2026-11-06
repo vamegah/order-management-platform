@@ -1,0 +1,128 @@
+package com.example.omp.customer.web;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import com.example.omp.customer.TestSecurityConfig;
+import com.example.omp.customer.config.SecurityConfig;
+import com.example.omp.customer.service.CustomerService;
+import com.example.omp.shared.web.config.SharedWebAutoConfiguration;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest({AddressController.class, CustomerController.class})
+@Import({SecurityConfig.class, SharedWebAutoConfiguration.class, TestSecurityConfig.class})
+@ActiveProfiles("test")
+class CustomerSecurityBoundaryTest {
+    private static final UUID ALICE = UUID.fromString("00000000-0000-0000-0000-000000000101");
+    private static final UUID BOB = UUID.fromString("00000000-0000-0000-0000-000000000102");
+    @Autowired MockMvc mvc;
+    @MockBean CustomerService customers;
+
+    @Test
+    void anonymousCallerCannotReadAddresses() throws Exception {
+        mvc.perform(get("/api/v1/customers/{id}/addresses", ALICE))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void customerWithoutVerifiedClaimCannotReadAddresses() throws Exception {
+        mvc.perform(
+                        get("/api/v1/customers/{id}/addresses", ALICE)
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.aliceToken()))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void verifiedCustomerCanReadOwnAddresses() throws Exception {
+        mvc.perform(
+                        get("/api/v1/customers/{id}/addresses", ALICE)
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.linkedAliceToken()))
+                .andExpect(status().isOk());
+        verify(customers).listAddresses(ALICE);
+    }
+
+    @Test
+    void verifiedCustomerCannotReadAnotherCustomersAddresses() throws Exception {
+        mvc.perform(
+                        get("/api/v1/customers/{id}/addresses", BOB)
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.linkedAliceToken()))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void adminCanReadAnotherCustomersAddresses() throws Exception {
+        mvc.perform(
+                        get("/api/v1/customers/{id}/addresses", BOB)
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.adminToken()))
+                .andExpect(status().isOk());
+        verify(customers).listAddresses(BOB);
+    }
+
+    @Test
+    void configuredPaginationAcceptsEmailSort() throws Exception {
+        mvc.perform(
+                        get("/api/v1/customers")
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.adminToken())
+                                .param("sort", "email,asc"))
+                .andExpect(status().isOk());
+        verify(customers)
+                .list(any(), argThat(page -> page.getSort().getOrderFor("email").isAscending()));
+    }
+
+    @Test
+    void unknownSortFieldIsRejectedBeforeServiceAccess() throws Exception {
+        mvc.perform(
+                        get("/api/v1/customers")
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.adminToken())
+                                .param("sort", "name,asc"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void allowedOriginCanPreflightWithoutAuthentication() throws Exception {
+        mvc.perform(
+                        options("/api/v1/customers/me")
+                                .header("Origin", "http://localhost:3000")
+                                .header("Access-Control-Request-Method", "GET")
+                                .header("Access-Control-Request-Headers", "Authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void unknownOriginCannotPreflight() throws Exception {
+        mvc.perform(
+                        options("/api/v1/customers/me")
+                                .header("Origin", "https://untrusted.example")
+                                .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+        verifyNoInteractions(customers);
+    }
+}

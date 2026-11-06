@@ -1,0 +1,355 @@
+# ==============================================================================
+# Order Management Platform — Traefik static configuration (DEVELOPMENT)
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/traefik/traefik.yml
+# MOUNTED  : /etc/traefik/traefik.yml (read-only) into the traefik container
+# USED BY  : docker-compose.yml (traefik service)
+#            via: command: ["--configFile=/etc/traefik/traefik.yml"]
+#
+# STATIC vs DYNAMIC CONFIGURATION
+#   Traefik has two kinds of configuration:
+#
+#   STATIC (this file)
+#     Read once at startup. Changes require a Traefik restart.
+#     Defines: entrypoints, providers, API/dashboard, logging, metrics, tracing.
+#
+#   DYNAMIC (Docker labels on each service)
+#     Read continuously. Changes are applied without restart.
+#     Defines: routers, services, middlewares (per-service).
+#
+#   We keep ALL service-specific routing in Docker labels (see docker-compose.yml
+#   and docker-compose.prod.yml). This file only sets the global behaviour that
+#   doesn't change per-service.
+#
+# DEV vs PROD
+#   This is the DEVELOPMENT static config. It:
+#     - Serves plain HTTP on :80 (no TLS)
+#     - Exposes the dashboard on :8080 without authentication
+#     - Uses the Docker provider with direct socket access
+#     - Logs at INFO level (verbose, for debugging)
+#
+#   The PRODUCTION static config is traefik.prod.yml. It:
+#     - Adds an HTTPS entrypoint on :443
+#     - Configures Let's Encrypt (ACME) for automatic certificates
+#     - Redirects HTTP to HTTPS
+#     - Disables the insecure dashboard; requires basic-auth via middleware
+#     - Logs at WARN level
+#
+# REFERENCE
+#   Full static configuration reference:
+#     https://doc.traefik.io/traefik/reference/static-configuration/file/
+#
+# ==============================================================================
+
+# ==============================================================================
+# GLOBAL
+# ==============================================================================
+# Global options apply to the whole Traefik instance.
+# ==============================================================================
+global:
+  # Check for new Traefik versions periodically. In dev we disable this to
+  # avoid noise in logs and unnecessary external requests.
+  checkNewVersion: false
+
+  # Send anonymous usage statistics. Disabled — we don't want to phone home.
+  sendAnonymousUsage: false
+
+# ==============================================================================
+# ENTRYPOINTS
+# ==============================================================================
+# Entrypoints are the network ports Traefik listens on. Each entrypoint is a
+# distinct way of receiving traffic. In dev, there's one: HTTP on :80.
+#
+# In prod (traefik.prod.yml), there are two: HTTP (:80, redirects) and HTTPS
+# (:443, serves traffic with TLS).
+# ==============================================================================
+entryPoints:
+  # `web` — plain HTTP. The only entrypoint in dev.
+  web:
+    address: ":80"
+
+    # Proxy protocol. When Traefik is behind another load balancer (like an
+    # AWS ALB or another Traefik), the upstream sends a PROXY protocol header
+    # containing the real client IP. We're not behind a load balancer in dev,
+    # so it's disabled.
+    proxyProtocol:
+      insecure: false
+
+    # Forwarded headers. Traefik trusts certain headers from upstream
+    # (X-Forwarded-For, X-Forwarded-Proto, etc.). With no upstream, this is
+    # a no-op, but declared for clarity.
+    forwardedHeaders:
+      insecure: false
+
+    # HTTP/2. Traefik serves HTTP/2 automatically on TLS entrypoints; on
+    # plain HTTP, h2c (HTTP/2 cleartext) can be enabled. We don't need it
+    # in dev — HTTP/1.1 is fine for the browser and curl.
+    # http2:
+    #   maxConcurrentStreams: 250
+
+    # HTTP/3. Requires UDP and TLS. Not applicable in dev.
+    # http3:
+    #   advertisedPort: 443
+
+    # Transport options (timeouts, keep-alives). Defaults are fine for dev.
+    # transport:
+    #   respondingTimeouts:
+    #     readTimeout: 60s
+    #     writeTimeout: 60s
+    #     idleTimeout: 180s
+
+# ==============================================================================
+# PROVIDERS
+# ==============================================================================
+# Providers are where Traefik discovers configuration (routers, services,
+# middlewares). We use two:
+#   - Docker: discovers services via labels on containers.
+#   - File (optional): reads additional YAML/TOML from disk.
+#
+# In dev, we use Docker only. File provider is enabled but points at an
+# empty directory, so it's effectively a no-op. This is intentional:
+# when we need to add file-based config (e.g., global middlewares), the
+# provider is already set up.
+# ==============================================================================
+providers:
+  # ----------------------------------------------------------------------------
+  # Docker provider — the primary source of dynamic config
+  # ----------------------------------------------------------------------------
+  # Traefik watches the Docker daemon for containers and reads their labels.
+  # Each container with `traefik.enable=true` and router labels becomes a
+  # reachable service.
+  #
+  # We use `exposedByDefault: false`, which means a container MUST explicitly
+  # opt in with `traefik.enable=true`. This prevents accidental exposure of
+  # containers that have nothing to do with our app (databases, caches, etc.).
+  # ----------------------------------------------------------------------------
+  docker:
+    # The Docker network Traefik uses to reach backends. This MUST match a
+    # network name that services are on. In our setup, the `edge` network
+    # (see docker-compose.yml).
+    #
+    # Traefik resolves backend services by container IP on this network.
+    # The name here must match the FULL network name Docker assigns. Since we
+    # use a Compose project name (`omp`), the actual network is `omp_edge`.
+    network: omp_edge
+
+    # Only containers with `traefik.enable=true` are exposed. Critical safety
+    # default — nothing is exposed without explicit opt-in.
+    exposedByDefault: false
+
+    # Watch the Docker daemon for changes. When a container starts or stops,
+    # Traefik re-reads labels and updates its routing table.
+    watch: true
+
+    # Polling interval for the Docker API (seconds). The default is 0 (event-based,
+    # no polling). We keep the event-based default; setting a value here would
+    # switch to polling and add latency.
+    # endpoint: "unix:///var/run/docker.sock"  # default; the socket is mounted
+
+    # Whether to use the Swarm provider mode. We're on Compose, not Swarm.
+    swarmMode: false
+
+    # Allow Traefik to use the default `default` network if no network label
+    # is present on a container. We don't use this — services explicitly set
+    # `traefik.docker.network=omp_edge` in their labels.
+    # useBindPortIP: false
+
+    # Default rule for services when no `traefik.http.routers.X.rule` label is
+    # set. We don't set a default; services must define their own rules.
+    # defaultRule: "Host(`{{ normalize .Name }}.localhost`)"
+
+  # ----------------------------------------------------------------------------
+  # File provider — reads YAML/TOML from a directory (currently empty)
+  # ----------------------------------------------------------------------------
+  # Enabled but pointed at a directory that contains no files (yet). When we
+  # add file-based config (e.g., global middlewares shared by multiple
+  # services), they'll go in /etc/traefik/dynamic/ and be picked up
+  # automatically.
+  #
+  # We set `watch: true` so changes are applied without restart.
+  # ----------------------------------------------------------------------------
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# ==============================================================================
+# API / DASHBOARD
+# ==============================================================================
+# The Traefik dashboard shows the current routing table, active services,
+# middleware chain, and health status. Invaluable for debugging routing.
+#
+# In dev, `insecure: true` exposes the dashboard on port 8080 without any
+# authentication. This is fine on a laptop (localhost-only). In prod,
+# `insecure: false` and the dashboard is behind a router with basic auth
+# (see docker-compose.prod.yml).
+# ==============================================================================
+api:
+  # Expose the API (needed for the dashboard to function).
+  dashboard: true
+
+  # DEV ONLY — the dashboard is reachable at http://traefik.localhost (routed
+  # via a label in docker-compose.yml) AND at http://localhost:8080 (the
+  # insecure API port). Both work.
+  #
+  # In prod: `insecure: false`. The dashboard is then only reachable via a
+  # router, protected by basic-auth middleware.
+  insecure: true
+
+  # Debug mode adds extra detail to API responses. Off — the dashboard is
+  # detailed enough.
+  debug: false
+
+# ==============================================================================
+# LOGGING
+# ==============================================================================
+# Traefik has two log streams:
+#   - `log` (application logs): Traefik's own messages (startup, config
+#     reloads, errors, panics).
+#   - `accessLog`: one line per HTTP request (method, path, status, duration,
+#     upstream service). The audit trail.
+#
+# Both go to stdout/stderr. Docker's logging driver captures them.
+# ==============================================================================
+log:
+  # Log level. One of: TRACE, DEBUG, INFO, WARN, ERROR, FATAL, PANIC.
+  #
+  # Dev: INFO — see every routing event.
+  # Prod: WARN — only warnings and errors.
+  level: INFO
+
+  # Log format. `common` is human-readable. `json` is structured (better for
+  # Loki/ELK ingestion). In dev, `common` is easier to read in a terminal.
+  # In prod (traefik.prod.yml), we switch to `json`.
+  format: common
+
+  # Whether to include the caller's file:line in log lines. Useful for
+  # debugging Traefik itself; noisy for normal operation. Off by default.
+  # filePath: ""  # default: disabled
+
+  # Disable color in logs. On when piping to a file; off in dev for readability.
+  noColor: false
+
+# ==============================================================================
+# ACCESS LOG
+# ==============================================================================
+# One line per request. Essential for:
+#   - Debugging "why did this request 404?" (see the router Traefik matched).
+#   - Correlating with downstream service logs.
+#   - Security auditing (who accessed what when).
+#   - Performance analysis (backend response times).
+# ==============================================================================
+accessLog:
+  # Enable access logs. On in both dev and prod.
+  enabled: true
+
+  # Output format. `common` is Apache-style (readable). `json` is structured.
+  # In dev we use `common`; in prod we use `json` so Loki can parse fields.
+  format: common
+
+  # Where to write access logs. Traefik's stdout is captured by Docker.
+  # (Alternatives: a file, or a syslog endpoint. We use stdout.)
+  # filePath: ""  # stdout
+
+  # Buffering size for access logs. Default is fine.
+  # bufferingSize: 0
+
+  # Fields to include/exclude. In dev we include everything.
+  fields:
+    # Default behaviour: include all standard fields.
+    defaultMode: keep
+
+    # Traefik can add extra request headers to the access log. We don't
+    # (privacy, noise). If needed for debugging, uncomment and specify.
+    # headers:
+    #   defaultMode: drop
+    #   names:
+    #     Authorization: redact
+    #     Cookie: redact
+
+    # Add specific headers for tracing correlation. If a client sends
+    # `X-Request-ID`, it's captured. Otherwise, Traefik generates one and
+    # includes it in both the access log and the request forwarded to the
+    # backend.
+    # (Handled via the request ID middleware, configured elsewhere.)
+
+# ==============================================================================
+# METRICS
+# ==============================================================================
+# Traefik can export metrics in several formats (Prometheus, Datadog,
+# InfluxDB, StatsD). We use Prometheus.
+#
+# Prometheus metrics are SCRAPED — Prometheus pulls them from Traefik at a
+# configured interval. The endpoint is exposed on Traefik's admin port (8080
+# by default in dev, or the `metrics.prometheus.entryPoint` if set).
+#
+# File 15's prometheus.yml defines the scrape job for Traefik.
+# ==============================================================================
+metrics:
+  prometheus:
+    # Enable Prometheus metrics.
+    enabled: true
+
+    # EntryPoint that exposes /metrics. We don't set one explicitly — Traefik
+    # exposes metrics via the API on the `traefik` internal entrypoint (which
+    # is bound to the container's admin port 8080 in dev). Prometheus reaches
+    # this at `http://traefik:8080/metrics`.
+    #
+    # In prod, we might dedicate an entrypoint for metrics to separate them
+    # from the public API.
+
+    # Add entrypoint labels to metrics. These are per-entrypoint counters
+    # (`traefik_entrypoint_requests_total{entrypoint="web"}`), useful for
+    # tracking traffic by ingress point.
+    addEntryPointsLabels: true
+
+    # Add service labels. Per-service counters
+    # (`traefik_service_requests_total{service="order-service@docker"}`),
+    # essential for per-backend metrics.
+    addServicesLabels: true
+
+    # Add routers labels. Per-router counters. Slightly noisy, but useful
+    # for tracking traffic by routing rule.
+    addRoutersLabels: true
+
+    # Buckets for histograms (request duration). Default buckets are fine.
+    # Customizing requires knowing your latency profile.
+    # buckets:
+    #   - 0.005
+    #   - 0.01
+    #   - ...
+
+# ==============================================================================
+# TRACING
+# ==============================================================================
+# Traefik can emit distributed traces via OpenTelemetry Protocol (OTLP).
+# These go to our OTel Collector (see File 2a's `otel-collector` service),
+# which forwards them to Tempo.
+#
+# Each request into Traefik generates a span. Downstream services continue
+# the trace via the propagated `traceparent` header (W3C Trace Context).
+# ==============================================================================
+tracing:
+  otlp:
+    # Enable OTLP exporter.
+    http:
+      # OTel Collector's OTLP HTTP endpoint, from the internal Docker network.
+      endpoint: http://otel-collector:4318/v1/traces
+
+      # Additional headers to send with each trace export. None required for
+      # our local OTel Collector.
+      # headers: {}
+
+      # TLS settings for the OTLP connection. We're using HTTP (plaintext) to
+      # an internal Docker service, so no TLS.
+      # tls: {}
+
+    # Sample rate — the fraction of requests to trace. 1.0 = trace everything.
+    #
+    # Dev: 1.0 (trace everything, we want to see it all).
+    # Prod: 0.1 or lower (trace a sample — tracing is expensive at high RPS).
+    # Set in traefik.prod.yml.
+    #
+    # Note: Traefik uses a "sampling rate" here, not a "sampler" object.
+    # It's a per-request probabilistic decision. Not configurable to only
+    # sample errors, etc. — that's a downstream concern (Tempo can filter).
+    sampleRate: 1.0

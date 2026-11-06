@@ -1,0 +1,17 @@
+# ==============================================================================
+# Prometheus scrape target — inventory-service
+# ------------------------------------------------------------------------------
+# Picked up by the `omp-services` job in prometheus.yml (File 15).
+#
+# IMPORTANT: the target port is 9092 — the MANAGEMENT HTTP port, not the gRPC
+# port (9091). Prometheus scrapes HTTP endpoints, and gRPC's binary framing
+# isn't compatible with the Prometheus exposition format. The management port
+# exposes the same /actuator/prometheus endpoint that Phase 1 services use.
+# ==============================================================================
+
+- targets:
+    - inventory-service:9092
+  labels:
+    service: inventory-service
+    tier: app
+    __metrics_path__: /actuator/prometheus

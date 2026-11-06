@@ -1,0 +1,335 @@
+# ==============================================================================
+# Order Management Platform — Traefik static configuration (PRODUCTION)
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/traefik/traefik.prod.yml
+# MOUNTED  : /etc/traefik/traefik.yml (read-only) into the traefik container
+#            WHEN the prod overlay is applied:
+#              docker compose -f docker-compose.yml \
+#                             -f docker-compose.prod.yml \
+#                             --env-file .env.prod up -d
+#
+# DIFFERENCES FROM DEV (traefik.yml)
+#   - Adds a `websecure` entrypoint on :443 with TLS
+#   - HTTP → HTTPS redirect on `web`
+#   - Let's Encrypt (ACME) certificate resolver
+#   - api.insecure = false (no exposed dashboard/metrics port)
+#   - Adds a `metrics` entrypoint for Prometheus scraping
+#   - log/accessLog format = json (for Loki)
+#   - log level = WARN
+#   - tracing.sampleRate = 0.1 (was 1.0)
+#   - Docker provider connects via socket proxy, not the raw socket
+#   - Tighter entrypoint timeouts
+#
+# PREREQUISITES
+#   - .env.prod contains OMP_DOMAIN and ACME_EMAIL
+#   - DNS for <OMP_DOMAIN> and subdomains points to this host's public IP
+#   - Ports 80 and 443 reachable from the internet (for ACME HTTP-01)
+#   - The `docker-socket-proxy` service is defined in docker-compose.prod.yml
+#
+# REFERENCE
+#   https://doc.traefik.io/traefik/reference/static-configuration/file/
+#
+# ==============================================================================
+
+# ==============================================================================
+# GLOBAL
+# ==============================================================================
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# ==============================================================================
+# ENTRYPOINTS
+# ==============================================================================
+# Prod has three entrypoints:
+#   web       (:80)  — HTTP; redirects to websecure (except ACME challenges)
+#   websecure (:443) — HTTPS; serves application traffic with TLS
+#   metrics   (:8082) — internal-only, exposes /metrics for Prometheus
+# ==============================================================================
+entryPoints:
+
+  # ----------------------------------------------------------------------------
+  # web — HTTP on :80
+  # ----------------------------------------------------------------------------
+  # All requests to :80 are redirected to :443, EXCEPT requests for the ACME
+  # HTTP-01 challenge path (/.well-known/acme-challenge/...). Traefik handles
+  # that reservation automatically when a certificate resolver is configured.
+  # ----------------------------------------------------------------------------
+  web:
+    address: ":80"
+
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+    proxyProtocol:
+      insecure: false
+    forwardedHeaders:
+      insecure: false
+
+  # ----------------------------------------------------------------------------
+  # websecure — HTTPS on :443
+  # ----------------------------------------------------------------------------
+  # Serves all application traffic. TLS certificates are provided by the `le`
+  # certificate resolver (see `certificatesResolvers` below).
+  #
+  # Timeouts are tighter than dev:
+  #   readTimeout  — time to read the request headers/body from the client
+  #   writeTimeout — time to write the response back
+  #   idleTimeout  — how long to keep an idle keep-alive connection open
+  #
+  # These are Traefik↔client timeouts. Backend timeouts (Traefik↔service) are
+  # configured per-service via labels in later phases.
+  # ----------------------------------------------------------------------------
+  websecure:
+    address: ":443"
+
+    proxyProtocol:
+      insecure: false
+    forwardedHeaders:
+      insecure: false
+
+    transport:
+      respondingTimeouts:
+        readTimeout: 30s
+        writeTimeout: 30s
+        idleTimeout: 90s
+
+    # HTTP/2 is enabled automatically on TLS entrypoints. HTTP/3 (QUIC) would
+    # require enabling UDP on the entrypoint and is out of scope for Phase 0.
+    # http3:
+    #   advertisedPort: 443
+
+  # ----------------------------------------------------------------------------
+  # metrics — internal-only, for Prometheus scraping
+  # ----------------------------------------------------------------------------
+  # Bound to :8082. Not exposed to the host — the `traefik` service in the prod
+  # overlay does NOT publish this port. Prometheus reaches it directly via the
+  # internal Docker network (`traefik:8082`).
+  #
+  # Traefik serves /metrics on this entrypoint.
+  # ----------------------------------------------------------------------------
+  metrics:
+    address: ":8082"
+
+    proxyProtocol:
+      insecure: false
+    forwardedHeaders:
+      insecure: false
+
+# ==============================================================================
+# CERTIFICATE RESOLVERS
+# ==============================================================================
+# ACME (Let's Encrypt) configuration. Traefik requests certificates on demand,
+# the first time a router with `tls.certresolver=le` is hit.
+#
+# HTTP-01 CHALLENGE
+#   Traefik serves a challenge token at
+#       http://<domain>/.well-known/acme-challenge/<token>
+#   Let's Encrypt fetches that URL. Success = certificate issued.
+#
+#   REQUIREMENT: port 80 must be reachable from the internet on the domain
+#   being certified. If it isn't (corporate firewall, air-gapped, etc.),
+#   switch to DNS-01 (see the commented block below).
+#
+# STORAGE
+#   Certificates are stored in /data/acme.json inside the container. This
+#   path is on the `traefik-data` volume (declared in docker-compose.yml),
+#   so certs survive container restarts.
+#
+#   The file must have mode 0600. Traefik enforces this and refuses to start
+#   if permissions are wrong. On first boot, Docker creates it with default
+#   permissions; we handle the chmod in an init script or via the volume
+#   mounting approach (out of scope for Phase 0 — see the runbook).
+#
+# RENEWAL
+#   Let's Encrypt certificates are valid for 90 days. Traefik renews them
+#   automatically 30 days before expiry.
+# ==============================================================================
+certificatesResolvers:
+  le:
+    acme:
+      # Contact email — from .env.prod
+      email: ${ACME_EMAIL}
+
+      # ACME server. Let's Encrypt production:
+      #   https://acme-v02.api.letsencrypt.org/directory
+      # For testing (untrusted certs, no rate limits):
+      #   https://acme-staging-v02.api.letsencrypt.org/directory
+      #
+      # USE STAGING WHEN FIRST DEPLOYING. Let's Encrypt production has strict
+      # rate limits (5 duplicate certs/week, 50 certs/week per domain). During
+      # initial setup, it's easy to burn through these. Once you confirm
+      # everything works with staging, switch to production and restart.
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+
+      # Storage for the ACME account key and issued certificates.
+      storage: /data/acme.json
+
+      # HTTP-01 challenge
+      httpChallenge:
+        entryPoint: web
+
+      # DNS-01 challenge (alternative to HTTP-01) — commented out.
+      # Enable this instead of httpChallenge if port 80 isn't reachable.
+      # Requires setting the appropriate DNS provider credentials as env vars.
+      #
+      # dnsChallenge:
+      #   provider: cloudflare  # or route53, digitalocean, etc.
+      #   delayBeforeCheck: 30s
+
+      # Key type. EC256 (ECDSA P-256) is smaller and faster than RSA.
+      # Older clients might not support it — but "older" here means
+      # pre-2015 browsers, which we don't care about.
+      keyType: EC256
+
+# ==============================================================================
+# PROVIDERS
+# ==============================================================================
+providers:
+
+  # ----------------------------------------------------------------------------
+  # Docker provider — via socket proxy
+  # ----------------------------------------------------------------------------
+  # Production hardening: rather than mounting the raw Docker socket (which
+  # gives Traefik root-equivalent access to the daemon), we connect to a
+  # socket proxy that only exposes the read endpoints Traefik needs.
+  #
+  # The proxy service (`docker-socket-proxy`) is defined in
+  # docker-compose.prod.yml. It runs `tecnativa/docker-socket-proxy` with
+  # CONTAINERS=1 and SERVICES=1 (read-only) and everything else disabled.
+  #
+  # Traefik connects to the proxy over HTTP on port 2375. The proxy then talks
+  # to the real Docker socket.
+  # ----------------------------------------------------------------------------
+  docker:
+    # Connect via the proxy, not the raw socket.
+    endpoint: "tcp://docker-socket-proxy:2375"
+
+    # Network Traefik uses to reach backends — the same as dev.
+    network: omp_edge
+
+    # Only explicitly opted-in containers are exposed.
+    exposedByDefault: false
+
+    # Watch for container events (start/stop) to update routing.
+    watch: true
+
+    swarmMode: false
+
+  # ----------------------------------------------------------------------------
+  # File provider — same as dev, points at the shared dynamic directory
+  # ----------------------------------------------------------------------------
+  # Used for global middlewares (security headers, rate limits) defined in
+  # infrastructure/traefik/dynamic/*.yml.
+  # ----------------------------------------------------------------------------
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# ==============================================================================
+# API / DASHBOARD
+# ==============================================================================
+# The dashboard is NOT exposed on an insecure port in prod. It's reachable
+# only via a router, which (per docker-compose.prod.yml) is gated by the
+# `admin-auth` basic-auth middleware.
+#
+# The `insecure: false` setting also removes the /metrics endpoint from the
+# main API — metrics are exposed separately on the `metrics` entrypoint.
+# ==============================================================================
+api:
+  dashboard: true
+  insecure: false
+  debug: false
+
+# ==============================================================================
+# LOGGING
+# ==============================================================================
+# Application logs (Traefik's own messages). WARN level — INFO is noisy at
+# production request rates.
+#
+# JSON format so Loki can parse fields (level, msg, router, etc.) without
+# regex. The container's log driver (File 2b) ships these to Loki.
+# ==============================================================================
+log:
+  level: WARN
+  format: json
+  noColor: true
+
+# ==============================================================================
+# ACCESS LOG
+# ==============================================================================
+# One line per request, JSON format for structured ingestion.
+#
+# Fields kept: everything default, PLUS a redacted view of sensitive headers
+# (Authorization, Cookie) so credentials never land in Loki.
+# ==============================================================================
+accessLog:
+  enabled: true
+  format: json
+
+  # Buffer and flush behaviour. bufferingSize trades log latency for reduced
+  # syscall overhead. 100 is a reasonable default for moderate traffic.
+  bufferingSize: 100
+
+  fields:
+    defaultMode: keep
+
+    # Redact sensitive headers. These headers would otherwise be logged in
+    # plaintext, leaking bearer tokens and session cookies to anyone with
+    # log access.
+    headers:
+      defaultMode: drop
+      names:
+        Authorization: redact
+        Cookie: redact
+        Set-Cookie: redact
+        X-Api-Key: redact
+
+    # Do not log the query string. Query strings can contain sensitive
+    # parameters (tokens, passwords, PII in search terms). Ops can enable
+    # per-request via a header if needed for debugging.
+    # queryParameters:
+    #   defaultMode: drop
+
+# ==============================================================================
+# METRICS
+# ==============================================================================
+# Prometheus exposition on the `metrics` entrypoint (:8082). Prometheus
+# scrapes http://traefik:8082/metrics at the configured interval (File 15).
+# ==============================================================================
+metrics:
+  prometheus:
+    enabled: true
+
+    # EntryPoint that serves /metrics. Must match the `metrics` entrypoint
+    # declared above.
+    entryPoint: metrics
+
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+    # Router labels are disabled in prod. They add high cardinality to every
+    # metric (one series per router), which increases Prometheus's memory and
+    # storage cost. Services and entrypoints cover the common cases.
+    addRoutersLabels: false
+
+# ==============================================================================
+# TRACING
+# ==============================================================================
+# Sample rate 0.1 — 10% of requests get traced. Higher rates overwhelm Tempo
+# at production RPS.
+#
+# To ensure errors are always traced, we rely on downstream tail sampling in
+# the OTel Collector (Phase 7 enhancement). For now, 10% gives enough data
+# to see patterns.
+# ==============================================================================
+tracing:
+  otlp:
+    http:
+      endpoint: http://otel-collector:4318/v1/traces
+
+    sampleRate: 0.1

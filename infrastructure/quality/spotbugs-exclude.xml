@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Only generated protoc/JAXB classes: application code has no blanket suppression. -->
+    <Match><Package name="~com\.example\.omp\.proto(\..*)?"/></Match>
+    <Match><Package name="~com\.omp\.bank\.soap(\..*)?"/></Match>
+</FindBugsFilter>

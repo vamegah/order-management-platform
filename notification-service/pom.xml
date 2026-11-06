@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- =====================================================================
+         PARENT
+         ===================================================================== -->
+    <parent>
+        <groupId>com.example.omp</groupId>
+        <artifactId>order-management-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!-- =====================================================================
+         MODULE COORDINATES
+         ===================================================================== -->
+    <artifactId>notification-service</artifactId>
+    <name>Notification Service</name>
+    <description>
+        Real-time notification service. Consumes Kafka events from orders,
+        inventory, and payments, and pushes updates to subscribed clients
+        over STOMP-over-WebSocket.
+
+        No persistent storage. Subscriptions are held in-memory and tied to
+        WebSocket connections. Redis pub/sub fans out events across replicas
+        so a client connected to one replica receives events triggered on
+        another.
+
+        Exposes WebSocket on port 8084 and management HTTP on port 8085.
+    </description>
+
+    <!-- =====================================================================
+         DEPENDENCIES
+         ===================================================================== -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             Internal shared modules
+             ================================================================ -->
+
+        <!-- Event types and deserialization support for Kafka consumers.
+             Provides BaseEvent, all event records, EventSerde, and the
+             KafkaTopics constants. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Web utilities: RequestIdFilter for HTTP request correlation
+             (used on the WebSocket handshake and actuator paths), plus
+             ProblemDetails for any future REST endpoints. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-web</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Note: omp-shared-domain is not declared. This service doesn't
+             use Money, Email, or PhoneNumber. -->
+
+        <!-- Note: omp-shared-proto is not declared. This service doesn't
+             use gRPC. -->
+
+        <!-- ================================================================
+             Spring Boot starters
+             ================================================================ -->
+
+        <!-- Web: HTTP server (Tomcat) for the WebSocket handshake, actuator,
+             and any future REST endpoints. Required for WebSocket support. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!-- ===================== Batch 9.3 additions ===================== -->
+
+        <!-- Persistence (webhook subscriptions, delivery attempts, DLQ) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Postgres driver -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway migrations -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- =================== end Batch 9.3 additions =================== -->
+
+        <!-- WebSocket: STOMP message broker infrastructure. Provides
+             @EnableWebSocketMessageBroker, SimpMessagingTemplate,
+             ChannelInterceptor, and the SockJS/WebSocket transports. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <!-- Security: filter chain for HTTP endpoints (WebSocket handshake,
+             actuator). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- OAuth2 Resource Server: JWT validation for both HTTP and STOMP
+             CONNECT frames. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <!-- Bean Validation: on DTOs used in the Feign calls to
+             customer-service and order-service. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Actuator: health, info, prometheus on port 8085. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Outbound webhook subscriptions, attempts and DLQ entries use JPA/PostgreSQL. -->
+
+        <!-- ================================================================
+             Spring Security Messaging
+             ================================================================
+             Not brought transitively by the security starter. Provides
+             AbstractSecurityWebSocketMessageBrokerConfigurer, used by
+             WebSocketSecurityConfig for STOMP message-level security. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-messaging</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Kafka consumer
+             ================================================================ -->
+
+        <!-- @KafkaListener, ConsumerFactory, and the message listener
+             container. Versions managed by Spring Boot BOM. -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Redis — pub/sub for cross-replica fan-out
+             ================================================================ -->
+
+        <!-- Provides StringRedisTemplate, RedisMessageListenerContainer,
+             and the Lettuce client. Configuration via spring.data.redis.* -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Spring Cloud — Feign clients for ownership verification
+             ================================================================ -->
+
+        <!-- CustomerClient (calls customer-service /me) and OrderClient
+             (calls order-service GET /orders/{id}) for subscription-time
+             ownership checks. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Resilience4j — protection for Feign calls
+             ================================================================ -->
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Observability
+             ================================================================ -->
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
+
+        <!-- Note: no springdoc-openapi. WebSocket endpoints aren't REST;
+             no OpenAPI document is generated. -->
+
+        <!-- ================================================================
+             Test dependencies
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Boot Testcontainers integration: @Testcontainers,
+             @Container, @DynamicPropertySource. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers JUnit 5 extension. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Kafka test support: @EmbeddedKafka for consumer tests
+             without a running broker. -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- REST Assured: HTTP tests against the WebSocket handshake and
+             actuator endpoints. -->
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- WireMock: stub customer-service and order-service for
+             ownership-verification tests. -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- =====================================================================
+         BUILD
+         ===================================================================== -->
+    <build>
+        <plugins>
+
+            <!-- ============================================================
+                 Spring Boot Maven Plugin — executable jar packaging
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Surefire — unit tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Failsafe — integration tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 JaCoCo — 80% coverage enforcement
+                 ============================================================
+                 Excludes:
+                   - NotificationServiceApplication (main class)
+                   - config/**     (Spring configuration)
+                   - clients/**    (Feign interfaces)
+                   - clients/dto/** (client-side DTO records)
+                   - dispatcher/** (framework glue: EventEnvelope,
+                                    DestinationResolver logic tested via
+                                    integration tests with embedded Kafka
+                                    and Redis Testcontainers)
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/example/omp/notification/NotificationServiceApplication.class</exclude>
+                                <exclude>com/example/omp/notification/config/**</exclude>
+                                <exclude>com/example/omp/notification/clients/**</exclude>
+                                <exclude>com/example/omp/notification/dispatcher/**</exclude>
+                            </excludes>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

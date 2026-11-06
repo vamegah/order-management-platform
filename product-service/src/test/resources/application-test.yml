@@ -1,0 +1,50 @@
+# ==============================================================================
+# Test profile configuration
+# ==============================================================================
+# Loaded when SPRING_PROFILES_ACTIVE=test.
+#
+# Datasource settings are supplied by the Spring-owned Testcontainers
+# @ServiceConnection in AbstractIntegrationTest. The values here are
+# placeholders that would only apply if Testcontainers weren't used.
+# ==============================================================================
+
+spring:
+  datasource:
+    # Overridden by Testcontainers. Placeholder for context loading.
+    url: jdbc:postgresql://localhost:5432/omp
+    username: test
+    password: test
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+    schemas: products
+    default-schema: products
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Real Keycloak is not started in tests. The mock JWT decoder
+          # (TestSecurityConfig) replaces this.
+          issuer-uri: http://mock-issuer/realms/omp
+
+management:
+  server:
+    port: 0
+  tracing:
+    enabled: false
+    sampling:
+      probability: 0
+
+logging:
+  level:
+    root: WARN
+    com.example.omp: INFO
+    org.hibernate.SQL: WARN
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN

@@ -1,0 +1,13 @@
+# ==============================================================================
+# Prometheus scrape target — notification-service
+# ------------------------------------------------------------------------------
+# The target port is 8085 — the management HTTP port (not 8084, the WebSocket
+# port). Prometheus scrapes /actuator/prometheus on the management port.
+# ==============================================================================
+
+- targets:
+    - notification-service:8085
+  labels:
+    service: notification-service
+    tier: app
+    __metrics_path__: /actuator/prometheus

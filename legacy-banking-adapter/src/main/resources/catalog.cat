@@ -1,0 +1,2 @@
+PUBLIC "http://legacybank.example.com/ws" "xsd/banking.xsd"
+SYSTEM "../xsd/banking.xsd" "xsd/banking.xsd"

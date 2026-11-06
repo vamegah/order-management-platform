@@ -1,0 +1,38 @@
+# ==============================================================================
+# Production overrides
+# ==============================================================================
+# Active when SPRING_PROFILES_ACTIVE=prod.
+# ==============================================================================
+
+logging:
+  level:
+    root: WARN
+    com.example.omp: INFO
+    org.springframework.web: WARN
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+spring:
+  graphql:
+    graphiql:
+      enabled: false       # Disable the query editor in prod
+    schema:
+      introspection:
+        enabled: false      # Disable schema inspection in prod
+
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:0.1}
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  cors:
+    allowed-origins:
+      - "https://web.${OMP_DOMAIN}"
+      - "https://admin.${OMP_DOMAIN}"

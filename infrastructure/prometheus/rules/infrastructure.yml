@@ -1,0 +1,132 @@
+# ==============================================================================
+# Infrastructure alerting rules
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/prometheus/rules/infrastructure.yml
+# MOUNTED  : /etc/prometheus/rules/infrastructure.yml (read-only)
+#
+# These rules evaluate every 15s. Firing alerts are visible in:
+#   - Prometheus UI at /alerts
+#   - Grafana via the ALERTS and ALERTS_FOR_STATE time series
+#
+# Notification (Slack, email, PagerDuty) requires Alertmanager, which is
+# Phase 7. Until then, these rules are "observed" via Grafana but not
+# "delivered" to any human.
+#
+# CONVENTIONS
+#   - Alert names are CamelCase, describe the condition, not the action.
+#   - `for` is included where transient blips shouldn't alert.
+#   - Labels include `severity` (critical, warning, info).
+#   - Annotations include `summary` (short) and `description` (detail with
+#     template variables).
+# ==============================================================================
+
+groups:
+  - name: infrastructure
+    interval: 15s
+
+    rules:
+
+      # ----------------------------------------------------------------------
+      # Scrape target health
+      # ----------------------------------------------------------------------
+      - alert: ScrapeTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Scrape target {{ $labels.job }} is down"
+          description: |
+            The target {{ $labels.instance }} in job {{ $labels.job }} has
+            been unreachable for 2 minutes. Prometheus has stopped receiving
+            metrics from it.
+
+            Check: docker compose ps {{ $labels.job }}
+            Logs:  docker compose logs {{ $labels.job }}
+
+      # ----------------------------------------------------------------------
+      # Prometheus self-health
+      # ----------------------------------------------------------------------
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus config reload failed"
+          description: |
+            The most recent config reload (SIGHUP or POST /-/reload) failed.
+            Prometheus is still running with the previous config.
+
+            Check the Prometheus logs for the specific error.
+
+      - alert: PrometheusRuleEvaluationSlow
+        expr: prometheus_rule_group_last_duration_seconds > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rule group {{ $labels.rule_group }} evaluation is slow"
+          description: |
+            Rule group {{ $labels.rule_group }} in file
+            {{ $labels.file }} takes more than 5 seconds to evaluate.
+            This is a sign of an expensive query, a missing recording rule,
+            or growing cardinality.
+
+      # ----------------------------------------------------------------------
+      # Traefik
+      # ----------------------------------------------------------------------
+      - alert: TraefikHighErrorRate
+        expr: |
+          sum by (job) (rate(traefik_entrypoint_requests_total{code=~"5.."}[5m]))
+            /
+          sum by (job) (rate(traefik_entrypoint_requests_total[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Traefik 5xx error rate above 5%"
+          description: |
+            Over the last 5 minutes, more than 5% of requests through Traefik
+            returned a 5xx status. This suggests a downstream service is
+            unhealthy.
+
+            Current error rate: {{ $value | humanizePercentage }}
+
+      - alert: TraefikHighLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, job) (
+              rate(traefik_entrypoint_request_duration_seconds_bucket[5m])
+            )
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Traefik p99 latency above 2s"
+          description: |
+            The 99th percentile request latency through Traefik has been above
+            2 seconds for 5 minutes.
+
+            Current p99: {{ $value | humanizeDuration }}
+
+      # ----------------------------------------------------------------------
+      # OTel Collector
+      # ----------------------------------------------------------------------
+      - alert: OTelCollectorExportFailures
+        expr: |
+          rate(otelcol_exporter_send_failed_spans[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OTel Collector is failing to export spans"
+          description: |
+            The collector has been unable to export spans to Tempo for 5
+            minutes. Traces are being dropped.
+
+            Check Tempo is healthy and reachable:
+              docker compose ps tempo
+              docker compose logs otel-collector

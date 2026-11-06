@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+                  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+                  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                  xmlns:tns="http://legacybank.example.com/ws"
+                  targetNamespace="http://legacybank.example.com/ws"
+                  name="LegacyBankService">
+
+    <wsdl:types>
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                   xmlns:tns="http://legacybank.example.com/ws"
+                   targetNamespace="http://legacybank.example.com/ws"
+                   elementFormDefault="qualified">
+
+            <!-- ============ Requests ============ -->
+
+            <xs:element name="TransferFundsRequest">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="fromAccount" type="xs:string"/>
+                        <xs:element name="toAccount"   type="xs:string"/>
+                        <xs:element name="amount"      type="xs:decimal"/>
+                        <xs:element name="currency"    type="xs:string"/>
+                        <xs:element name="reference"   type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetAccountBalanceRequest">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="accountNumber" type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="ReverseTransactionRequest">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="transactionId" type="xs:string"/>
+                        <xs:element name="reason"        type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- ============ Responses ============ -->
+
+            <xs:element name="TransferFundsResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="transactionId" type="xs:string"/>
+                        <xs:element name="status"        type="xs:string"/>
+                        <xs:element name="timestamp"     type="xs:dateTime"/>
+                        <xs:element name="newBalance"    type="xs:decimal"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetAccountBalanceResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="accountNumber" type="xs:string"/>
+                        <xs:element name="balance"       type="xs:decimal"/>
+                        <xs:element name="currency"      type="xs:string"/>
+                        <xs:element name="timestamp"     type="xs:dateTime"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="ReverseTransactionResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="transactionId" type="xs:string"/>
+                        <xs:element name="status"        type="xs:string"/>
+                        <xs:element name="timestamp"     type="xs:dateTime"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- ============ Faults ============ -->
+
+            <xs:element name="BankingFault">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="code"    type="xs:string"/>
+                        <xs:element name="message" type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+        </xs:schema>
+    </wsdl:types>
+
+    <!-- ============ Messages ============ -->
+
+    <wsdl:message name="TransferFundsRequest">
+        <wsdl:part name="parameters" element="tns:TransferFundsRequest"/>
+    </wsdl:message>
+    <wsdl:message name="TransferFundsResponse">
+        <wsdl:part name="parameters" element="tns:TransferFundsResponse"/>
+    </wsdl:message>
+    <wsdl:message name="BankingFault">
+        <wsdl:part name="fault" element="tns:BankingFault"/>
+    </wsdl:message>
+
+    <wsdl:message name="GetAccountBalanceRequest">
+        <wsdl:part name="parameters" element="tns:GetAccountBalanceRequest"/>
+    </wsdl:message>
+    <wsdl:message name="GetAccountBalanceResponse">
+        <wsdl:part name="parameters" element="tns:GetAccountBalanceResponse"/>
+    </wsdl:message>
+
+    <wsdl:message name="ReverseTransactionRequest">
+        <wsdl:part name="parameters" element="tns:ReverseTransactionRequest"/>
+    </wsdl:message>
+    <wsdl:message name="ReverseTransactionResponse">
+        <wsdl:part name="parameters" element="tns:ReverseTransactionResponse"/>
+    </wsdl:message>
+
+    <!-- ============ PortType ============ -->
+
+    <wsdl:portType name="BankingPort">
+        <wsdl:operation name="TransferFunds">
+            <wsdl:input  message="tns:TransferFundsRequest"/>
+            <wsdl:output message="tns:TransferFundsResponse"/>
+            <wsdl:fault  name="BankingFault" message="tns:BankingFault"/>
+        </wsdl:operation>
+        <wsdl:operation name="GetAccountBalance">
+            <wsdl:input  message="tns:GetAccountBalanceRequest"/>
+            <wsdl:output message="tns:GetAccountBalanceResponse"/>
+        </wsdl:operation>
+        <wsdl:operation name="ReverseTransaction">
+            <wsdl:input  message="tns:ReverseTransactionRequest"/>
+            <wsdl:output message="tns:ReverseTransactionResponse"/>
+        </wsdl:operation>
+    </wsdl:portType>
+
+    <!-- ============ Binding ============ -->
+
+    <wsdl:binding name="BankingBinding" type="tns:BankingPort">
+        <soap:binding style="document"
+                      transport="http://schemas.xmlsoap.org/soap/http"/>
+        <wsdl:operation name="TransferFunds">
+            <soap:operation soapAction="http://legacybank.example.com/ws/TransferFunds"/>
+            <wsdl:input><soap:body use="literal"/></wsdl:input>
+            <wsdl:output><soap:body use="literal"/></wsdl:output>
+            <wsdl:fault name="BankingFault"><soap:fault name="BankingFault" use="literal"/></wsdl:fault>
+        </wsdl:operation>
+        <wsdl:operation name="GetAccountBalance">
+            <soap:operation soapAction="http://legacybank.example.com/ws/GetAccountBalance"/>
+            <wsdl:input><soap:body use="literal"/></wsdl:input>
+            <wsdl:output><soap:body use="literal"/></wsdl:output>
+        </wsdl:operation>
+        <wsdl:operation name="ReverseTransaction">
+            <soap:operation soapAction="http://legacybank.example.com/ws/ReverseTransaction"/>
+            <wsdl:input><soap:body use="literal"/></wsdl:input>
+            <wsdl:output><soap:body use="literal"/></wsdl:output>
+        </wsdl:operation>
+    </wsdl:binding>
+
+    <!-- ============ Service ============ -->
+
+    <wsdl:service name="LegacyBankService">
+        <wsdl:port name="BankingPort" binding="tns:BankingBinding">
+            <soap:address location="https://localhost:8443/ws"/>
+        </wsdl:port>
+    </wsdl:service>
+</wsdl:definitions>

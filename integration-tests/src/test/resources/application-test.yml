@@ -1,0 +1,8 @@
+# The integration-tests module calls order-service via REST, and inventory/payment
+# via gRPC (directly, to inspect state).
+#
+# gRPC client stubs are constructed manually in GrpcClientFactory, not
+# injected via @GrpcClient. This avoids loading a Spring context.
+#
+# Environment variables (INVENTORY_GRPC_HOST, etc.) override the defaults
+# in GrpcClientFactory.

@@ -1,0 +1,27 @@
+# ==============================================================================
+# Local development overrides
+# ==============================================================================
+# Active when SPRING_PROFILES_ACTIVE=local (the default).
+# Runs on a developer laptop or in the local Docker stack.
+# ==============================================================================
+
+logging:
+  level:
+    com.example.omp: DEBUG
+    org.springframework.security: DEBUG
+    org.flywaydb: INFO
+    # Verbose SQL logging — the exact statements Hibernate sends to Postgres.
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
+spring:
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+management:
+  endpoint:
+    health:
+      show-details: always

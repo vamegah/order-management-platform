@@ -1,0 +1,10 @@
+# ==============================================================================
+# Prometheus scrape target — customer-service
+# ==============================================================================
+
+- targets:
+    - customer-service:8082
+  labels:
+    service: customer-service
+    tier: app
+    __metrics_path__: /actuator/prometheus

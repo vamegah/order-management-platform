@@ -1,0 +1,235 @@
+# ==============================================================================
+# Order Management Platform — Grafana dashboard provider configuration
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/grafana/provisioning/dashboards.yml
+# MOUNTED  : /etc/grafana/provisioning/dashboards/dashboards.yml (read-only)
+#            via the mount in docker-compose.yml:
+#              - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+#
+# WHAT THIS FILE DOES
+#   Tells Grafana:
+#     - Where to find dashboard JSON files on disk (the provider directory).
+#     - Which Grafana folder to load them into ("OMP").
+#     - Whether the UI can edit them (no — they're read-only, file is source
+#       of truth).
+#     - How often to scan for changes (every 30 seconds).
+#     - What happens when a dashboard file is removed (the Grafana copy is
+#       deleted too, matching the file system).
+#
+# WHAT THIS FILE DOES NOT DO
+#   - Contain dashboard definitions. Those are JSON files in
+#     infrastructure/grafana/dashboards/. This file only points at them.
+#   - Configure datasources. Those are in datasources.yml (File 16).
+#   - Configure Grafana's alerting. That's disabled; Prometheus handles rules.
+#
+# PROVISIONING BEHAVIOUR — DIFFERENT FROM DATASOURCES
+#   Datasource provisioning (File 16) reads its config ONCE at Grafana
+#   startup. Changes require a restart.
+#
+#   Dashboard provisioning (this file) reads its config once, but then
+#   RE-SCANS THE DASHBOARD DIRECTORY every updateIntervalSeconds. Changes
+#   to dashboard JSON files are applied WITHOUT a restart.
+#
+#   Practically:
+#     - Editing a dashboard JSON  → reloaded within 30s.
+#     - Adding a new JSON file    → appears within 30s.
+#     - Removing a JSON file      → removed from Grafana within 30s.
+#     - Editing THIS file         → requires `docker compose restart grafana`.
+#
+# REFERENCES
+#   https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+#   https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/
+#
+# ==============================================================================
+
+apiVersion: 1
+
+# ==============================================================================
+# PROVIDERS
+# ==============================================================================
+# A provider is a directory of dashboard JSON files, plus rules for how
+# Grafana should load them. We use one provider for Phase 0.
+#
+# WHEN TO ADD A SECOND PROVIDER
+#   - When dashboards need different permissions (e.g., infra read-only vs
+#     business editable by product teams).
+#   - When the number of dashboards justifies folder separation in the
+#     Grafana sidebar.
+#   - When dashboards are sourced from different teams or repos.
+#
+#   Adding a provider is a two-line change: a new entry here, and a new
+#   mount in docker-compose.yml. The existing provider is unaffected.
+#
+# Currently: single provider, all dashboards in the "OMP" folder.
+# ==============================================================================
+providers:
+
+  - name: omp
+    orgId: 1
+    folder: OMP
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+
+    options:
+      # Directory inside the Grafana container where dashboard JSON files
+      # are mounted. MUST match the mount path in docker-compose.yml:
+      #   - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      path: /var/lib/grafana/dashboards
+
+      # Whether to interpret subdirectories as folders. `false` means every
+      # dashboard file goes into the folder declared above ("OMP"),
+      # regardless of its on-disk location.
+      #
+      # Set to `true` later if we want:
+      #   infrastructure/traefik.json  →  folder "infrastructure"
+      #   application/orders.json      →  folder "application"
+      #
+      # Currently `false` — one flat folder, dashboards sorted by name.
+      foldersFromFilesStructure: false
+
+# ==============================================================================
+# HOW DASHBOARDS ARE LOADED
+# ==============================================================================
+#
+# 1. Grafana starts. It reads THIS file, learning about the `omp` provider
+#    and its directory.
+#
+# 2. Grafana scans `/var/lib/grafana/dashboards` for `*.json` files. (Any
+#    file with a different extension is ignored.)
+#
+# 3. For each JSON file, Grafana:
+#      - Parses it as a dashboard definition.
+#      - Assigns it to the "OMP" folder.
+#      - Attaches an internal ID (from the dashboard's `uid` field, or
+#        generated if absent).
+#      - Stores it in Grafana's database.
+#
+# 4. Every `updateIntervalSeconds` (30s), Grafana re-scans:
+#      - New file → loaded and added to the folder.
+#      - Modified file (by mtime or content) → dashboard updated.
+#      - Deleted file → dashboard removed (because disableDeletion=false).
+#
+# 5. If a user tries to edit a provisioned dashboard in the UI, they see a
+#    message: "This dashboard is provisioned and cannot be edited through
+#    the UI. To make changes, edit the file." (because allowUiUpdates=false).
+#
+# ==============================================================================
+# DASHBOARD JSON CONVENTIONS
+# ==============================================================================
+#
+# Every dashboard JSON in infrastructure/grafana/dashboards/ should:
+#
+#   1. Have a stable, descriptive `uid` (e.g., "omp-overview").
+#      Grafana uses this in URLs. Changing it breaks bookmarks.
+#
+#   2. Have a `title` (shown in the UI) prefixed with "OMP — " for
+#      consistent sidebar sorting.
+#
+#   3. Reference datasources by UID:
+#        "datasource": { "type": "prometheus", "uid": "prometheus" }
+#        "datasource": { "type": "loki",       "uid": "loki" }
+#        "datasource": { "type": "tempo",      "uid": "tempo" }
+#      NEVER by name. UIDs are stable (see File 16); names can change.
+#
+#   4. Use template variables for common filters (environment, service)
+#      so one dashboard works across dev/prod/regions.
+#
+#   5. Be valid JSON (no trailing commas, no comments — even though Grafana
+#      tolerates JSONC-ish input, standard JSON is safer for tooling).
+#
+#   6. Include a `version` field (any integer). Grafana uses this to detect
+#      changes and prompt users about updates.
+#
+#   7. NOT include `id` (Grafana manages it). Include `uid` instead.
+#
+# These conventions are enforced by review, not tooling. A linter could be
+# added later (e.g., a CI step that validates JSON against a schema).
+#
+# ==============================================================================
+# AUTHORING WORKFLOW
+# ==============================================================================
+#
+# Dashboards are authored in Grafana's UI and exported to JSON, because
+# hand-writing panel JSON is tedious and error-prone. The workflow:
+#
+#   1. In Grafana, create a NEW dashboard: Dashboards → New → New dashboard.
+#      (Provisioned dashboards are locked; you can't edit them, so start
+#      from a fresh one for prototyping.)
+#
+#   2. Build panels using the UI. Test queries against real datasources.
+#
+#   3. When satisfied, click "Save dashboard" (choose any temporary name).
+#
+#   4. Open the saved dashboard, click "Dashboard settings" (gear icon),
+#      then "JSON Model" (left sidebar).
+#
+#   5. Copy the entire JSON.
+#
+#   6. Paste into a file under infrastructure/grafana/dashboards/:
+#        e.g., infrastructure/grafana/dashboards/omp-overview.json
+#
+#   7. MANUALLY CLEAN UP the pasted JSON:
+#      - Remove the top-level `"id"` field (Grafana manages it; leaving it
+#        causes collisions when Grafana's DB is reset).
+#      - Add `"uid": "omp-<name>"` if not present.
+#      - Ensure datasource references use UID, not name:
+#          OK:  "datasource": { "type": "prometheus", "uid": "prometheus" }
+#          BAD: "datasource": "Prometheus"
+#      - Prefix the `"title"` with "OMP — ".
+#
+#   8. Save the file. Within 30 seconds, Grafana loads it into the "OMP"
+#      folder. You'll see BOTH the prototype (still in Grafana's DB) and
+#      the provisioned version — delete the prototype.
+#
+#   9. Commit the file. From now on, the JSON in git is the source of truth.
+#      Future edits: change the JSON, wait 30s, refresh Grafana. If you
+#      prefer the UI, edit the prototype, re-export, re-clean, and re-commit.
+#
+# The "clean up the JSON" step is the annoying part of this workflow. We
+# accept it because:
+#   - It's fast once you've done it twice.
+#   - It keeps the file clean for review and diffing.
+#   - It avoids embedding Grafana-internal state in the file.
+#
+# A future enhancement: a small script (scripts/grafana-export.sh) that
+# automates the cleanup. Phase 7 if it becomes a pain point.
+#
+# ==============================================================================
+# TROUBLESHOOTING
+# ==============================================================================
+#
+# DASHBOARD DOESN'T APPEAR
+#   - Verify the file is under infrastructure/grafana/dashboards/ and is
+#     committed (the mount is from the host directory).
+#   - Verify it's valid JSON:
+#       jq . infrastructure/grafana/dashboards/<file>.json
+#   - Check Grafana logs for provisioning errors:
+#       docker compose logs grafana | grep -i "dashboard\|provisioning"
+#   - Look in the sidebar: the dashboard may be in the "OMP" folder, which
+#     is collapsed by default if you were last viewing a different folder.
+#   - Wait 30 seconds, then refresh (provisioning isn't instant).
+#
+# DASHBOARD APPEARS BUT PANELS SAY "Datasource not found"
+#   - A panel references a datasource by a UID that doesn't exist.
+#   - Fix the panel's `datasource.uid` to match one of: prometheus, loki,
+#     tempo (from File 16).
+#
+# DASHBOARD APPEARS BUT PANELS SAY "No data"
+#   - Datasource is correct but the query returns nothing.
+#   - Open Explore, run the same query manually, verify it returns data.
+#   - Common causes: metric name typo, wrong time range, target service
+#     not yet scraped by Prometheus.
+#
+# DUPLICATE DASHBOARDS (same name, two entries)
+#   - You have a UI-created dashboard AND a provisioned one with the same
+#     title. Delete the UI-created one. Provisioned dashboards always win
+#     on reload, so the UI one is stale.
+#
+# EDITS TO A PROVISIONED DASHBOARD DON'T STICK
+#   - Expected. `allowUiUpdates: false` prevents UI edits. Edit the file.
+#
+# ==============================================================================
+# END OF dashboards.yml
+# ==============================================================================

@@ -1,0 +1,45 @@
+// ==============================================================================
+// Money — shared monetary value
+// ------------------------------------------------------------------------------
+// Used by inventory-service (stock value) and payment-service (transaction
+// amounts) to represent monetary amounts.
+//
+// DESIGN NOTES
+//   Protobuf has no decimal type. `double` loses precision, which is
+//   unacceptable for money. `sfixed64` with a scale convention requires
+//   coordination. The standard solution is to serialize the amount as a
+//   string, and parse it into a BigDecimal on the receiving side.
+//
+//   The currency is an ISO 4217 code (3 uppercase letters).
+//
+// CONSUMERS
+//   The generated Java class (com.example.omp.proto.common.Money) is used by
+//   both gRPC services. Services convert it to/from the platform's `Money`
+//   value object (com.example.omp.shared.domain.Money) via a small helper.
+//
+// VERSIONING
+//   This file is stable. New fields may be added; existing fields must not
+//   change their number or type.
+// ==============================================================================
+
+syntax = "proto3";
+
+package omp.common;
+
+option java_package = "com.example.omp.proto.common";
+option java_multiple_files = true;
+option java_outer_classname = "MoneyProto";
+
+// A monetary amount in a specific currency.
+//
+// The amount is a string to preserve decimal precision (see header comment).
+// It's serialized with a scale of 4 (e.g., "2499.9900") to match the
+// platform's `numeric(19,4)` convention, but clients should not rely on the
+// trailing zeros — parse to BigDecimal and use arithmetic.
+message Money {
+  // Amount as a decimal string. Example: "2499.9900".
+  string amount = 1;
+
+  // ISO 4217 currency code. Example: "USD".
+  string currency = 2;
+}

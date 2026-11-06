@@ -1,0 +1,441 @@
+name: Verify platform
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test verification tooling
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Verify Maven bootstrap without unzip and reject bad checksums
+        run: bash scripts/tests/test_maven_wrapper.sh
+      - name: Verify development certificate setup preserves existing identities
+        run: bash scripts/tests/test_ci_setup.sh
+      - name: Enforce the supported gRPC stream deployment topology
+        env:
+          OMP_DOMAIN: acceptance.example.invalid
+          ACME_EMAIL: acceptance@example.invalid
+          TRAEFIK_ADMIN_BASICAUTH: unused-for-config-validation
+        run: |
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --format json | python scripts/check_stream_topology.py
+      - name: Build and test reactor, including container integration tests
+        run: bash mvnw --batch-mode --no-transfer-progress clean verify
+      - name: Reject missing, skipped or incomplete test and coverage evidence
+        run: python scripts/check_verification.py
+      - name: Publish test and coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+            **/target/site/jacoco/**
+          if-no-files-found: error
+
+  packaged-payment-journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Package dependencies and run authenticated service containers
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress -pl platform-tests -am -Pe2e
+          clean package failsafe:integration-test failsafe:verify
+          -Dit.test=PaymentToWebhookContainerIT -Dfailsafe.failIfNoSpecifiedTests=false
+      - name: Require executed container journey evidence
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse('platform-tests/target/failsafe-reports/TEST-com.example.omp.tests.system.PaymentToWebhookContainerIT.xml').getroot()
+          assert int(suite.get('tests', '0')) > 0, 'Container journey did not execute'
+          for outcome in ('failures', 'errors', 'skipped'):
+              assert int(suite.get(outcome, '0')) == 0, f'Container journey has {outcome}'
+          PY
+      - name: Publish packaged journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-payment-journey-reports
+          path: platform-tests/target/failsafe-reports/**
+          if-no-files-found: error
+
+  external-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      COMPOSE_PROJECT_NAME: omp-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare isolated development identities and local routing
+        shell: bash
+        run: |
+          bash scripts/ci-setup.sh
+          # The host tests own the keys; container UID/GID 1000 also needs read access.
+          for service in order-service inventory-service payment-service; do
+            sudo chgrp 1000 "infrastructure/tls/$service/tls.key"
+            chmod 640 "infrastructure/tls/$service/tls.key"
+          done
+          echo '127.0.0.1 keycloak.localhost product-service.localhost customer-service.localhost order-service.localhost notification.localhost' | sudo tee -a /etc/hosts
+      - name: Build the six deployed service images sequentially
+        shell: bash
+        run: |
+          for service in product-service customer-service order-service inventory-service payment-service notification-service; do
+            docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml build "$service"
+          done
+      - name: Start a fresh stack and require every health check
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          up -d --no-build --wait --wait-timeout 600 traefik
+          product-service customer-service order-service inventory-service payment-service notification-service
+      - name: Exercise authenticated REST, mTLS gRPC and WebSocket journeys
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress
+          -pl integration-tests -am -Pe2e verify
+      - name: Reject missing or skipped external suites
+        run: python scripts/check_verification.py --root integration-tests --include-e2e
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: clients/notifications/package-lock.json
+      - name: Verify the packaged client against the deployed issuer and ownership policy
+        working-directory: clients/notifications
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          npm run test:deployed 2>&1 | tee notification-client-deployed.log
+      - name: Reject missing or skipped deployed client cases
+        run: python scripts/check_junit.py clients/notifications/deployed-results.xml --minimum-tests 2
+      - name: Collect deployment diagnostics
+        if: always()
+        shell: bash
+        run: |
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml ps -a > external-stack-status.log
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml logs --no-color > external-stack.log
+      - name: Publish external acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-e2e-reports
+          path: |
+            integration-tests/target/failsafe-reports/**
+            external-stack-status.log
+            clients/notifications/notification-client-deployed.log
+            clients/notifications/deployed-results.xml
+            external-stack.log
+          if-no-files-found: error
+      - name: Remove only this run's isolated stack and volumes
+        if: always()
+        run: docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml down --volumes --remove-orphans
+
+  notification-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: clients/notifications
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: clients/notifications/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - name: Reject missing or skipped client transport cases
+        run: python ../../scripts/check_junit.py test-results.xml --minimum-tests 17
+      - run: npm audit --audit-level=high
+      - name: Generate client SBOM
+        run: npm sbom --sbom-format cyclonedx --omit=dev > client-sbom.json
+      - name: Package JavaScript and declarations
+        run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notification-client-package
+          path: |
+            ${{ runner.temp }}/omp-notifications-*.tgz
+            clients/notifications/client-sbom.json
+            clients/notifications/test-results.xml
+          if-no-files-found: error
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and enforce high-confidence SpotBugs findings
+        run: bash mvnw --batch-mode --no-transfer-progress -Pstatic-analysis clean test-compile spotbugs:check
+      - name: Reject incomplete analysis and missing classpaths
+        run: python scripts/check_static_analysis.py
+      - name: Publish static analysis reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: '**/target/spotbugsXml.xml'
+          if-no-files-found: error
+
+  contract-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check out the exact PR base for contract comparison
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - name: Generate and verify base protobuf clients and descriptors
+        if: github.event_name == 'pull_request'
+        working-directory: baseline
+        run: bash mvnw --batch-mode --no-transfer-progress -pl shared/proto -am clean verify
+      - name: Verify published protobuf contracts and the exact PR base
+        shell: bash
+        run: |
+          options=()
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            options+=("-Dproto.compatibility.baseline=$GITHUB_WORKSPACE/baseline/shared/proto/target/generated-resources/protobuf/descriptor-sets/platform.protobin")
+          fi
+          bash mvnw --batch-mode --no-transfer-progress -pl shared/proto -am clean verify "${options[@]}"
+      - name: Verify published SOAP contracts and producer/client schema parity
+        shell: bash
+        run: |
+          options=()
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            options+=(--base-root baseline)
+          fi
+          python scripts/check_soap_contracts.py "${options[@]}"
+      - name: Regenerate and verify JAXB clients and the published SOAP boundary
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress
+          -pl legacy-bank-service,legacy-banking-adapter -am clean verify
+      - name: Publish generated contract and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-compatibility-reports
+          path: |
+            shared/proto/target/generated-resources/protobuf/descriptor-sets/**
+            shared/proto/target/surefire-reports/**
+            legacy-bank-service/target/surefire-reports/**
+            legacy-banking-adapter/target/surefire-reports/**
+          if-no-files-found: error
+
+  coverage-regression:
+    # Use pull_request (never pull_request_target): untrusted builds get no secrets
+    # or write credentials. Both revisions run the same unit-only phase.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test coverage comparison tooling
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Measure clean head unit coverage
+        if: github.event_name == 'pull_request'
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress clean
+          org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent package
+          org.jacoco:jacoco-maven-plugin:0.8.12:report
+      - name: Snapshot head coverage
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_coverage_regression.py snapshot --root .
+          --revision "$GITHUB_SHA" --output coverage/head.json
+      - name: Check out the exact PR base revision
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - name: Measure clean base unit coverage
+        if: github.event_name == 'pull_request'
+        working-directory: baseline
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress clean
+          org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent package
+          org.jacoco:jacoco-maven-plugin:0.8.12:report
+      - name: Snapshot base with the same measurement policy
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          python scripts/check_coverage_regression.py snapshot --root baseline
+          --revision "$BASE_SHA" --output coverage/base.json
+      - name: Reject per-module coverage regression
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_coverage_regression.py compare
+          --base coverage/base.json --head coverage/head.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish comparison evidence
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage-comparison
+          path: coverage/*.json
+          if-no-files-found: error
+
+  dependency-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Set vulnerability cache date
+        id: cache-date
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-13-${{ runner.os }}-${{ steps.cache-date.outputs.day }}-${{ github.run_id }}
+          restore-keys: nvd-13-${{ runner.os }}-
+      - name: Resolve packaged reactor artifacts for aggregate analysis
+        # Tests/coverage run in the independent required verify job.
+        run: bash mvnw --batch-mode --no-transfer-progress clean install -DskipTests -DskipITs -Djacoco.skip=true
+      - name: Verify executable jars and Docker layer extraction
+        run: python3 scripts/check_packaging.py
+      - name: Generate aggregate CycloneDX SBOM
+        run: bash mvnw --batch-mode --no-transfer-progress -Psupply-chain cyclonedx:makeAggregateBom
+      - name: Reject dependencies with CVSS 7 or higher
+        run: bash mvnw --batch-mode --no-transfer-progress -Psupply-chain dependency-check:aggregate
+      - name: Publish SBOM and dependency policy evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-reports
+          path: |
+            target/bom.json
+            target/bom.xml
+            target/dependency-check-report.*
+          if-no-files-found: error
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - product-service
+          - customer-service
+          - order-service
+          - graphql-gateway
+          - inventory-service
+          - payment-service
+          - notification-service
+          - payment-provider-simulator
+          - legacy-bank-service
+          - legacy-banking-adapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build service image from the reactor root
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: false
+          tags: omp/${{ matrix.service }}:verification
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  quality-gate:
+    if: always()
+    needs: [verify, packaged-payment-journey, external-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          TEST_RESULT: ${{ needs.verify.result }}
+          JOURNEY_RESULT: ${{ needs['packaged-payment-journey'].result }}
+          EXTERNAL_RESULT: ${{ needs['external-e2e'].result }}
+          CLIENT_RESULT: ${{ needs['notification-client'].result }}
+          STATIC_RESULT: ${{ needs['static-analysis'].result }}
+          CONTRACT_RESULT: ${{ needs['contract-compatibility'].result }}
+          COVERAGE_RESULT: ${{ needs['coverage-regression'].result }}
+          DEPENDENCY_RESULT: ${{ needs['dependency-policy'].result }}
+          IMAGE_RESULT: ${{ needs.images.result }}
+        run: |
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT"; do
+            if [ "$result" != success ]; then
+              echo "A required verification job failed, was cancelled, or was skipped."
+              exit 1
+            fi
+          done

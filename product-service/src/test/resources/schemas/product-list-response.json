@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["content", "page", "size", "totalElements", "totalPages", "first", "last"],
+  "properties": {
+    "content": {
+      "type": "array",
+      "items": { "$ref": "product-response.json" }
+    },
+    "page": { "type": "integer", "minimum": 0 },
+    "size": { "type": "integer", "minimum": 1 },
+    "totalElements": { "type": "integer", "minimum": 0 },
+    "totalPages": { "type": "integer", "minimum": 0 },
+    "first": { "type": "boolean" },
+    "last": { "type": "boolean" }
+  }
+}

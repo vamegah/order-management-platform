@@ -1,0 +1,12 @@
+# ==============================================================================
+# Prometheus scrape target — legacy-banking-adapter
+# ------------------------------------------------------------------------------
+# Management port 8085 exposes /actuator/prometheus.
+# ==============================================================================
+
+- targets:
+    - legacy-banking-adapter:8085
+  labels:
+    service: legacy-banking-adapter
+    tier: app
+    __metrics_path__: /actuator/prometheus

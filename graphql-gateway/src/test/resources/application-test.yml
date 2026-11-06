@@ -1,0 +1,123 @@
+# ==============================================================================
+# GraphQL Gateway — test profile configuration
+# ==============================================================================
+# Loaded when SPRING_PROFILES_ACTIVE=test.
+#
+# Unlike the Phase 1 services, the gateway has NO database. So this file is
+# smaller: no datasource, no JPA, no Flyway. Only GraphQL, security, and
+# client configuration.
+#
+# WIREMOCK OVERRIDES
+#   The URLs under `omp.clients.*.url` are placeholders. AbstractGraphQlTest
+#   injects the actual WireMock ports via @DynamicPropertySource. These
+#   values are only used if a test forgets to configure WireMock — in which
+#   case any downstream call fails immediately with "connection refused".
+# ==============================================================================
+
+spring:
+  application:
+    name: graphql-gateway
+
+  # ----------------------------------------------------------------------------
+  # GraphQL
+  # ----------------------------------------------------------------------------
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: false       # No UI in tests
+    schema:
+      printer:
+        enabled: false     # No startup schema dump; reduces log noise in CI
+      introspection:
+        enabled: true      # Enabled so tests can introspect
+
+  # ----------------------------------------------------------------------------
+  # Security
+  # ----------------------------------------------------------------------------
+  # Mock decoder replaces the real Keycloak JWKS lookup. See TestSecurityConfig.
+  # The issuer-uri is a placeholder; it's never actually contacted.
+  # ----------------------------------------------------------------------------
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://mock-issuer/realms/omp
+
+# ==============================================================================
+# Downstream clients
+# ==============================================================================
+# Placeholders — @DynamicPropertySource overrides with real WireMock ports.
+# ==============================================================================
+omp:
+  clients:
+    product-service:
+      url: http://localhost:0
+    customer-service:
+      url: http://localhost:0
+    order-service:
+      url: http://localhost:0
+
+# ==============================================================================
+# Feign — tight timeouts for fast test failures
+# ==============================================================================
+# Default timeouts (2s connect, 5s read) make tests slow when a stub is
+# missing. Tests should fail fast and loud.
+# ==============================================================================
+spring.cloud.openfeign:
+  client:
+    config:
+      default:
+        connectTimeout: 1000
+        readTimeout: 2000
+        loggerLevel: full    # Log every request/response for debugging
+  compression:
+    request:
+      enabled: false
+    response:
+      enabled: false
+
+# ==============================================================================
+# Resilience4j — circuit breakers disabled in tests
+# ==============================================================================
+# The default 50% failure threshold would trip during tests that
+# intentionally simulate failures (404, 500). We want the underlying error
+# to surface, not "circuit breaker open".
+# ==============================================================================
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: false
+        slidingWindowSize: 100
+        failureRateThreshold: 100       # Only trip if 100% fail
+        waitDurationInOpenState: 1000ms
+    instances:
+      productClient:
+        baseConfig: default
+      customerClient:
+        baseConfig: default
+      orderClient:
+        baseConfig: default
+
+# ==============================================================================
+# Management
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info       # No prometheus endpoint in tests
+  tracing:
+    enabled: false                  # Tracing is unnecessary in tests
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+logging:
+  level:
+    root: WARN
+    com.example.omp: INFO
+    com.example.omp.gateway.graphql: DEBUG
+    org.springframework.graphql: WARN
+    feign: WARN
+    org.springframework.web: WARN

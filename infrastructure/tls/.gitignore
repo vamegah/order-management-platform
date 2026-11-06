@@ -1,0 +1,32 @@
+# ==============================================================================
+# TLS certificate gitignore
+# ------------------------------------------------------------------------------
+# The certificates and keys in this directory are generated per-environment
+# by the scripts in this directory. They must NEVER be committed.
+#
+# What's ignored:
+#   *.crt   — certificates (public, but environment-specific)
+#   *.key   — private keys (NEVER commit — this is the critical one)
+#   ca/     — the CA directory (contains the CA private key)
+#   */      — the per-service directories (they contain private keys)
+#
+# What's committed:
+#   .gitignore, README.md, generate-*.sh
+# ==============================================================================
+
+# Certificates and keys
+*.crt
+*.key
+*.csr
+*.pem
+*.srl
+
+# Generated CA and per-service directories
+ca/
+order-service/
+inventory-service/
+payment-service/
+
+# OpenSSL intermediate files
+*.old
+*.attr

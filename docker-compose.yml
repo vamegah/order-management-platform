@@ -1,0 +1,1280 @@
+# ==============================================================================
+# Order Management Platform — Local Development Stack
+# ------------------------------------------------------------------------------
+# PURPOSE
+#   Fast, lean, reproducible local dev environment. Runs on any laptop with
+#   ~4 GB free RAM. NOT production-shaped: no TLS, no replicas, no resource
+#   caps, no external secrets.
+#
+# PRODUCTION
+#   Apply the overlay:  docker compose -f docker-compose.yml \
+#                                       -f docker-compose.prod.yml up -d
+#   The overlay adds TLS (Traefik), resource limits, replicas, Docker secrets,
+#   backup sidecars, and HA for Kafka/Redis. See docker-compose.prod.yml.
+#
+# QUICK START
+#   cp .env.example .env
+#   docker compose up -d
+#   docker compose ps
+#   open http://localhost
+#
+# TEARDOWN
+#   docker compose down        # keep data
+#   docker compose down -v     # wipe everything (destructive)
+# ==============================================================================
+
+name: omp
+
+# ------------------------------------------------------------------------------
+# NETWORKS — segmented by trust boundary
+#   edge : reachable from the host browser (UIs, ingress)
+#   app  : application services talk to each other here
+#   data : stateful backends — never exposed to edge
+# ------------------------------------------------------------------------------
+networks:
+  edge:
+    driver: bridge
+  app:
+    driver: bridge
+    internal: false   # needs outbound for pulling deps during build
+  data:
+    driver: bridge
+    internal: true    # no outbound internet from data plane
+
+# ------------------------------------------------------------------------------
+# VOLUMES — named, so `down` keeps data; only `down -v` wipes
+# ------------------------------------------------------------------------------
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  keycloak-data:
+  traefik-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+  promtail-positions:
+
+# ------------------------------------------------------------------------------
+# SERVICES
+# ------------------------------------------------------------------------------
+services:
+
+  # ============================================================================
+  # TRAEFIK — Ingress / reverse proxy
+  # ----------------------------------------------------------------------------
+  # Dev: HTTP only on :80, dashboard on :8080. Auto-discovers services via
+  # Docker labels. No TLS — localhost traffic only.
+  #
+  # Prod overlay replaces this with TLS + Let's Encrypt + HTTP→HTTPS redirect.
+  # ============================================================================
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true                    # dev only; prod disables this
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=omp_edge
+      - --entrypoints.web.address=:80
+      - --accesslog=true
+      - --log.level=INFO
+      - --metrics.prometheus=true              # Traefik exports metrics
+      - --metrics.prometheus.addEntryPointsLabels=true
+      - --tracing.otlp=true                    # Traefik traces via OTLP
+      - --tracing.otlp.http.endpoint=http://otel-collector:4318/v1/traces
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      # Read-only access to Docker socket lets Traefik auto-discover services.
+      # Dev only — prod uses a socket proxy or static config.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-data:/data
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dashboard.rule=Host(`traefik.localhost`)
+      - traefik.http.routers.dashboard.service=api@internal
+
+  # ============================================================================
+  # POSTGRESQL — Primary datastore
+  # ----------------------------------------------------------------------------
+  # One instance, one database (`omp`), multiple schemas — one per service.
+  # Init scripts in ./infrastructure/postgres/init/ run alphabetically on first
+  # boot only. Subsequent boots use the existing volume.
+  # ============================================================================
+  postgres:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB required in .env}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:?POSTGRES_SUPERUSER required in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERPASSWORD:?POSTGRES_SUPERPASSWORD required in .env}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 60s
+    networks:
+      - data
+    labels:
+      - traefik.enable=false
+
+  # ============================================================================
+  # PGDADMIN — Postgres web UI (dev only)
+  # ============================================================================
+  pgadmin:
+    image: dpage/pgadmin4:8.12
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?PGADMIN_EMAIL required in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD required in .env}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    volumes:
+      - ./infrastructure/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/misc/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pgadmin.rule=Host(`pgadmin.localhost`)
+      - traefik.http.routers.pgadmin.entrypoints=web
+      - traefik.http.services.pgadmin.loadbalancer.server.port=80
+
+  # ============================================================================
+  # REDIS — Cache, WebSocket pub/sub, rate-limit counters
+  # ----------------------------------------------------------------------------
+  # Prod overlay replaces this with Sentinel (3 nodes) for HA.
+  # ============================================================================
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD required in .env}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 30s
+    networks:
+      - data
+
+  # ============================================================================
+  # KAFKA — KRaft mode, single broker (dev)
+  # ----------------------------------------------------------------------------
+  # Prod overlay: 3 brokers, RF=3, min ISR=2, TLS+SASL, no auto-create.
+  #
+  # IMAGE TAG STABILITY
+  #   Bitnami has historically re-pushed tags with breaking changes and,
+  #   in 2024, began deprecating parts of its public catalog. The tag
+  #   `bitnami/kafka:3.8` currently works, but a future `docker pull`
+  #   may fail or resolve to a different image than expected.
+  #
+  #   If `docker compose up kafka` fails with "manifest unknown" or
+  #   "not found", switch to ONE of:
+  #
+  #   (A) Official Apache image (recommended for new deployments):
+  #         image: apache/kafka:3.8.0
+  #       The Apache project maintains this image directly. Environment
+  #       variable prefixes differ slightly — Bitnami uses KAFKA_CFG_*;
+  #       Apache uses KAFKA_* (no _CFG_). Update the `environment:` block
+  #       below accordingly (rename every KAFKA_CFG_X to KAFKA_X).
+  #
+  #   (B) Pinned Bitnami digest (freezes the current image):
+  #         image: bitnami/kafka@sha256:<digest>
+  #       Guarantees reproducibility as long as the registry hosts the
+  #       layer. Find the digest with:
+  #         docker pull bitnami/kafka:3.8
+  #         docker inspect bitnami/kafka:3.8 --format='{{index .RepoDigests 0}}'
+  #
+  #   For now, we keep the floating tag: it works, and the environments
+  #   where it runs are all ephemeral (dev, CI). A future hardening pass
+  #   (Phase 7) will pin every image to a digest.
+  # ============================================================================
+  kafka:
+    image: bitnami/kafka:3.8
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENERS: "INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "INTERNAL://kafka:9092,EXTERNAL://localhost:29092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_NUM_PARTITIONS: "3"
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_CFG_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_CFG_LOG_RETENTION_HOURS: "168"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-29092}:29092"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 60s
+    networks:
+      - data
+
+  # ============================================================================
+  # KAFKA UI — topic/partition/message browser (dev only)
+  # ============================================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: omp-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_READONLY: "false"
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.kafka-ui.rule=Host(`kafka-ui.localhost`)
+      - traefik.http.routers.kafka-ui.entrypoints=web
+      - traefik.http.services.kafka-ui.loadbalancer.server.port=8080
+
+
+  # ============================================================================
+  # PRODUCT SERVICE — REST API for the product catalog
+  # ----------------------------------------------------------------------------
+  # First business service of the platform. Owns the `products` schema in
+  # Postgres. Exposes /api/v1/products and /api/v1/categories.
+  #
+  # The build context is the service's directory, so Docker builds the
+  # image from its Dockerfile. In dev, this build happens on each
+  # `docker compose up --build product-service` when source changes.
+  #
+  # Traefik routing: via labels below. The service is reachable at
+  # http://product-service.localhost (routed through Traefik).
+  # ============================================================================
+  product-service:
+    build:
+      context: .
+      dockerfile: product-service/Dockerfile
+    image: omp/product-service:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      # Datasource — resolves to the local Postgres container.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=products,public
+      SPRING_DATASOURCE_USERNAME: products_svc
+      SPRING_DATASOURCE_PASSWORD: ${PRODUCT_SERVICE_DB_PASSWORD:-local-dev-products-password}
+
+      # Keycloak — both URLs are needed:
+      #   issuer-uri for JWT validation (must be the public URL that clients
+      #     use, so the `iss` claim in tokens matches).
+      #   jwk-set-uri for fetching public keys (internal URL, avoids DNS).
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      # OpenTelemetry Collector for trace export.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+      # Inherits env=dev from the parent. Overridden to `prod` in the
+      # prod overlay.
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    networks:
+      - edge    # for Traefik routing
+      - app     # for service-to-service communication (Phase 2+)
+      - data    # for Postgres, Redis, Kafka
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      # Traefik routing
+      - traefik.enable=true
+      - traefik.http.routers.product-service.rule=Host(`product-service.localhost`)
+      - traefik.http.routers.product-service.entrypoints=web
+      - traefik.http.services.product-service.loadbalancer.server.port=8081
+
+    # ============================================================================
+  # CUSTOMER SERVICE — REST API for customer profiles
+  # ----------------------------------------------------------------------------
+  # Second business service. Owns the `customers` schema. Exposes
+  # /api/v1/customers and /api/v1/customers/{id}/addresses.
+  # ============================================================================
+  customer-service:
+    build:
+      context: .
+      dockerfile: customer-service/Dockerfile
+    image: omp/customer-service:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=customers,public
+      SPRING_DATASOURCE_USERNAME: customers_svc
+      SPRING_DATASOURCE_PASSWORD: ${CUSTOMER_SERVICE_DB_PASSWORD:-local-dev-customers-password}
+
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    networks:
+      - edge
+      - app
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.customer-service.rule=Host(`customer-service.localhost`)
+      - traefik.http.routers.customer-service.entrypoints=web
+      - traefik.http.services.customer-service.loadbalancer.server.port=8082
+
+    # ============================================================================
+  # ORDER SERVICE — REST API for order management
+  # ----------------------------------------------------------------------------
+  # Orchestrates product-service and customer-service to fulfill orders.
+  # Depends on those services being healthy at startup.
+  # ============================================================================
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    image: omp/order-service:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      customer-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=orders,public
+      SPRING_DATASOURCE_USERNAME: orders_svc
+      SPRING_DATASOURCE_PASSWORD: ${ORDER_SERVICE_DB_PASSWORD:-local-dev-orders-password}
+
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      # URLs of downstream services (internal Docker DNS).
+      PRODUCT_SERVICE_URL: http://product-service:8081
+      CUSTOMER_SERVICE_URL: http://customer-service:8082
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    networks:
+      - edge
+      - app
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.order-service.rule=Host(`order-service.localhost`)
+      - traefik.http.routers.order-service.entrypoints=web
+      - traefik.http.services.order-service.loadbalancer.server.port=8083
+
+    volumes:
+      - ./infrastructure/tls/order-service/tls.crt:/etc/tls/tls.crt:ro
+      - ./infrastructure/tls/order-service/tls.key:/etc/tls/tls.key:ro
+      - ./infrastructure/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+
+
+  # ============================================================================
+  # GRAPHQL GATEWAY — aggregation layer over the three REST services
+  # ----------------------------------------------------------------------------
+  # Exposes a single GraphQL endpoint that queries across product-service,
+  # customer-service, and order-service. Uses token relay — forwards the
+  # caller's JWT to downstream services.
+  #
+  # Depends on ALL three REST services being healthy at startup.
+  # ============================================================================
+  graphql-gateway:
+    build:
+      context: .
+      dockerfile: graphql-gateway/Dockerfile
+    image: omp/graphql-gateway:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      customer-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      # Keycloak — same as Phase 1 services
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      # Downstream service URLs — internal Docker DNS
+      PRODUCT_SERVICE_URL: http://product-service:8081
+      CUSTOMER_SERVICE_URL: http://customer-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+
+      # Observability
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    networks:
+      - edge
+      - app
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8000/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.graphql-gateway.rule=Host(`graphql.localhost`)
+      - traefik.http.routers.graphql-gateway.entrypoints=web
+      - traefik.http.services.graphql-gateway.loadbalancer.server.port=8000
+
+  # ============================================================================
+  # NOTIFICATION SERVICE — WebSocket + Kafka consumer
+  # ----------------------------------------------------------------------------
+  # Consumes Kafka events from orders, inventory, and payments, and pushes
+  # updates to subscribed WebSocket clients.
+  #
+  # Ports:
+  #   - 8084: HTTP server for STOMP over WebSocket.
+  #   - 8085: management HTTP (actuator).
+  #
+  # Depends on:
+  #   - Kafka (event bus)
+  #   - Redis (cross-replica pub/sub)
+  #   - Keycloak (JWT validation)
+  #
+  # Networks: edge (for Traefik) + app + data.
+  # ============================================================================
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    image: omp/notification-service:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      # --- Batch 9.3 additions ---
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=notifications,public
+      SPRING_DATASOURCE_USERNAME: notifications_svc
+      SPRING_DATASOURCE_PASSWORD: ${NOTIFICATION_SERVICE_DB_PASSWORD:-local-dev-notifications-password}
+
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD required in .env}
+
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+
+      NOTIFICATION_SERVICE_DB_PASSWORD: ${NOTIFICATION_SERVICE_DB_PASSWORD:-local-dev-notifications-password}
+      JWT_ISSUER_URI: http://keycloak:8080/realms/omp
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      SERVER_PORT: "8084"
+      MANAGEMENT_PORT: "8085"
+      CUSTOMER_SERVICE_URL: http://customer-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+      PAYMENT_SERVICE_URL: http://payment-service:8080
+    networks:
+      - edge
+      - app
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.notification-service.rule=Host(`notification.localhost`)
+      - traefik.http.routers.notification-service.entrypoints=web
+      - traefik.http.services.notification-service.loadbalancer.server.port=8084
+
+  # ============================================================================
+  # INVENTORY SERVICE — gRPC-only service for stock levels and reservations
+  # ----------------------------------------------------------------------------
+  # No REST endpoints. No Traefik routing. Internal-only.
+  #
+  # The service listens on:
+  #   - 9091: gRPC server (called by order-service)
+  #   - 9092: management HTTP (actuator endpoints; scraped by Prometheus)
+  #
+  # Networks: app (for peer services) + data (for Postgres). No edge.
+  # ============================================================================
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    image: omp/inventory-service:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      # Postgres datasource — the `inventory` schema.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=inventory,public
+      SPRING_DATASOURCE_USERNAME: inventory_svc
+      SPRING_DATASOURCE_PASSWORD: ${INVENTORY_SERVICE_DB_PASSWORD:-local-dev-inventory-password}
+
+      # Keycloak — for JWT validation via the gRPC interceptor.
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      # OpenTelemetry Collector for trace export.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+      # Metrics environment label.
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+
+      # gRPC server configuration.
+      GRPC_PORT: "9091"
+      # Reflection enabled in dev for grpcurl tooling.
+      GRPC_REFLECTION_ENABLED: "true"
+      MANAGEMENT_PORT: "9092"
+    networks:
+      # No `edge`. Internal only.
+      - app
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      # Checks the management HTTP port, not the gRPC port. This is because
+      # wget speaks HTTP, not gRPC. The actuator health endpoint on 9092
+      # reports the application's overall health, which is what we care about.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9092/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No Traefik labels — internal only.
+    volumes:
+      - ./infrastructure/tls/inventory-service/tls.crt:/etc/tls/tls.crt:ro
+      - ./infrastructure/tls/inventory-service/tls.key:/etc/tls/tls.key:ro
+      - ./infrastructure/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+
+  # ============================================================================
+  # PAYMENT SERVICE — gRPC-only service for payment intents and refunds
+  # ----------------------------------------------------------------------------
+  # No REST endpoints. No Traefik routing. Internal-only.
+  #
+  # Listens on:
+  #   - 9093: gRPC server (called by order-service)
+  #   - 9094: management HTTP (actuator endpoints; scraped by Prometheus)
+  #
+  # Networks: app (for peer services) + data (for Postgres). No edge.
+  # ============================================================================
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    image: omp/payment-service:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      # Postgres datasource — the `payments` schema.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=payments,public
+      SPRING_DATASOURCE_USERNAME: payments_svc
+      SPRING_DATASOURCE_PASSWORD: ${PAYMENT_SERVICE_DB_PASSWORD:-local-dev-payment-password}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_ISSUER_URI: http://keycloak:8080/realms/omp
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-noop}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+
+      # Keycloak — for JWT validation via the gRPC interceptor.
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+
+      GRPC_PORT: "9093"
+      GRPC_REFLECTION_ENABLED: "true"
+      MANAGEMENT_PORT: "9094"
+    networks:
+      - app
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9094/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No Traefik labels.
+    volumes:
+      - ./infrastructure/tls/payment-service/tls.crt:/etc/tls/tls.crt:ro
+      - ./infrastructure/tls/payment-service/tls.key:/etc/tls/tls.key:ro
+      - ./infrastructure/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+
+
+  # ============================================================================
+  # PAYMENT PROVIDER SIMULATOR — simulates an external payment provider
+  # ----------------------------------------------------------------------------
+  # Exposes an HTTP API to trigger payments and sends signed webhooks to
+  # payment-service after a configurable delay. Used for local dev and e2e
+  # testing without a real Stripe account.
+  #
+  # Ports:
+  #   - 8090: HTTP API (trigger payments)
+  #   - 8091: management HTTP (actuator/health, actuator/prometheus)
+  # ============================================================================
+  payment-provider-simulator:
+    build:
+      context: .
+      dockerfile: payment-provider-simulator/Dockerfile
+    image: omp/payment-provider-simulator:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SERVER_PORT: "8090"
+      MANAGEMENT_PORT: "8091"
+      WEBHOOK_URL: http://payment-service:9093/webhooks/payment
+      WEBHOOK_HMAC_SECRET: ${SIMULATOR_WEBHOOK_SECRET:-dev-simulator-secret-not-for-production}
+      WEBHOOK_DELAY_MS: ${SIMULATOR_WEBHOOK_DELAY_MS:-2000}
+      FAILURE_RATE: ${SIMULATOR_FAILURE_RATE:-0.0}
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    networks:
+      - app
+    ports:
+      - "${SIMULATOR_PORT:-8090}:8090"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8091/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.simulator.rule=Host(`simulator.localhost`)
+      - traefik.http.routers.simulator.entrypoints=web
+      - traefik.http.services.simulator.loadbalancer.server.port=8090
+
+  # ============================================================================
+  # LEGACY BANKING ADAPTER — REST-to-SOAP bridge for the legacy bank service
+  # ----------------------------------------------------------------------------
+  # Translates REST calls from order-service into WS-Security SOAP calls
+  # against legacy-bank-service. Exposes circuit-breaker metrics.
+  #
+  # Port 8085: REST API + management (actuator/health, actuator/prometheus)
+  # ============================================================================
+  legacy-banking-adapter:
+    build:
+      context: .
+      dockerfile: legacy-banking-adapter/Dockerfile
+    image: omp/legacy-banking-adapter:1.0.0-SNAPSHOT
+    restart: unless-stopped
+    depends_on:
+      legacy-bank-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      BANK_PASSWORD: ${BANK_PASSWORD:-platform-secret}
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    networks:
+      - edge
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.banking-adapter.rule=Host(`banking.localhost`)
+      - traefik.http.routers.banking-adapter.entrypoints=web
+      - traefik.http.services.banking-adapter.loadbalancer.server.port=8085
+
+  legacy-bank-service:
+      build:
+        context: .
+        dockerfile: legacy-bank-service/Dockerfile
+      container_name: legacy-bank-service
+      ports:
+        - "8443:8443"
+      environment:
+        SPRING_PROFILES_ACTIVE: docker
+      networks:
+        - app
+      healthcheck:
+        test: ["CMD", "wget", "--no-check-certificate", "-q", "-O-",
+              "https://localhost:8443/actuator/health"]
+        interval: 15s
+        timeout: 5s
+        retries: 3
+        start_period: 30s
+
+  # ============================================================================
+  # KEYCLOAK — OAuth2 / OIDC identity provider
+  # ----------------------------------------------------------------------------
+  # Dev mode: start-dev, HTTP, admin console exposed.
+  # Prod: start --optimized, TLS via Traefik, no admin console on public edge.
+  # ============================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    restart: unless-stopped
+    command:
+      - start-dev
+      - --http-port=8080
+      - --hostname-strict=false
+      - --health-enabled=true
+      - --import-realm
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN required in .env}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD required in .env}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}?currentSchema=keycloak
+      KC_DB_USERNAME: ${POSTGRES_SUPERUSER}
+      KC_DB_PASSWORD: ${POSTGRES_SUPERPASSWORD}
+      KC_DB_SCHEMA: keycloak
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_LOG_LEVEL: INFO
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - ./infrastructure/keycloak/import:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q 'UP'"
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 90s
+    stop_grace_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.keycloak.rule=Host(`keycloak.localhost`)
+      - traefik.http.routers.keycloak.entrypoints=web
+      - traefik.http.services.keycloak.loadbalancer.server.port=8080
+
+  # ============================================================================
+  # OPEN TELEMETRY COLLECTOR — central pipeline for traces/metrics/logs
+  # ----------------------------------------------------------------------------
+  # Services send OTLP here; the collector fans out to Tempo, Prometheus, Loki.
+  # Decoupling apps from backends means we can swap Tempo for another backend
+  # without touching app code.
+  # ============================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./infrastructure/otel/otel-collector.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"    # OTLP gRPC
+      - "${OTEL_HTTP_PORT:-4318}:4318"    # OTLP HTTP
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol/config.yml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 30s
+
+  # ============================================================================
+  # TEMPO — distributed tracing backend (replaces Zipkin)
+  # ============================================================================
+  tempo:
+    image: grafana/tempo:2.6.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./infrastructure/tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+
+  # ============================================================================
+  # LOKI — log aggregation backend
+  # ============================================================================
+  loki:
+    image: grafana/loki:3.2.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./infrastructure/loki/loki-config.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+    # ============================================================================
+  # PROMTAIL — log shipper (Docker → Loki)
+  # ----------------------------------------------------------------------------
+  # Discovers Docker containers via the Docker socket, tails their log files
+  # on disk, parses them, and pushes them to Loki.
+  #
+  # This is the bridge between Docker's log files and Loki's ingestion API.
+  # Without it, no container logs reach Loki.
+  #
+  # See File 18a for the full pipeline config.
+  # ============================================================================
+  promtail:
+    image: grafana/promtail:3.2.1
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/promtail/config.yml
+    volumes:
+      # Read container log files on the host. Docker writes each container's
+      # stdout/stderr here in json-file format.
+      #
+      # Must be a bind mount (not a named volume) — this is the HOST's
+      # Docker log directory, not a Docker-managed volume.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+
+      # Docker socket for container discovery. Promtail queries the Docker
+      # API to enumerate running containers and their metadata.
+      #
+      # Read-only is sufficient — Promtail only reads container info.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Promtail's own config.
+      - ./infrastructure/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+
+      # Positions file — persists read offsets across restarts.
+      - promtail-positions:/var/lib/promtail
+    networks:
+      # On `data` to reach Loki. On `edge` so its metrics endpoint is
+      # reachable by Prometheus (Phase 7 will add a scrape job).
+      - data
+      - edge
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9080/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=false
+
+  # ============================================================================
+  # ALERTMANAGER — alert routing and notification
+  # ----------------------------------------------------------------------------
+  # Receives firing alerts from Prometheus and routes them to receivers.
+  # Dev: logs to a local webhook. Prod overlay: Slack/PagerDuty/email.
+  # ============================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=:9093
+      - --web.external-url=http://alertmanager.localhost
+    volumes:
+      - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    environment:
+      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-http://localhost:5001/alerts}
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.alertmanager.rule=Host(`alertmanager.localhost`)
+      - traefik.http.routers.alertmanager.entrypoints=web
+      - traefik.http.services.alertmanager.loadbalancer.server.port=9093
+
+  # ============================================================================
+  # PROMETHEUS — metrics scraper + TSDB
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    restart: unless-stopped
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver   # OTel collector pushes here
+      # Enables ${VAR} substitution inside prometheus.yml, needed for the
+      # `env` external label (see infrastructure/prometheus/prometheus.yml,
+      # global.external_labels). Without this flag, ${PROMETHEUS_ENV} would
+      # be treated as a literal string, not expanded.
+      - --enable-feature=expand-external-labels 
+    environment:
+      # Environment label applied to every metric as an external label.
+      # Used in Grafana queries like `up{env="dev"}` to distinguish
+      # dev from prod when a single Grafana serves both.
+      #
+      # The default `dev` matches File 15's fallback — this variable is
+      # redundant in dev but essential in the prod overlay, where
+      # PROMETHEUS_ENV=prod is set explicitly.
+      PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
+    
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)
+      - traefik.http.routers.prometheus.entrypoints=web
+      - traefik.http.services.prometheus.loadbalancer.server.port=9090
+
+  # ============================================================================
+  # GRAFANA — dashboards + unified UI over Prometheus/Loki/Tempo
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER required in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD required in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/health | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`grafana.localhost`)
+      - traefik.http.routers.grafana.entrypoints=web
+      - traefik.http.services.grafana.loadbalancer.server.port=3000

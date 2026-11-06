@@ -1,0 +1,46 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: legacy-banking-adapter
+
+bank:
+  ws:
+    url: https://localhost:8443/ws
+    username: platform-user
+    password: ${BANK_PASSWORD:platform-secret}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      banking:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      banking:
+        maxAttempts: 3
+        waitDuration: 500ms
+        retryExceptions:
+          - com.example.omp.adapter.port.BankingException
+        ignoreExceptions:
+          - com.example.omp.adapter.port.BankingException
+  # ^ NOTE: we ignore all BankingExceptions for retry by default.
+  #   Business faults must never be retried. Only infra faults should be.
+  #   We'll refine this in a follow-up.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers
+
+logging:
+  level:
+    com.example.omp.adapter: DEBUG
+    org.springframework.ws: INFO

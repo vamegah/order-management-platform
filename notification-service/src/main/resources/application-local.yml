@@ -1,0 +1,26 @@
+# ==============================================================================
+# Local development overrides
+# ==============================================================================
+
+logging:
+  level:
+    com.example.omp.notification: DEBUG
+    org.springframework.web.socket: INFO
+    org.springframework.messaging: INFO
+    org.springframework.kafka: DEBUG
+    org.springframework.data.redis: DEBUG
+    org.springframework.security: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+omp:
+  notifications:
+    # In dev, all localhost ports are allowed (browsers vary).
+    allowed-origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://web.localhost"
+      - "http://notification.localhost"

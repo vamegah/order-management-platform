@@ -1,0 +1,44 @@
+# ==============================================================================
+# Security headers middleware
+# ------------------------------------------------------------------------------
+# Applied to every HTTPS router via `middlewares=security-headers@file` in
+# each service's labels (or globally via a router-level default — see notes).
+#
+# REFERENCES
+#   https://doc.traefik.io/traefik/middlewares/http/headers/
+#   https://owasp.org/www-project-secure-headers/
+# ==============================================================================
+
+http:
+  middlewares:
+    security-headers:
+      headers:
+        # HSTS — tell browsers to always use HTTPS for this domain, for 1 year.
+        # includeSubdomains applies to all subdomains.
+        # preload is a stronger commitment (browser preload lists); leave off
+        # until the domain is stable.
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: false
+
+        # Prevent MIME-type sniffing. Browsers must respect Content-Type.
+        contentTypeNosniff: true
+
+        # Disallow embedding in frames (clickjacking protection).
+        frameDeny: true
+
+        # Referrer policy — send origin only for cross-origin requests.
+        referrerPolicy: "strict-origin-when-cross-origin"
+
+        # XSS filter — legacy, but harmless.
+        browserXssFilter: true
+
+        # Custom headers. Traefik lets us inject arbitrary response headers.
+        customResponseHeaders:
+          X-Permitted-Cross-Domain-Policies: "none"
+          Permissions-Policy: "geolocation=(), microphone=(), camera=()"
+
+        # Content-Security-Policy is left to the application. Different
+        # services have different needs (some serve static assets, others
+        # JSON-only). Setting it globally risks breaking legitimate
+        # functionality. Per-service CSP is the correct place.

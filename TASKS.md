@@ -1,0 +1,167 @@
+# Project Completion Tasks
+
+This backlog turns the current implementation into a buildable, deployable, and production-ready reference platform for REST, GraphQL, gRPC, WebSocket, webhooks, and SOAP. Complete sections in order: later work relies on the earlier foundations.
+
+Implementation evidence and current blockers are tracked in [the implementation report](docs/task-implementation-report.md). Unchecked items are not accepted as complete.
+
+## 0. Establish a Green, Reproducible Baseline
+
+- [x] **Fix Maven reactor coordinates and module paths.** Rename or correct the `legacy-banking-service` module entry to `legacy-bank-service`; align all legacy parent coordinates with `com.example.omp`; correct/remove the adapter's invalid shared dependency.
+  - Acceptance: `./mvnw verify` reaches compilation for every module without model-resolution errors.
+- [x] **Repair legacy-bank compilation and SOAP fault output.** Resolve the duplicate `SoapFault` imports and implement a stable, documented SOAP fault-detail schema.
+  - Acceptance: simulator and adapter compile; SOAP fault contract tests cover business and infrastructure faults.
+- [x] **Run and fix the complete test suite.** Execute unit, integration, platform, and `e2e` profiles after the reactor is repaired; classify flaky versus failing tests and fix all deterministic failures.
+  - Acceptance: clean checkout passes `./mvnw verify` and documented e2e command without skipped required tests.
+  - Continuation: default/e2e Failsafe selection repaired; CI now checks for missing/skipped suites and absent coverage data. A clean 17-module unit/package/static-analysis run passes 701 tests with zero SpotBugs findings. Testcontainers BOM precedence and Docker 29 compatibility are repaired. The later complete/default and external milestones below close test-suite acceptance.
+  - Product/customer continuation: repaired startup auditing/YAML, existing PostgreSQL column mappings, container lifetimes, CORS/pagination binding and HTTP error/security handling. Fixed preference creation, address IDs/default replacement and product default filtering/image IDs. See [verification scope and commands](docs/catalog-customer-verification.md).
+  - [x] Product/customer verification milestone: clean changed-module checks pass 125 unit/in-process tests and SpotBugs; the complete five-module `verify` passes all 98 PostgreSQL integration tests without skips and the unchanged 80% gates (product 91.64%, customer 91.51%). All 13 local unit coverage comparisons pass (638 current reactor unit reports). Full-reactor and e2e acceptance remain open.
+  - [x] Order verification milestone: clean changed-module checks pass 261 unit/in-process tests and SpotBugs. The six-module `verify` passes all 42 PostgreSQL/HTTP integration tests without skips and the unchanged 80% order gate (80.12%). All 13 local unit coverage comparisons pass (649 current reactor unit reports). See [verification scope and access policy](docs/order-verification.md). Full-reactor and e2e acceptance remain open.
+  - Initial full-reactor diagnostic: twelve modules pass; gateway, inventory, payment and notification fail, and platform-tests is skipped. Subsequent clean focused runs pass gateway, inventory, payment and notification tests/gates. Payment startup now uses the explicit outbox schema and current retry exception class. Platform/full-reactor/e2e acceptance remains open. See [the classified evidence](docs/task-implementation-report.md#full-reactor-and-integration-fixture-continuation).
+  - [x] Inventory/gateway verification milestone: inventory passes 34 unit/in-process and five PostgreSQL cases with its unchanged 80% gate at 90.56%. Gateway passes 59 unit/in-process and eleven HTTP cases with its unchanged gate at 80.49%. Inventory bulk operations now share unary transaction/idempotency/outbox behavior, with bounded streams and rollback/replay regressions; see [the contract](docs/inventory-reservations.md).
+  - [x] Payment verification milestone: clean five-module verification passes 326 unit/in-process and all sixteen PostgreSQL/Kafka integration tests without skips. The unchanged 80% payment gate passes at 82.39%. Startup schema/retry binding, HTTP/provider contracts, raw webhook forwarding and stream lifecycle checks are documented in [payment verification](docs/payment-verification.md).
+  - [x] Reactor unit/static/package milestone: the clean seventeen-module build passes 701 tests with no missing suites, failures, errors or skips. Fourteen SpotBugs reports contain zero findings/errors, all thirteen fresh unit-coverage comparisons pass, and all ten executable packages pass launcher and layer-extraction checks. Focused integration evidence is archived separately; notification/platform/full verify/e2e acceptance remains open.
+  - [x] Notification reactor milestone: a fresh clean seventeen-module `spotless:apply package jacoco:report` run passes 701 unit/in-process tests (36 notification, including WebSocketBrokerTest) with zero failures, errors or skips. Fourteen SpotBugs reports contain zero findings/errors. All ten executable packages pass launcher and layer-extraction checks. Coverage snapshot `after-notification-reactor.json` records 25.72% notification unit instruction coverage; self-comparison passes all 13 modules. Container suites were unexecuted at this milestone; subsequent focused acceptance is recorded below.
+  - [x] Notification verification milestone: the clean four-module `-Pstatic-analysis verify` passes 178 unit/in-process tests (82 notification) and all thirteen PostgreSQL/Redis/Kafka/HTTP/STOMP integration cases without failures, errors, skips or missing suites. The unchanged 80% notification gate passes at 85.67%; all three focused SpotBugs reports have zero findings/errors/missing classes. Startup, owner mapping, Kafka acknowledgment, management authorization and DLQ replay fixes are documented in [notification verification](docs/notification-verification.md), with source-bound reports archived separately from unit-only coverage snapshots. Platform/full-reactor/e2e acceptance remains open.
+  - [x] Platform verification milestone: all 42 cases in the twelve application-context platform suites pass without failures, errors or skips. Repaired shared-classpath configuration/migrations, Redis/retry fixtures, asynchronous cleanup and independent authenticated payment-to-webhook journeys, including canonical refund event aliases. The packaged journey is now also required by default verification; its acceptance is recorded separately below. See [platform verification](docs/platform-verification.md).
+  - [x] Packaged payment/notification journey: independently packaged services, PostgreSQL/Kafka/Redis, signed JWT/JWKS verification and subscriber signature/history checks pass both container cases without failures/errors/skips. Fixed consumer-created one-partition topics and require complete broker partition assignments before publishing. The focused eight-module build also passes all 457 unit/in-process tests. See [platform verification](docs/platform-verification.md).
+  - [x] Complete default reactor verification milestone: the fresh seventeen-module static-analysis `clean verify` passes all 999 tests without failures, errors, skips or missing suites and preserves all coverage gates. A focused gateway follow-up supplies its analysis annotation classpath; all fourteen complete SpotBugs reports have zero findings/errors/missing classes. All ten executable package/layer checks pass. Source-bound reports and both commands are retained in `coverage/complete-default-reactor-evidence.zip` and JSON; the separate external milestone also passes.
+  - [x] External deployed milestone: all ten REST/order/refund/mTLS gRPC/WebSocket cases pass without failures, errors or skips. Missing/invalid bearer identities are rejected. Six deployed JAR hashes, health checks, public deployment inputs and reports are retained in `coverage/external-linux-evidence.zip` and JSON. This uses independently packaged runtime images; checked-in multi-stage Docker builds remain a separate CI gate.
+  - Runtime continuation: clean inventory acceptance passes 41 tests at 89.93% instruction coverage with signed-JWT management authorization. Real deployed checkout/place/cancel succeeds after fixing runtime dependencies, DNS/TLS/client identity and development issuer configuration. The complete reactor run was interrupted. Restored the issuer's stable `sub` mapper and verified fresh realm import plus real STOMP CONNECT; all ten expanded external cases and the complete 999-test reactor now pass. See the [November 6 evidence](docs/task-implementation-report.md#2026-11-06-deployed-transport-and-topology-continuation).
+  - External-suite continuation: replaced the unfinished lifecycle case and throwing cancellation helper with independent order/shipment/cancellation/refund journeys. Fresh orders expose committed payment/reservation references; clients use mTLS and deadlines, development JWTs refresh, and the WebSocket case waits for a subscription metric and checks unsubscribe cleanup. The opt-in e2e Compose overlay initializes development database credentials and broker bindings. Compilation and deployed execution must pass before accepting the parent task; see [external e2e](docs/external-e2e.md).
+- [ ] **Enforce quality gates.** Configure JaCoCo thresholds, Spotless, static analysis, dependency vulnerability scanning, and SBOM generation in CI.
+  - Acceptance: pull requests fail on formatting, build/test failure, coverage regression, or policy-violating dependencies.
+  - Continuation: added SpotBugs, CVSS >= 7 dependency policy, aggregate CycloneDX SBOM and evidence enforcement. Added exact per-module PR/base unit-coverage regression checks and 80% banking coverage policies; existing thresholds are preserved. The strict static/JUnit gates reject missing/error/skipped evidence, with 47 passing tooling tests. See [quality gates and remaining acceptance](docs/quality-gates.md).
+- [ ] **Add CI workflows.** Build/test the Maven reactor, build containers, run integration tests, and publish reports/artifacts.
+  - Acceptance: a GitHub Actions workflow executes on pull requests and the default branch.
+  - Continuation: independent verification/static-analysis/dependency/image jobs cover all ten executable modules. Root build contexts and executable jar packaging repaired; GitHub workflow action versions fixed to real published releases (checkout@v4, setup-java@v4, setup-python@v5, upload-artifact@v4, cache@v4, setup-buildx@v3, build-push-action@v6).
+
+## 1. Finish Core Order Lifecycle
+
+- [ ] **Persist inventory reservation IDs on orders.** Add schema migration, domain mapping, and transaction handling for reservations created during checkout.
+  - Acceptance: every accepted order line has a durable reservation reference.
+  - Continuation: schema/domain/transaction support and real PostgreSQL checkout tests verify committed line references and acceptance journal state. HTTP tests exercise those references through generated inventory clients; deployed-service and legacy-row acceptance remain open.
+- [ ] **Release reservations during cancellation and compensation.** Replace the current best-effort placeholder with idempotent gRPC release calls.
+  - Acceptance: cancelling an order releases all active reservations; repeated cancellation/retry is safe.
+  - Continuation: cleanup now validates payment ownership, cancels pending payments and requests idempotent remaining refunds for confirmed/partially refunded payments. Pending outcomes remain queued; deployed compensation acceptance remains open. See [refund coordination](docs/payment-refunds.md).
+- [ ] **Implement expiry and reconciliation jobs.** Expire stale reservations; reconcile orphaned payments/reservations created by partial saga failure; provide metrics and operator-safe retry actions.
+  - Acceptance: injected partial failures recover automatically and are visible in metrics/logs.
+  - Continuation: added opt-in bounded refund recovery, provider GET reconciliation, persisted backoff/attention state, metrics and administrator retry/inspection. Unknown-reference refunds now have an audited administrator action requiring verified original provider metadata and unique reference binding. Thirteen targeted PostgreSQL payment/refund tests pass; deployed recovery and reservation-expiry acceptance remain open. See [refund recovery](docs/payment-refunds.md) and [operator reconciliation](docs/refund-reconciliation.md).
+- [x] **Complete order-line behavior.** Replace the `_ping` placeholder with defined draft-order add/update/remove operations, or remove that controller and document immutable order lines.
+  - Acceptance: API contract and tests match the selected behavior.
+- [ ] **Define and test order state transitions.** Cover all payment, shipment, cancellation, refund, and compensation edge cases across REST and gRPC boundaries.
+  - Acceptance: end-to-end tests prove valid transitions and reject invalid transitions with stable problem/error contracts.
+  - Continuation: shipment now persists FULFILLING intent/tasks, commits matching inventory holds, fences cancellation, rechecks payment and completes its history/outbox atomically. HTTP 202/GraphQL pending responses and opt-in authenticated retries are implemented; Eight PostgreSQL persistence cases now pass, covering durable references, history/outbox atomicity, optimistic concurrency and fulfillment recovery. HTTP tests also cover paid shipment and cancellation retries. Deployed recovery and refund coordination acceptance remain open. See [durable fulfillment](docs/order-fulfillment.md).
+
+## 2. Complete REST and GraphQL Public APIs
+
+- [ ] **Publish versioned OpenAPI contracts.** Store and validate OpenAPI 3.1 specifications for product, customer, order, webhook-management, and banking-facade APIs.
+  - Acceptance: CI detects implementation/spec drift; examples authenticate and run through Traefik.
+- [x] **Add batch read APIs for product and customer services.** Implement authorization, validation, bounded request sizes, and response ordering semantics.
+  - Acceptance: GraphQL DataLoaders resolve N unique IDs in one request per service rather than N requests.
+- [x] **Add GraphQL query protection.** Enforce depth, complexity, request-size, rate, and timeout limits with meaningful GraphQL error codes.
+  - Acceptance: abusive nested/expensive queries are rejected and normal aggregate queries continue to work.
+- [x] **Finalize GraphQL production policy.** Decide and implement persisted-query support, cache policy, introspection/GraphiQL production settings, and error redaction.
+  - Acceptance: policy is documented and tested for development and production profiles.
+- [ ] **Add external API contract tests.** Test REST/OpenAPI and GraphQL contracts from consumer-facing clients, including authentication, pagination, errors, and backward compatibility.
+  - Acceptance: breaking changes are detected before merge.
+  - Continuation: product/customer real HTTP suites cover batch bounds/order, invalid credentials, configured sorting, browser-origin policy, customer ownership and profile/address mutation responses. Committed lifecycle tests cover image replacement, default-address concurrency/rollback, preferences and identity-link conflicts. Full cross-service/GraphQL compatibility acceptance remains open.
+
+## 3. Productionize gRPC
+
+- [ ] **Validate all gRPC patterns end to end.** Exercise unary, client streaming, server streaming, and bidirectional streaming with real containers, deadlines, cancellation, and backpressure.
+  - Acceptance: each RPC has positive, error, authorization, deadline, and cancellation coverage.
+  - Continuation: generated in-process inventory clients cover stock queries, reservation lifecycle/replay, exception translation, bulk completion and stock-stream cancellation. Separate PostgreSQL tests verify committed item transactions and outbox rollback/replay. Full-container transport, authorization, deadlines/backpressure and all-RPC acceptance remain open.
+- [ ] **Make stream fan-out multi-replica safe.** Replace local-only inventory/payment stream registries with Redis/Kafka-backed fan-out or explicitly constrain them to one replica.
+  - Acceptance: a subscriber receives expected events after pod/container replacement or replica changes.
+  - Continuation: production inventory/payment replicas are explicitly constrained to one, with stop-first updates and rollbacks. The required verification job checks the fully resolved Compose topology and rejects scaling/overlap overrides. Fixed invalid backup-service indentation and undeclared Kafka volumes so that configuration resolves. Replacement/resubscription acceptance remains open; see [stream topology](docs/grpc-stream-topology.md).
+- [ ] **Harden proto evolution.** Add buf/protobuf compatibility checks, ownership rules, field-reservation rules, generated-client verification, and release/versioning policy.
+  - Acceptance: CI blocks incompatible proto changes.
+  - Continuation: the required contract job generates the exact PR base descriptor as well as checking the published v1 fixture. Added oneof-name, map-encoding and reservation regressions, ownership and release policy. Seven protobuf tests and 32 Python tooling tests pass locally; GitHub job execution/branch protection remain unverified. See [contract evolution](docs/contract-evolution.md).
+- [ ] **Harden internal transport.** Verify mTLS in production configuration, automate certificate distribution/rotation, and test rejection of plaintext/invalid-client calls.
+  - Acceptance: rotation occurs without downtime and negative mTLS tests pass.
+  - Continuation: order uses TLS with explicit client authentication and healthy DNS-resolving dependencies; certificate setup preserves existing identities and rejects incomplete/mismatched inputs. Missing/invalid bearer-token rejection and caller-context cleanup now have focused real-RPC tests. Rotation and negative mTLS acceptance remain open.
+
+## 4. Make Events and WebSockets Durable and Secure
+
+- [ ] **Standardize event contracts.** Version event envelopes, define compatibility and replay rules, provide fixtures, and add producer/consumer contract tests.
+  - Acceptance: old/new consumers safely process additive changes and invalid events are quarantined.
+- [ ] **Finish transactional-outbox adoption.** Verify every state-changing event producer writes an outbox record in the same transaction; expose draining failures, lag, and replay tooling.
+  - Acceptance: a database commit cannot silently lose its corresponding domain event.
+  - Continuation: inventory bulk reservations no longer bypass the transactional unary handler. PostgreSQL fault injection verifies that an outbox failure rolls back its stock/hold mutation and that complete-stream replay preserves earlier commits without duplicate events. Producer-wide and deployed drain/replay acceptance remain open.
+- [ ] **Add consumer DLQ and replay operations.** Handle malformed/poison messages with bounded retry, dead lettering, audit information, and safe replay.
+  - Acceptance: poisoned events do not block a partition indefinitely and can be replayed by an operator.
+  - Notification continuation: outbound webhook listeners commit after successful processing, fan-out waits for bounded broker acknowledgment, and DLQ storage failures propagate for retry. Administrator replay preserves delivery identity and exposes 404/409 outcomes. Domain-event quarantine, atomic broker/database handoff and audited concurrent replay acceptance remain open; see [notification verification](docs/notification-verification.md).
+- [ ] **Complete WebSocket authorization.** Implement payment ownership verification, user-scoped notifications, subscription-ID tracking/unsubscribe cleanup, and bounded ownership lookup caching or JWT claims.
+  - Acceptance: unauthorized subscribe attempts fail; authorized users receive only their own events.
+  - Notification continuation: the complete application fixture now verifies authenticated order-topic delivery and unsubscribe/disconnect cleanup with PostgreSQL, Redis and embedded Kafka running. The external order ownership lookup is mocked. Existing unit/socket tests cover private routing and denial policies; deployed issuer/upstream verification and scheduled expiry closure remain open.
+- [x] **Provide a supported client library and recovery semantics.** Package the reference TypeScript client, specify reconnect/resubscribe/state-resync behavior, and test it.
+  - Acceptance: reconnect after disconnect produces no unauthorized access and converges client state.
+  - Continuation: packaged [@omp/notifications](clients/notifications/README.md) with strict TypeScript declarations, expiry-aware credential refresh, independent unsubscribe handles, identity isolation, bounded jittered retries and serialized/periodic canonical-state reads. Seventeen real WebSocket/STOMP transport tests pass, npm audit reports zero vulnerabilities, and the distributable/SBOM are generated. Both actual-platform cases also pass: native STOMP/event delivery with offline state convergence and real foreign-order denial. JUnit reports, package hashes and source inputs are retained in `coverage/notification-client-evidence.zip` and JSON. CI requires the package, advisory/SBOM, non-skipped JUnit evidence and deployed checks; registry publication remains separate.
+- [ ] **Load-test real-time delivery.** Test multi-replica fan-out, slow consumers, reconnect storms, and 1,000+ concurrent clients.
+  - Acceptance: target throughput/latency/message-loss SLOs are measured and documented.
+
+## 5. Complete Payment and Webhook Integrations
+
+- [ ] **Deploy the payment-provider simulator.** Add it to dev/prod test topology as appropriate, with routing, health checks, test fixtures, and documentation.
+  - Acceptance: automated end-to-end payment/webhook tests run against the simulator.
+  - Continuation: added its Dockerfile, repaired the missing scheduler bean, and passed real HTTP/signed-webhook receiver tests. Added Compose service (port 8090, Traefik route at simulator.localhost), Prometheus scrape target, and env vars in .env.example. Deployed payment-service journey remains open.
+- [ ] **Replace Stripe test-card placeholder behavior.** Use tokenized/client-supplied payment methods, model SCA/`requires_action`, and avoid hard-coded payment methods.
+  - Acceptance: provider integration handles success, decline, action-required, timeout, and idempotent retry scenarios.
+- [ ] **Make refunds asynchronous and webhook-driven.** Add pending/refund lifecycle states, provider correlation, idempotency, and eventual completion/failure handling.
+  - Acceptance: delayed provider refund outcomes reconcile safely without duplicate refunds.
+  - Continuation: REST/gRPC share durable provider-backed intents, transaction-free dispatch, fenced leases, provider idempotency headers and correlated webhook completion. A bounded worker recovers missing webhooks through provider GET; an audited operator action can resolve expired unknown-reference intents after strict provider metadata checks. Thirteen targeted PostgreSQL tests pass. Legacy data repair, deployed provider delivery and broader lifecycle acceptance remain open. See [refund operations](docs/payment-refunds.md).
+- [ ] **Finish inbound webhook security.** Enforce provider-specific signature verification, timestamp/replay tolerance, payload-size limits, IP/network policy where available, and audit-safe logging.
+  - Acceptance: valid events acknowledge quickly; invalid/replayed/stale events are rejected and measured.
+- [ ] **Harden outbound webhook delivery.** Verify endpoint registration, SSRF defenses, DNS/IP revalidation, redirect policy, payload/version contracts, signing-key rotation, retry classification, DLQ retention, and replay authorization.
+  - Acceptance: malicious URLs are rejected and delivery lifecycle is observable/replayable.
+  - Notification continuation: repaired application startup, lowercase persisted owner mapping, nested Keycloak administrator roles and invalid pagination. HTTP contracts exercise management ownership and secret rotation; the container pipeline verifies signed delivery, persisted failure/history and administrator DLQ replay. Subscriber URL/DNS protection, retention, payload enrichment, atomic handoff and deployed recovery remain open. See [verification scope](docs/notification-verification.md).
+- [ ] **Load-test webhook pipelines.** Benchmark ingress, outbox draining, delivery workers, circuit breakers, and DLQ recovery.
+  - Acceptance: documented throughput and recovery objectives are met under provider/subscriber failure.
+
+## 6. Complete SOAP Boundary
+
+- [ ] **Deploy the banking adapter.** Add Dockerfile/build, Compose service, Traefik route, Prometheus target, dashboard, environment variables, and health checks.
+  - Acceptance: REST-to-adapter-to-SOAP flow works in a fresh Compose deployment.
+  - Continuation: added Compose service (Traefik route at banking.localhost), Prometheus scrape target, and BANK_PASSWORD env var. Deployed REST-to-SOAP flow acceptance remains open.
+- [ ] **Finish WS-Security and TLS configuration.** Externalize credentials/certificates; validate UsernameToken behavior; define truststore/certificate rotation process.
+  - Acceptance: bad/missing WS-Security credentials are rejected and valid traffic succeeds over trusted TLS.
+  - Continuation: fixed bank application scanning and BCrypt-backed PasswordText validation; local HTTP/SOAP boundary tests cover accepted credentials and rejection of missing/invalid credentials, digest tokens and missing timestamps. Trusted-TLS/rotation acceptance remains open; see [banking verification](docs/banking-verification.md).
+- [ ] **Define REST/SOAP error contracts.** Map each SOAP fault deterministically to RFC 7807 errors without leaking implementation details.
+  - Acceptance: contract tests cover validation, insufficient funds, authentication, timeout, and backend faults.
+- [ ] **Validate resilience.** Test circuit-breaker open/half-open/close behavior, retry classification, timeouts, and fallback responses against a failing simulator.
+  - Acceptance: adapter prevents cascading failure and exposes useful metrics.
+- [ ] **Add WSDL drift protection.** Regenerate/validate JAXB artifacts in CI and add compatibility checks for WSDL/XSD changes.
+  - Acceptance: incompatible contract changes block merge.
+  - Continuation: froze semantic v1 WSDL/XSD fixtures, enforce producer/client/embedded-schema parity and exact PR-base compatibility, and require clean JAXB generation plus banking tests in the contract job. The bank now serves the checked-in WSDL rather than an independently generated contract. Local Python drift regressions pass; fresh Java boundary/CI acceptance is recorded separately. See [contract evolution](docs/contract-evolution.md).
+
+## 7. Security, Operations, and Release Readiness
+
+- [ ] **Add ingress and API rate limits.** Cover REST, GraphQL, WebSocket handshake/SUBSCRIBE, webhook ingress, and expensive operations.
+  - Acceptance: limits are identity-aware, observable, and return stable errors.
+- [ ] **Conduct an OWASP API Top 10 review.** Address object-level authorization, function-level authorization, mass assignment, resource consumption, SSRF, unsafe third-party consumption, and inventory management.
+  - Acceptance: review evidence and remediation tests exist for every public endpoint class.
+  - Continuation: customer address reads enforce the profile endpoint's administrator/verified-owner policy. Regressions cover foreign/missing claims, administrator-only writes and aggregate rejection of foreign default-address changes. Order UUID/number reads, creation, placement and cancellation now require administrator access or a canonical verified `customer_id` matching the requested/persisted owner, with foreign/claimless denial regressions. The endpoint-wide review remains open.
+- [ ] **Add Alertmanager and SLO-based alerts.** Configure receivers, routing, inhibition, silences, and test alerts for availability, latency, error rate, saturation, Kafka lag, outbox lag, webhook DLQ, and certificate expiry.
+  - Acceptance: each alert is triggered in a controlled test and reaches its intended receiver.
+  - Continuation: added Alertmanager service to Compose (alertmanager.localhost), alertmanager.yml with routing/inhibition/dev-webhook receiver, and application.yml alert rules covering availability, HTTP error rate, HTTP latency, Kafka consumer lag, outbox lag, webhook DLQ depth, TLS certificate expiry, and JVM heap/GC saturation. Prometheus wired to Alertmanager. Controlled trigger tests and production receiver configuration remain open.
+- [ ] **Complete observability.** Add database/Redis/Kafka exporters, service RED/USE dashboards, OTel tail sampling, exemplars, and cross-protocol trace verification.
+  - Acceptance: an operator can trace a checkout through REST/GraphQL, gRPC, Kafka, WebSocket/webhook, and SOAP where applicable.
+- [ ] **Create performance and chaos suites.** Use k6/Gatling plus fault injection for database, Kafka, Redis, payment provider, SOAP backend, and downstream HTTP/gRPC failures.
+  - Acceptance: results meet published SLOs or produce prioritized remediation work.
+- [ ] **Operationalize backups and recovery.** Exercise Postgres restore, Kafka/DLQ recovery, outbox replay, certificate/secret rotation, and deployment rollback.
+  - Acceptance: each runbook has an executed dry-run record.
+- [ ] **Harden supply chain and deployment.** Pin image digests, sign images/SBOMs, scan dependencies/images, manage secrets outside environment files, and automate environment promotion.
+  - Acceptance: a reproducible release can be promoted with approvals and rollback instructions.
+
+## 8. Documentation and Final Acceptance
+
+- [x] **Reconcile project status documentation.** Update the root README, phase plan, service READMEs, ADR index, and retrospectives so they match implemented code and remaining work.
+  - Acceptance: no document labels implemented functionality as a future phase or claims unavailable functionality is complete.
+  - Notification continuation: corrected stale README claims about Kafka/Redis delivery, unsubscribe tracking, private notifications and database requirements; repaired development code fences and linked explicit verification scope. Root status/phase plan, all ten service READMEs, ADR index, historical retrospectives and the documentation/runbook catalogue now distinguish implementation from accepted verification. Added the missing bank/adapter/simulator READMEs, current architecture/API guides and bounded procedures. Production runbook execution and remaining feature work stay explicitly open.
+- [ ] **Write missing architecture and runbook documentation.** Include topology, trust boundaries, data/event flows, API catalogue, local setup, production deployment, incident response, recovery, and scaling.
+  - Acceptance: a new contributor can run the system and an operator can execute recovery procedures without source-code archaeology.
+  - Continuation: added the [current architecture/trust-boundary guide and API catalogue](docs/architecture/README.md), [dedicated acceptance procedure](docs/runbooks/development-acceptance.md) and [bounded incident triage](docs/runbooks/incident-response.md). They link implemented cleanup/fulfillment/refund/DLQ actions and distinguish live hints from durable state. Complete production deployment, restore, rotation, rollback and executed dry-run records remain open.
+- [ ] **Define release criteria.** Set measurable SLOs, compatibility promises, supported deployment topology, security requirements, and test gates.
+  - Acceptance: a release checklist is approved and every item is automated or has named evidence.
+- [ ] **Perform final full-stack acceptance.** Run fresh-environment deployment and scripted journeys for every API style and critical failure mode.
+  - Acceptance: release report includes build, test, security, performance, resilience, observability, and operational evidence.

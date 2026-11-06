@@ -1,0 +1,551 @@
+# ==============================================================================
+# Order Management Platform — OpenTelemetry Collector configuration
+# ------------------------------------------------------------------------------
+# FILENAME : infrastructure/otel/otel-collector.yml
+# MOUNTED  : /etc/otelcol/config.yml (read-only) into the otel-collector
+#            container
+# USED BY  : docker-compose.yml (otel-collector service)
+#            via: command: ["--config=/etc/otelcol/config.yml"]
+#
+# WHAT THE COLLECTOR DOES
+#   The OTel Collector is a vendor-neutral agent that receives, processes,
+#   and exports telemetry data. In our stack, it handles TRACES only:
+#
+#     Application (Phase 1+)
+#         │ OTLP
+#         ▼
+#     OTel Collector (this file)
+#         │ OTLP
+#         ▼
+#     Tempo (File 19)
+#
+#   Traefik also sends traces to this Collector (see File 14's tracing
+#   config), so ingress-level spans are included.
+#
+# WHY NOT LOGS OR METRICS VIA THE COLLECTOR?
+#   Logs:
+#     We use Promtail (File 18a) to read Docker log files and ship them
+#     directly to Loki. This is the standard pattern and avoids routing
+#     every log line through the Collector. Applications do NOT need to
+#     emit logs via OTLP.
+#
+#   Metrics:
+#     Prometheus scrapes metrics directly from services (Phase 1+, File 15
+#     includes a file_sd_configs block for this). The Collector is not
+#     needed as a metrics hop. In Phase 7, the Collector MIGHT be used for
+#     metrics if we want OTLP-native metric ingestion, but Prometheus's
+#     scrape model is simpler for now.
+#
+#   Traces:
+#     The Collector is essential here. OTel SDKs emit traces via OTLP, and
+#     Tempo's ingestion is OTLP. The Collector sits between, providing
+#     batching, retry, sampling (Phase 7), and back-pressure handling.
+#
+# STATELESS BY DESIGN
+#   The Collector holds no persistent state. In-flight spans are in memory
+#   only. If the Collector crashes, buffered spans are lost. Services decide
+#   how to handle this (usually: drop, log a warning, continue).
+#
+#   This makes the Collector trivially scalable (add replicas, no
+#   coordination) and restart-safe (no cleanup needed).
+#
+# RENDERING
+#   The Collector parses environment variables in the config using the
+#   ${VAR} syntax (with ${VAR:-default} for defaults). We use this
+#   sparingly — see the `env:` substitution notes inline.
+#
+# REFERENCES
+#   https://opentelemetry.io/docs/collector/configuration/
+#   https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpreceiver
+#   https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/otlpexporter
+#
+# ==============================================================================
+
+# ==============================================================================
+# RECEIVERS
+# ==============================================================================
+# Receivers are the entry points for telemetry data. We enable ONLY OTLP.
+#
+# The OTLP receiver listens on two transports simultaneously:
+#   - gRPC on :4317 (standard for OpenTelemetry SDKs)
+#   - HTTP on :4318 (curl-friendly, useful for testing)
+#
+# Both protocols share the same pipeline — a span arriving via either
+# transport is processed identically.
+# ==============================================================================
+receivers:
+
+  # ----------------------------------------------------------------------------
+  # OTLP receiver
+  # ----------------------------------------------------------------------------
+  # Receives traces from:
+  #   - Application services (Phase 1+) via OTel SDKs.
+  #   - Traefik (via its `tracing.otlp.http` exporter — see File 14).
+  #   - Any other client speaking OTLP.
+  #
+  # Default port assignments (match the OTel spec):
+  #   - gRPC: 4317
+  #   - HTTP: 4318
+  #
+  # The `endpoint: 0.0.0.0:PORT` syntax listens on all container interfaces.
+  # Since the container is only on internal Docker networks, this is safe.
+  # ----------------------------------------------------------------------------
+  otlp:
+    protocols:
+
+      grpc:
+        endpoint: "0.0.0.0:4317"
+
+        # Max message size for gRPC. Default is 4 MB. Some span batches
+        # with large attributes can exceed this. Bumping to 16 MB avoids
+        # silent rejections.
+        max_recv_msg_size_mib: 16
+
+        # Keep-alive settings. EnforceServerTransportSecurity is left at
+        # default (off, because we're on a trusted internal network).
+        keepalive:
+          server_parameters:
+            max_connection_idle: 11s
+            max_connection_age: 30s
+            time: 30s
+
+      http:
+        endpoint: "0.0.0.0:4318"
+
+        # CORS — allow browsers to post OTLP directly.
+        # Not needed for Phase 0 (no browser-based OTel clients), but
+        # included for flexibility if we ever have a frontend that emits
+        # spans directly (e.g., for user interaction timing).
+        cors:
+          allowed_origins:
+            - "http://*.localhost"
+          allowed_headers:
+            - "*"
+
+# ==============================================================================
+# PROCESSORS
+# ==============================================================================
+# Processors transform telemetry data between receivers and exporters. They
+# run in the order listed in `service.pipelines`.
+#
+# We enable two:
+#   1. memory_limiter — refuse data if memory usage is high.
+#   2. batch — accumulate spans before export.
+# ==============================================================================
+processors:
+
+  # ----------------------------------------------------------------------------
+  # Memory limiter
+  # ----------------------------------------------------------------------------
+  # Prevents the Collector from OOMing under load. If memory usage exceeds
+  # the hard limit, incoming data is refused (and the sender is notified
+  # via gRPC status).
+  #
+  # Ordering: MUST run FIRST in any pipeline (before other processors).
+  # Because if the Collector is already under memory pressure, running
+  # other processors would allocate more memory.
+  #
+  # Limits:
+  #   - check_interval: how often to sample memory. 1s is fine.
+  #   - limit_mib: hard limit. The Collector refuses data above this.
+  #   - spike_limit_mib: reserved headroom for GC and short bursts.
+  #
+  # TUNING
+  #   The container has 1 GB RAM (see File 2a).
+  #   - limit_mib: 800 MB (leaves 200 MB for GC and OS).
+  #   - spike_limit_mib: 200 MB (the "soft" headroom before the hard limit).
+  #
+  #   With these values, the Collector starts refusing data at 600 MB and
+  #   hard-limits at 800 MB. This is aggressive but safe — tracing is
+  #   allowed to drop data under load.
+  # ----------------------------------------------------------------------------
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 800
+    spike_limit_mib: 200
+
+  # ----------------------------------------------------------------------------
+  # Batch
+  # ----------------------------------------------------------------------------
+  # Accumulates spans in memory and flushes them to the exporter either:
+  #   - When `send_batch_size` spans have accumulated, OR
+  #   - When `timeout` has elapsed since the last flush, OR
+  #   - When `send_batch_max_size` is reached (hard cap).
+  #
+  # Batching reduces network calls (fewer, larger OTLP exports) and helps
+  # the exporter's queue operate efficiently.
+  #
+  # TUNING
+  #   - send_batch_size: 8192 (spans per batch; the OTel default).
+  #   - send_batch_max_size: 10000 (hard cap, prevents unbounded batches).
+  #   - timeout: 5s (flush interval; more frequent = fresher traces, more
+  #     network calls).
+  #
+  # TRADE-OFF
+  #   Larger batches = fewer exports, higher latency.
+  #   Smaller batches = more exports, lower latency.
+  #
+  #   5s is a good balance for dev. In production with high throughput,
+  #   batches fill up before the timeout, so effective latency is lower.
+  # ----------------------------------------------------------------------------
+  batch:
+    send_batch_size: 8192
+    send_batch_max_size: 10000
+    timeout: 5s
+
+  # ----------------------------------------------------------------------------
+  # Optional processors — commented for Phase 0
+  # ----------------------------------------------------------------------------
+
+  # --- Attributes processor ---
+  # Add, modify, or delete span attributes. Phase 1+ will use this to
+  # redact PII (e.g., remove user emails from spans) or add deployment
+  # metadata.
+  #
+  # attributes:
+  #   actions:
+  #     - key: "deployment.environment"
+  #       value: "${ENV_NAME:-dev}"
+  #       action: insert
+  #     - key: "user.email"
+  #       action: delete
+
+  # --- Resource processor ---
+  # Modify resource attributes (as opposed to span attributes). Similar to
+  # attributes, but operates on the resource level.
+  #
+  # resource:
+  #   attributes:
+  #     - key: "service.namespace"
+  #       value: "omp"
+  #       action: upsert
+
+  # --- Tail sampling ---
+  # Decide whether to keep or drop a trace AFTER all its spans have
+  # arrived. Enables "keep all traces with errors, sample 1% of successful
+  # ones" policies.
+  #
+  # Requires significant memory (the Collector must buffer complete traces
+  # before deciding). Phase 7 addition.
+  #
+  # tail_sampling:
+  #   decision_wait: 10s
+  #   num_traces: 100000
+  #   policies:
+  #     - name: errors-policy
+  #       type: status_code
+  #       status_code: {status_codes: [ERROR]}
+  #     - name: slow-traces-policy
+  #       type: latency
+  #       latency: {threshold_ms: 1000}
+  #     - name: sample-rest
+  #       type: probabilistic
+  #       probabilistic: {sampling_percentage: 1}
+
+# ==============================================================================
+# EXPORTERS
+# ==============================================================================
+# Exporters send processed data to backends. We enable:
+#   - otlp/tempo — traces to Tempo.
+#   - debug — optional, dumps spans to stdout for troubleshooting.
+# ==============================================================================
+exporters:
+
+  # ----------------------------------------------------------------------------
+  # OTLP exporter — to Tempo
+  # ----------------------------------------------------------------------------
+  # Sends spans to Tempo's OTLP gRPC receiver (see File 19, section
+  # "distributor.receivers.otlp.protocols.grpc" — Tempo listens on :4317).
+  #
+  # The `otlp/tempo` naming convention:
+  #   - `otlp` is the exporter type.
+  #   - `tempo` is the instance name, so we can reference it in pipelines
+  #     as `otlp/tempo`.
+  #
+  # This pattern lets us define multiple instances of the same exporter
+  # (e.g., `otlp/tempo` and `otlp/secondary`) if we ever add a second
+  # trace backend.
+  # ----------------------------------------------------------------------------
+  otlp/tempo:
+
+    # Tempo's OTLP gRPC endpoint. Docker DNS resolves `tempo` to the
+    # Tempo container's IP on the internal network.
+    endpoint: "tempo:4317"
+
+    # TLS configuration. We're on the internal Docker network, so no TLS.
+    # `insecure: true` means "plaintext gRPC" — not the same as "not
+    # secure" in this context (the network provides the trust boundary).
+    tls:
+      insecure: true
+
+    # --------------------------------------------------------------------------
+    # Retry policy
+    # --------------------------------------------------------------------------
+    # If Tempo is unreachable or returns an error, the exporter retries
+    # with exponential backoff.
+    # --------------------------------------------------------------------------
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s   # give up after 5 minutes
+
+    # --------------------------------------------------------------------------
+    # Sending queue
+    # --------------------------------------------------------------------------
+    # In-memory buffer for spans awaiting export. If Tempo is slow, spans
+    # accumulate here (bounded by `queue_size`).
+    #
+    # With memory_limiter upstream, this queue can't grow unbounded.
+    # --------------------------------------------------------------------------
+    sending_queue:
+      enabled: true
+      num_consumers: 10        # parallel sender goroutines
+      queue_size: 5000         # batches in the queue (each up to 10k spans)
+
+    # Timeout for a single export call. If Tempo takes longer than this,
+    # the batch is retried.
+    timeout: 10s
+
+    # Compression. `gzip` reduces network bandwidth at the cost of some
+    # CPU. Between containers on the same host, bandwidth is free, so
+    # `gzip` is a small win. Set to `none` to disable.
+    compression: gzip
+
+  # ----------------------------------------------------------------------------
+  # Debug exporter — for troubleshooting only
+  # ----------------------------------------------------------------------------
+  # Dumps incoming telemetry to the Collector's logs at the configured
+  # verbosity. Useful for verifying that spans are flowing and inspecting
+  # their content.
+  #
+  # ENABLED IN A SEPARATE PIPELINE — see `service.pipelines.traces/debug`.
+  # Not enabled by default because it's extremely verbose.
+  #
+  # To enable: uncomment the `traces/debug` pipeline at the bottom of this
+  # file. Then spans will appear in `docker compose logs otel-collector`.
+  # ----------------------------------------------------------------------------
+  debug:
+    verbosity: detailed     # basic | normal | detailed
+    sampling_initial: 5     # first 5 spans logged at verbosity level
+    sampling_thereafter: 500  # then 1 in 500
+
+# ==============================================================================
+# EXTENSIONS
+# ==============================================================================
+# Extensions add capabilities to the Collector that don't fit the
+# receiver/processor/exporter model. We enable two:
+#   - health_check — a health endpoint for Docker and load balancers.
+#   - zpages — a debug UI for the Collector itself.
+# ==============================================================================
+extensions:
+
+  # ----------------------------------------------------------------------------
+  # Health check
+  # ----------------------------------------------------------------------------
+  # Exposes a simple endpoint that returns 200 when the Collector is
+  # running. Docker's healthcheck (see File 2a) pings this.
+  # ----------------------------------------------------------------------------
+  health_check:
+    endpoint: "0.0.0.0:13133"
+    path: "/health/status"
+
+  # ----------------------------------------------------------------------------
+  # ZPages — debug UI
+  # ----------------------------------------------------------------------------
+  # The Collector's built-in debugging interface. Serves HTML pages at
+  # :55679 showing:
+  #   - Active pipeline stages (receivers, processors, exporters).
+  #   - Recent spans and their processing status.
+  #   - Runtime configuration and startup info.
+  #
+  # Not exposed publicly. Useful for diagnosing "why isn't my span
+  # arriving at Tempo?" questions.
+  # ----------------------------------------------------------------------------
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+  # ----------------------------------------------------------------------------
+  # pprof — Go profiling endpoint
+  # ----------------------------------------------------------------------------
+  # Exposes Go's pprof profiling data at :1777. Useful when the Collector
+  # is consuming unexpected CPU or memory. Not needed in Phase 0.
+  #
+  # Uncomment if you need to debug the Collector itself.
+  # ----------------------------------------------------------------------------
+  # pprof:
+  #   endpoint: "0.0.0.0:1777"
+
+# ==============================================================================
+# SERVICE
+# ==============================================================================
+# The service section ties everything together: which extensions to load,
+# and which pipelines connect receivers to processors to exporters.
+# ==============================================================================
+service:
+
+  # Extensions loaded at startup. Order doesn't matter — the Collector
+  # starts all listed extensions.
+  extensions:
+    - health_check
+    - zpages
+    # - pprof       # uncomment with the extension above
+
+  # ----------------------------------------------------------------------------
+  # Telemetry — the Collector's own observability
+  # ----------------------------------------------------------------------------
+  # The Collector emits its own metrics, traces, and logs. These configure
+  # how that self-telemetry is exposed.
+  #
+  # Prometheus reads the Collector's metrics on :8888. This is what powers
+  # the "OTel Collector Pipeline" row in the OMP Overview dashboard
+  # (File 17c) and the OTel alerts (File 15a).
+  # ----------------------------------------------------------------------------
+  telemetry:
+
+    # Logs — the Collector's own log output.
+    logs:
+      level: info
+      # development: human-readable; production: JSON.
+      # We use development-style for Phase 0 (readable in `docker compose logs`).
+      encoding: console
+      # Disable sampling — we want every log line.
+      sampling:
+        enabled: false
+
+    # Metrics — the Collector's own metrics.
+    metrics:
+      level: detailed   # basic | normal | detailed
+      # Readers define where metrics go.
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
+                # Path where Prometheus scrapes. Matches File 15's
+                # `metrics_path: /metrics`.
+                without_scope_info: false
+                without_units: false
+
+    # Traces — the Collector's own tracing (a nice-to-have for
+    # observability-of-observability). Not enabled in Phase 0.
+    # traces:
+    #   ...
+
+  # ----------------------------------------------------------------------------
+  # Pipelines
+  # ----------------------------------------------------------------------------
+  # A pipeline is a chain: receivers → processors → exporters. Data flows
+  # from receivers, through processors (in order), to exporters.
+  #
+  # We define ONE pipeline for traces:
+  #   otlp → [memory_limiter, batch] → otlp/tempo
+  #
+  # A second pipeline for debug dumping is available (commented).
+  # ----------------------------------------------------------------------------
+  pipelines:
+
+    # --------------------------------------------------------------------------
+    # Traces pipeline (main)
+    # --------------------------------------------------------------------------
+    # Receives OTLP from services and Traefik, batches spans, exports to
+    # Tempo.
+    #
+    # PROCESSOR ORDER: memory_limiter MUST come first (before batch). If
+    # memory is limited, we refuse data before doing any work. If batch
+    # came first, we'd allocate memory for batching before checking limits.
+    # --------------------------------------------------------------------------
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp/tempo
+
+    # --------------------------------------------------------------------------
+    # Traces pipeline (debug) — commented
+    # --------------------------------------------------------------------------
+    # Uncomment to see every span that flows through the Collector. This
+    # is extremely verbose but invaluable for troubleshooting ("is the
+    # span arriving? what does it look like?").
+    #
+    # WARNING: the debug exporter writes to stdout, which Docker captures
+    # and Promtail ships to Loki. In high-traffic environments, this can
+    # flood Loki with span dumps. Use only for short debugging sessions.
+    # --------------------------------------------------------------------------
+    # traces/debug:
+    #   receivers:
+    #     - otlp
+    #   processors:
+    #     - memory_limiter
+    #     - batch
+    #   exporters:
+    #     - otlp/tempo
+    #     - debug
+
+# ==============================================================================
+# OPERATIONAL NOTES
+# ==============================================================================
+#
+# VERIFYING THE COLLECTOR IS UP
+#   curl http://localhost:13133/health/status
+#   Expected: {"status":"Server available","upSince":"...","uptime":"..."}
+#
+# VERIFYING THE PROMETHEUS ENDPOINT
+#   curl http://localhost:8888/metrics | head
+#   Expected: prometheus-formatted metrics, prefixed with otelcol_*
+#
+# VERIFYING THE ZPAGES DEBUG UI
+#   http://localhost:55679/debug/pipelinez
+#   Shows the collector's internal pipeline status in an HTML page.
+#
+#   Note: :55679 is only reachable if the port is published. In Phase 0
+#   it's internal-only. To access it from the host:
+#     docker compose exec otel-collector wget -qO- http://localhost:55679/debug/pipelinez
+#
+# CHECKING SPAN FLOW
+#   If spans aren't reaching Tempo:
+#     1. Verify the Collector is up: docker compose ps otel-collector
+#     2. Check its logs for errors: docker compose logs otel-collector
+#     3. Verify Tempo is up: curl http://tempo:3200/ready (from a shell inside the Docker network)
+#     4. Enable the debug exporter (uncomment the traces/debug pipeline
+#        above). Restart the Collector. Watch for spans in the logs.
+#     5. If spans arrive but Tempo shows nothing, check Tempo's logs.
+#
+# PROMETHEUS METRIC NAMES
+#   The Collector exports metrics like:
+#     otelcol_receiver_accepted_spans
+#     otelcol_receiver_refused_spans
+#     otelcol_exporter_sent_spans
+#     otelcol_exporter_send_failed_spans
+#     otelcol_processor_batch_batch_send_size
+#
+#   These are consumed by File 15's scrape config, used in File 17c's
+#   dashboard, and alerted on in File 15a.
+#
+# TUNING MEMORY LIMITS
+#   The `memory_limiter` limits are set for a 1 GB container. If you
+#   change the container's memory limit in docker-compose.yml, update
+#   these values proportionally:
+#     limit_mib = container_memory * 0.8
+#     spike_limit_mib = container_memory * 0.2
+#
+# SAMPLING STRATEGY
+#   Two places to sample traces:
+#     1. In the application (OTel SDK's sampler). e.g., always-sample-errors,
+#        probabilistic for others. Cheap — happens at the source.
+#     2. In the Collector (tail_sampling processor). Decides AFTER the
+#        trace is complete. More powerful but memory-intensive.
+#
+#   Phase 0 uses NO application-level sampling (all traces flow). Phase 1+
+#   will introduce sampling policies:
+#     - Application-level: lightweight, default 10% probabilistic.
+#     - Collector-level tail sampling: keep errors + slow traces, sample
+#       the rest.
+#
+# ==============================================================================
+# END OF otel-collector.yml
+# ==============================================================================

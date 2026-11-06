@@ -1,0 +1,299 @@
+# ==============================================================================
+# Application SLO alert rules — Order Management Platform
+# ------------------------------------------------------------------------------
+# Covers: availability, latency (p99), error rate, Kafka consumer lag,
+# transactional outbox lag, webhook DLQ depth, and TLS certificate expiry.
+#
+# Alertmanager routes these to receivers defined in alertmanager.yml.
+# ==============================================================================
+
+groups:
+
+  # ============================================================================
+  # Service availability
+  # ============================================================================
+  - name: availability
+    interval: 15s
+    rules:
+
+      - alert: ServiceDown
+        expr: up{tier="app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: |
+            Prometheus cannot scrape {{ $labels.service }} ({{ $labels.instance }}).
+            The service has been unreachable for 1 minute.
+
+      - alert: ServiceHighRestartRate
+        expr: |
+          increase(kube_pod_container_status_restarts_total[15m]) > 3
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.container }} is restarting frequently"
+          description: |
+            Container {{ $labels.container }} has restarted more than 3 times
+            in the last 15 minutes.
+
+  # ============================================================================
+  # HTTP error rate (REST services via Traefik)
+  # ============================================================================
+  - name: error-rate
+    interval: 15s
+    rules:
+
+      - alert: HighHttpErrorRate
+        expr: |
+          sum by (service) (
+            rate(http_server_requests_seconds_count{status=~"5.."}[5m])
+          )
+          /
+          sum by (service) (
+            rate(http_server_requests_seconds_count[5m])
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} has a 5xx error rate of
+            {{ $value | humanizePercentage }} over the last 5 minutes.
+            SLO threshold: 5%.
+
+      - alert: CriticalHttpErrorRate
+        expr: |
+          sum by (service) (
+            rate(http_server_requests_seconds_count{status=~"5.."}[5m])
+          )
+          /
+          sum by (service) (
+            rate(http_server_requests_seconds_count[5m])
+          ) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical 5xx error rate on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} has a 5xx error rate of
+            {{ $value | humanizePercentage }} — above the critical 20% threshold.
+
+  # ============================================================================
+  # HTTP latency (p99)
+  # ============================================================================
+  - name: latency
+    interval: 15s
+    rules:
+
+      - alert: HighHttpLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, service) (
+              rate(http_server_requests_seconds_bucket[5m])
+            )
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p99 latency on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} p99 latency is {{ $value | humanizeDuration }}
+            (threshold: 2s).
+
+      - alert: CriticalHttpLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, service) (
+              rate(http_server_requests_seconds_bucket[5m])
+            )
+          ) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical p99 latency on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} p99 latency is {{ $value | humanizeDuration }}
+            — above the critical 10s threshold.
+
+  # ============================================================================
+  # Kafka consumer lag
+  # ============================================================================
+  - name: kafka
+    interval: 30s
+    rules:
+
+      - alert: KafkaConsumerLagHigh
+        expr: |
+          kafka_consumer_group_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag high for group {{ $labels.group }}"
+          description: |
+            Consumer group {{ $labels.group }} on topic {{ $labels.topic }}
+            partition {{ $labels.partition }} has lag {{ $value }}.
+            Threshold: 1000 messages.
+
+      - alert: KafkaConsumerLagCritical
+        expr: |
+          kafka_consumer_group_lag > 10000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer lag critical for group {{ $labels.group }}"
+          description: |
+            Consumer group {{ $labels.group }} on topic {{ $labels.topic }}
+            has lag {{ $value }} — above the critical 10,000 threshold.
+            The consumer may be stuck or the producer is overwhelming it.
+
+      - alert: KafkaBrokerDown
+        expr: |
+          kafka_brokers < 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Kafka brokers available"
+          description: |
+            The Kafka cluster reports {{ $value }} available brokers.
+            All event-driven services will be unable to produce or consume.
+
+  # ============================================================================
+  # Transactional outbox lag
+  # ============================================================================
+  - name: outbox
+    interval: 30s
+    rules:
+
+      - alert: OutboxLagHigh
+        expr: |
+          omp_outbox_pending_events_total > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox lag high on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} has {{ $value }} undelivered outbox events.
+            The outbox drainer may be slow or the Kafka broker is unavailable.
+
+      - alert: OutboxLagCritical
+        expr: |
+          omp_outbox_pending_events_total > 5000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox lag critical on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} has {{ $value }} undelivered outbox events.
+            Domain events are not reaching consumers. Investigate the outbox
+            drainer and Kafka connectivity immediately.
+
+  # ============================================================================
+  # Webhook DLQ depth
+  # ============================================================================
+  - name: webhook-dlq
+    interval: 30s
+    rules:
+
+      - alert: WebhookDlqNonEmpty
+        expr: |
+          omp_webhook_dlq_entries_total > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook DLQ has unprocessed entries"
+          description: |
+            The webhook DLQ contains {{ $value }} entries that have not been
+            replayed. Use GET /api/v1/webhook-dlq to inspect and
+            POST /api/v1/webhook-dlq/{id}/replay to replay.
+
+      - alert: WebhookDlqGrowing
+        expr: |
+          increase(omp_webhook_dlq_entries_total[30m]) > 10
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Webhook DLQ is growing rapidly"
+          description: |
+            The webhook DLQ grew by {{ $value }} entries in the last 30 minutes.
+            Subscriber endpoints may be down or rejecting deliveries.
+
+  # ============================================================================
+  # TLS certificate expiry
+  # ============================================================================
+  - name: tls
+    interval: 1h
+    rules:
+
+      - alert: TlsCertificateExpiringSoon
+        expr: |
+          (ssl_certificate_expiry_seconds - time()) / 86400 < 30
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expiring in {{ $value | humanizeDuration }}"
+          description: |
+            Certificate for {{ $labels.instance }} expires in less than 30 days.
+            Renew it before it causes service disruption.
+
+      - alert: TlsCertificateExpiryCritical
+        expr: |
+          (ssl_certificate_expiry_seconds - time()) / 86400 < 7
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS certificate expiring in {{ $value | humanizeDuration }}"
+          description: |
+            Certificate for {{ $labels.instance }} expires in less than 7 days.
+            Immediate renewal required.
+
+  # ============================================================================
+  # JVM saturation (heap / GC pressure)
+  # ============================================================================
+  - name: jvm
+    interval: 30s
+    rules:
+
+      - alert: JvmHeapUsageHigh
+        expr: |
+          sum by (service) (jvm_memory_used_bytes{area="heap"})
+          /
+          sum by (service) (jvm_memory_max_bytes{area="heap"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM heap usage high on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} heap usage is {{ $value | humanizePercentage }}.
+            GC pressure may increase latency. Consider increasing memory limits
+            or investigating for memory leaks.
+
+      - alert: JvmGcPauseHigh
+        expr: |
+          rate(jvm_gc_pause_seconds_sum[5m])
+          /
+          rate(jvm_gc_pause_seconds_count[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GC pause time on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} average GC pause is
+            {{ $value | humanizeDuration }} — above 500ms threshold.

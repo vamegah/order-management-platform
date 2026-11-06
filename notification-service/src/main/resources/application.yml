@@ -1,0 +1,251 @@
+# ==============================================================================
+# Notification Service — base configuration
+# ==============================================================================
+# A WebSocket + Kafka service. No persistence.
+#
+# Server:
+#   - Port 8084: HTTP server for WebSocket upgrade and any REST endpoints.
+#   - Port 8085: management HTTP (actuator only).
+# ==============================================================================
+
+spring:
+  application:
+    name: notification-service
+  # -------------------------------------------------------------------------
+  # Datasource (new in Batch 9.3)
+  # -------------------------------------------------------------------------
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/omp?currentSchema=notifications,public
+    username: ${NOTIFICATION_SERVICE_DB_USER:notifications_svc}
+    password: ${NOTIFICATION_SERVICE_DB_PASSWORD:local-dev-notifications-password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      pool-name: notification-svc-pool
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        default_schema: notifications
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: notifications
+    default-schema: notifications
+    baseline-on-migrate: false
+    validate-on-migrate: true
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  kafka:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      consumer:
+        # Already set in Batch 8.2; verifying they're present.
+        group-id: notification-service
+        auto-offset-reset: latest   # overridden to earliest in prod
+        enable-auto-commit: false
+        max-poll-records: 100
+        key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+        value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+      producer:
+        key-serializer: org.apache.kafka.common.serialization.StringSerializer
+        value-serializer: org.apache.kafka.common.serialization.StringSerializer
+        acks: all
+        enable-idempotence: true
+        properties:
+          session.timeout.ms: 15000
+          heartbeat.interval.ms: 5000
+          # Max poll interval — if a consumer doesn't poll within this window,
+          # Kafka considers it dead and rebalances. Higher values tolerate
+          # slower processing.
+          max.poll.interval.ms: 300000
+      listener:
+        ack-mode: manual_immediate
+        concurrency: 3
+        missing-topics-fatal: false
+
+  # ----------------------------------------------------------------------------
+  # WebSocket / STOMP
+  # ----------------------------------------------------------------------------
+  # The STOMP endpoint is /ws. Clients connect via WebSocket, then send
+  # STOMP CONNECT frames to establish their session. Subscription and
+  # message-broker configuration is in WebSocketConfig.
+  # ----------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # Redis (pub/sub for cross-replica fan-out)
+  # ----------------------------------------------------------------------------
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+
+
+  # ----------------------------------------------------------------------------
+  # OAuth2 / JWT
+  # ----------------------------------------------------------------------------
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://keycloak.localhost/realms/omp}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://keycloak:8080/realms/omp/protocol/openid-connect/certs}
+
+# ==============================================================================
+# Server
+# ==============================================================================
+server:
+  port: ${SERVER_PORT:8084}
+  shutdown: graceful
+
+# ---------------------------------------------------------------------------
+# Webhook subsystem (new in Batch 9.3)
+# ---------------------------------------------------------------------------
+webhook:
+  kafka:
+    delivery-concurrency: 6
+    event-concurrency: 3
+    dlq-concurrency: 1
+  topics:
+    events:
+      order: orders.events.order
+      payment: payments.events.payment
+      inventory: inventory.events.reservation
+  delivery:
+    timeout-seconds: 10
+    max-attempts: 6
+  circuit-breaker:
+    max-consecutive-failures: 10
+  retry:
+    jitter-fraction: 0.10
+    delays:
+      - attempt: 2
+        delay: 1m
+      - attempt: 3
+        delay: 5m
+      - attempt: 4
+        delay: 30m
+      - attempt: 5
+        delay: 2h
+      - attempt: 6
+        delay: 24h
+
+
+# ==============================================================================
+# Management (actuator) on separate HTTP port
+# ==============================================================================
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8085}
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# Notification-specific configuration
+# ==============================================================================
+omp:
+  clients:
+    customer-service:
+      url: ${CUSTOMER_SERVICE_URL:http://localhost:8082}
+    order-service:
+      url: ${ORDER_SERVICE_URL:http://localhost:8083}
+    payment-service:
+      url: ${PAYMENT_SERVICE_URL:http://localhost:8080}
+  notifications:
+    # STOMP endpoint clients connect to.
+    endpoint-path: /ws
+    # Allowed origins for the WebSocket handshake. Must include the origin
+    # of any browser client.
+    allowed-origins:
+      - "http://localhost:3000"
+      - "http://web.localhost"
+    # Heartbeat interval (server → client). Clients that miss two heartbeats
+    # are considered dead.
+    heartbeat-interval-ms: 10000
+    # Maximum number of concurrent WebSocket clients per replica.
+    max-concurrent-clients: 10000
+    # Maximum STOMP message size in bytes.
+    max-message-size-bytes: 65536
+  redis:
+    channels:
+      orders: notifications:orders
+      inventory: notifications:inventory
+      payments: notifications:payments
+
+
+# ==============================================================================
+# Kafka topic provisioning
+# ==============================================================================
+# notification-service doesn't produce events, but it can provision topics
+# in dev so a fresh Kafka instance has them ready. Set to false to disable.
+omp.kafka:
+  provision-topics: ${KAFKA_PROVISION_TOPICS:false}
+  default-partitions: ${KAFKA_DEFAULT_PARTITIONS:3}
+  default-replication-factor: ${KAFKA_DEFAULT_REPLICATION_FACTOR:1}
+  retention-hours: ${KAFKA_RETENTION_HOURS:168}
+  min-insync-replicas: ${KAFKA_MIN_INSYNC_REPLICAS:1}
+  
+# (existing sections unchanged; add these)
+
+# ==============================================================================
+# OpenTelemetry tracing
+# ==============================================================================
+management.tracing:
+  sampling:
+    probability: ${TRACING_SAMPLE_RATE:1.0}
+  propagation:
+    type: w3c
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: grpc
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+      service.namespace: omp
+      deployment.environment: ${PROMETHEUS_ENV:dev}
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+logging:
+  level:
+    root: INFO
+    com.example.omp: INFO
+    org.springframework.web.socket: INFO
+    org.springframework.messaging: INFO
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"

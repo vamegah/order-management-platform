@@ -1,0 +1,12 @@
+# ==============================================================================
+# Prometheus scrape target — payment-provider-simulator
+# ------------------------------------------------------------------------------
+# Management port 8091 exposes /actuator/prometheus.
+# ==============================================================================
+
+- targets:
+    - payment-provider-simulator:8091
+  labels:
+    service: payment-provider-simulator
+    tier: app
+    __metrics_path__: /actuator/prometheus

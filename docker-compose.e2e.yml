@@ -1,0 +1,100 @@
+# Opt-in host access for external acceptance clients. The services retain mTLS.
+# docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+x-acceptance-health: &acceptance-health
+  start_period: 180s
+  retries: 20
+  interval: 10s
+  timeout: 5s
+services:
+  traefik:
+    image: traefik:v3.7.17
+    command:
+      - --ping=true
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME:-omp}_edge
+      - --entrypoints.web.address=:80
+      - --log.level=INFO
+  kafka:
+    # The base Bitnami tag is no longer published. Keep this isolated from its data format.
+    image: apache/kafka:3.8.1
+    environment: !override
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: "3"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms128m -Xmx256m
+    volumes: !override
+      - kafka-e2e-data:/var/lib/kafka/data
+    healthcheck:
+      test: [CMD-SHELL, /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1]
+  postgres:
+    environment:
+      PRODUCT_SERVICE_DB_PASSWORD: ${PRODUCT_SERVICE_DB_PASSWORD:?Configure the e2e product password}
+      CUSTOMER_SERVICE_DB_PASSWORD: ${CUSTOMER_SERVICE_DB_PASSWORD:?Configure the e2e customer password}
+      ORDER_SERVICE_DB_PASSWORD: ${ORDER_SERVICE_DB_PASSWORD:?Configure the e2e order password}
+      INVENTORY_SERVICE_DB_PASSWORD: ${INVENTORY_SERVICE_DB_PASSWORD:?Configure the e2e inventory password}
+      PAYMENT_SERVICE_DB_PASSWORD: ${PAYMENT_SERVICE_DB_PASSWORD:?Configure the e2e payment password}
+      NOTIFICATION_SERVICE_DB_PASSWORD: ${NOTIFICATION_SERVICE_DB_PASSWORD:?Configure the e2e notification password}
+    volumes: !override
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init/01-schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql:ro
+      - ./infrastructure/postgres/init/02-extensions.sql:/docker-entrypoint-initdb.d/02-extensions.sql:ro
+      - ./infrastructure/postgres/e2e/03-service-passwords.sql:/docker-entrypoint-initdb.d/03-service-passwords.sql:ro
+      - ./infrastructure/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+  inventory-service:
+    healthcheck: *acceptance-health
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "127.0.0.1:9091:9091"
+  payment-service:
+    healthcheck: *acceptance-health
+    environment:
+      PAYMENT_PROVIDER: noop
+    ports:
+      - "127.0.0.1:9093:9093"
+  notification-service:
+    healthcheck: *acceptance-health
+    environment:
+      WEBHOOK_KAFKA_REPLICATION_FACTOR: "1"
+    ports:
+      - "127.0.0.1:18085:8085"
+    networks: [edge, app, data]
+  product-service:
+    healthcheck: *acceptance-health
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks: [edge, app, data]
+  customer-service:
+    healthcheck: *acceptance-health
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks: [edge, app, data]
+  order-service:
+    healthcheck: *acceptance-health
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      INVENTORY_GRPC_URL: dns:///inventory-service:9091
+      PAYMENT_GRPC_URL: dns:///payment-service:9093
+      GRPC_CLIENT_INVENTORY_SERVICE_NEGOTIATION_TYPE: TLS
+      GRPC_CLIENT_PAYMENT_SERVICE_NEGOTIATION_TYPE: TLS
+      GRPC_CLIENT_INVENTORY_SERVICE_SECURITY_CLIENT_AUTH_ENABLED: "true"
+      GRPC_CLIENT_PAYMENT_SERVICE_SECURITY_CLIENT_AUTH_ENABLED: "true"
+    networks: [edge, app, data]
+volumes:
+  kafka-e2e-data:

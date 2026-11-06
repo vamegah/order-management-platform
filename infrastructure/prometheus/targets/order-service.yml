@@ -1,0 +1,6 @@
+- targets:
+    - order-service:8083
+  labels:
+    service: order-service
+    tier: app
+    __metrics_path__: /actuator/prometheus

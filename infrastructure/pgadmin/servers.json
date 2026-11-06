@@ -1,0 +1,27 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "omp (dev)",
+      "Group": "OMP",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "omp_admin",
+      "SSLMode": "prefer",
+      "Comment": "Order Management Platform — local development database.",
+      "ConnectionParameters": {
+        "sslmode": "prefer",
+        "connect_timeout": 10,
+        "application_name": "pgadmin-dev"
+      },
+      "Password": "local-dev-only-change-me",
+      "SavePassword": true
+    }
+  },
+  "ServerGroups": {
+    "1": {
+      "Name": "OMP",
+      "Comment": "Order Management Platform servers"
+    }
+  }
+}

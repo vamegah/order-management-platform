@@ -1,0 +1,1176 @@
+# ==============================================================================
+# Order Management Platform — Production Overlay
+# ------------------------------------------------------------------------------
+# This file is applied ON TOP OF docker-compose.yml:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.prod.yml \
+#     --env-file .env.prod \
+#     up -d
+#
+# It assumes:
+#   - A host with a public DNS name (${OMP_DOMAIN})
+#   - Ports 80 and 443 reachable from the internet (for Let's Encrypt)
+#   - A secrets directory at /run/secrets or Docker secrets configured
+#   - Postgres data volume on a fast disk with snapshots enabled
+#
+# It does NOT change any service's identity (image, name) unless explicitly
+# noted. It only hardens: TLS, resource limits, HA, backups, secret handling.
+# ==============================================================================
+
+# ==============================================================================
+# NETWORKS
+# ==============================================================================
+# Additions:
+#   admin — separate network for admin tools (removed from edge)
+#   Overrides:
+#     data — stays internal; also add a named bridge with explicit subnet
+#            so firewall rules can target a stable CIDR
+# ==============================================================================
+networks:
+  edge:
+    driver: bridge
+  app:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  # Admin plane — only for ops tooling (dashboards, exporters). Never joins edge.
+  admin:
+    driver: bridge
+
+# ==============================================================================
+# VOLUMES
+# ==============================================================================
+# Unchanged from base. We add pgbackrest below for backups.
+# ==============================================================================
+volumes:
+  pgbackrest-data:
+  pgbackrest-config:
+  kafka-data-2:
+  kafka-data-3:
+
+# ==============================================================================
+# SECRETS
+# ------------------------------------------------------------------------------
+# Docker Compose file-based secrets. Each secret is a file on the host whose
+# contents are mounted at /run/secrets/<name> inside the container. Files
+# should be chmod 600 and owned by root.
+#
+# The file paths below are examples; adjust to your host's secret store layout
+# (Vault agent, AWS Secrets Manager CSI driver, etc.).
+# ==============================================================================
+secrets:
+  postgres_superuser_password:
+    file: /etc/omp/secrets/postgres_superuser_password
+  postgres_app_password:
+    file: /etc/omp/secrets/postgres_app_password
+  redis_password:
+    file: /etc/omp/secrets/redis_password
+  redis_sentinel_password:
+    file: /etc/omp/secrets/redis_sentinel_password
+  keycloak_admin_password:
+    file: /etc/omp/secrets/keycloak_admin_password
+  grafana_admin_password:
+    file: /etc/omp/secrets/grafana_admin_password
+  kafka_broker_password:
+    file: /etc/omp/secrets/kafka_broker_password
+  pgbackrest_repo_cipher:
+    file: /etc/omp/secrets/pgbackrest_repo_cipher
+  products_svc_password:
+    file: /etc/omp/secrets/products_svc_password
+  customers_svc_password:
+    file: /etc/omp/secrets/customers_svc_password
+
+  orders_svc_password:
+    file: /etc/omp/secrets/orders_svc_password
+
+  inventory_svc_password:
+    file: /etc/omp/secrets/inventory_svc_password
+
+  payments_svc_password:
+    file: /etc/omp/secrets/payments_svc_password
+
+# ==============================================================================
+# SERVICES
+# ==============================================================================
+services:
+
+  # ============================================================================
+  # TRAEFIK — production ingress
+  # ----------------------------------------------------------------------------
+  # Changes vs dev:
+  #   - No --api.insecure. Dashboard requires basic-auth and lives on admin net.
+  #   - HTTP→HTTPS redirect on entrypoint `web`.
+  #   - TLS via Let's Encrypt (ACME) with HTTP-01 challenge.
+  #   - Docker socket still mounted, but consider a socket proxy (see notes).
+  #   - Metrics + tracing enabled (already in dev, unchanged).
+  #   - Resource limits applied.
+  # ============================================================================
+  traefik:
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=omp_edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/data/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --accesslog=true
+      - --accesslog.format=json
+      - --log.level=WARN
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addEntryPointsLabels=true
+      - --tracing.otlp=true
+      - --tracing.otlp.http.endpoint=http://otel-collector:4318/v1/traces
+    ports: !override
+      - "80:80"
+      - "443:443"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 0
+        window: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      # Dashboard — Basic Auth protected, on admin host only
+      - traefik.enable=true
+      - traefik.http.routers.dashboard.rule=Host(`traefik.${OMP_DOMAIN}`)
+      - traefik.http.routers.dashboard.entrypoints=websecure
+      - traefik.http.routers.dashboard.tls.certresolver=le
+      - traefik.http.routers.dashboard.service=api@internal
+      - traefik.http.routers.dashboard.middlewares=admin-auth
+      - traefik.http.middlewares.admin-auth.basicauth.users=${TRAEFIK_ADMIN_BASICAUTH}
+
+  # ============================================================================
+  # POSTGRESQL — hardened single instance + WAL archiving + pgBackRest
+  # ----------------------------------------------------------------------------
+  # Changes vs dev:
+  #   - Custom image (see File 9a) includes pgBackRest for archive_command.
+  #   - No host port exposure. Only `data` network can reach it.
+  #   - Prod config file mounted (postgresql.prod.conf).
+  #   - Password from Docker secret, not env.
+  #   - WAL archiving enabled (feeds pgBackRest sidecar).
+  #   - pgbackrest.conf mounted + repository volume shared with sidecar.
+  #   - Resource limits, log rotation.
+  # ============================================================================
+  postgres:
+    # Build the custom image locally. In CI, this can be pre-built and pushed
+    # to a registry; the `image:` tag below is what Compose uses to run it.
+    build:
+      context: ./infrastructure/postgres
+      dockerfile: Dockerfile
+    image: omp/postgres:16.4
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C --data-checksums"
+    ports: !override []   # ← overrides dev's host port mapping (removes it)
+    secrets:
+      - postgres_superuser_password
+      - postgres_app_password
+      # The archive_command runs as postgres and needs the cipher key to
+      # encrypt WAL segments before pushing them to the repository.
+      - pgbackrest_repo_cipher
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/postgres/postgresql.prod.conf:/etc/postgresql/postgresql.conf:ro
+      # pgBackRest config — same file used by the sidecar container
+      - ./infrastructure/postgres/pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      # Shared repository volume. Postgres pushes WAL here; sidecar reads.
+      - pgbackrest-data:/var/lib/pgbackrest
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================================
+  # PGBACKREST — backup sidecar
+  # ----------------------------------------------------------------------------
+  # Runs alongside Postgres, connected via the data network. Performs:
+  #   - Daily full backup (cron)
+  #   - Hourly incremental backup
+  #   - Continuous WAL archiving (via Postgres archive_command)
+  #   - Retention: 14 full, 30 days WAL
+  #
+  # The repo cipher secret encrypts the backup repository at rest.
+  # Restores are documented in docs/runbooks/restore-postgres.md.
+  # ============================================================================
+  pgbackrest:
+    image: pgbackrest/pgbackrest:2.54.0
+    restart: unless-stopped
+    user: "999:999"
+    environment:
+      PGBACKREST_STANZA: omp
+      PGBACKREST_REPO1_PATH: /var/lib/pgbackrest
+      PGBACKREST_PG1_PATH: /var/lib/postgresql/data
+      PGBACKREST_PG1_HOST: postgres
+      PGBACKREST_PG1_PORT: "5432"
+      PGBACKREST_PG1_USER: ${POSTGRES_SUPERUSER}
+      PGBACKREST_REPO1_CIPHER_TYPE: aes-256-cbc
+    secrets:
+      - postgres_superuser_password
+      - pgbackrest_repo_cipher
+    volumes:
+      - postgres-data:/var/lib/postgresql/data:ro
+      - pgbackrest-data:/var/lib/pgbackrest
+      - ./infrastructure/postgres/pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - ./infrastructure/postgres/pgbackrest/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    # 30 minutes — a full backup can take 30+ minutes. Docker sends SIGTERM,
+    # waits this long for the container to exit cleanly, then SIGKILLs.
+    # The entrypoint's shell trap lets an in-progress `pgbackrest backup`
+    # run to completion, so this value must be >= the longest expected
+    # backup duration. Matches SHUTDOWN_GRACE in entrypoint.sh (File 10a).
+    stop_grace_period: 30m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # PGDADMIN — REMOVED IN PROD
+  # ----------------------------------------------------------------------------
+  # Overriding the image to a no-op is not enough — Compose will still start
+  # it. The correct way to remove a service in an overlay is to use a profile
+  # that is never activated in prod, and pin it to `profiles: ["dev"]` in the
+  # base file. Since we don't want to edit the base (already approved), we
+  # instead scale it to zero:
+  #   docker compose ... up -d --scale pgadmin=0
+  #
+  # Alternative (cleaner, if you're willing to edit the base later):
+  #   in File 2a, add `profiles: ["dev"]` to pgadmin and kafka-ui.
+  # Then prod (which doesn't activate `dev` profile) simply never starts them.
+  #
+  # RECOMMENDATION: revisit File 2a in a small follow-up to add profiles.
+  # For now, this overlay scales them to zero at deploy time.
+  # ============================================================================
+  pgadmin:
+    deploy:
+      replicas: 0
+
+  kafka-ui:
+    deploy:
+      replicas: 0
+
+  # ============================================================================
+  # REDIS — Sentinel HA
+  # ----------------------------------------------------------------------------
+  # Changes vs dev:
+  #   - Three Redis nodes + three Sentinels (in this file we run 1 master +
+  #     2 replicas + 3 sentinel processes as separate services).
+  #   - TLS disabled here for simplicity; enable via redis.conf in Phase 7
+  #     when internal mTLS lands.
+  #   - ACL file restricts commands per service (Phase 7).
+  #
+  # To keep the overlay file readable, we rename the base `redis` to be the
+  # master, and add replicas + sentinels. The base service definition is
+  # overridden; the extra services are new.
+  # ============================================================================
+  redis:
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 1gb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --masterauth
+      - ${REDIS_PASSWORD}
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1.5G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-replica-1:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --masterauth
+      - ${REDIS_PASSWORD}
+      - --replicaof
+      - redis
+      - "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-replica-2:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --masterauth
+      - ${REDIS_PASSWORD}
+      - --replicaof
+      - redis
+      - "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-sentinel-1:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<EOF
+        port 26379
+        sentinel monitor omp-master redis 6379 2
+        sentinel auth-pass omp-master ${REDIS_PASSWORD}
+        sentinel down-after-milliseconds omp-master 5000
+        sentinel failover-timeout omp-master 60000
+        sentinel parallel-syncs omp-master 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-sentinel-2:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<EOF
+        port 26379
+        sentinel monitor omp-master redis 6379 2
+        sentinel auth-pass omp-master ${REDIS_PASSWORD}
+        sentinel down-after-milliseconds omp-master 5000
+        sentinel failover-timeout omp-master 60000
+        sentinel parallel-syncs omp-master 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-sentinel-3:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<EOF
+        port 26379
+        sentinel monitor omp-master redis 6379 2
+        sentinel auth-pass omp-master ${REDIS_PASSWORD}
+        sentinel down-after-milliseconds omp-master 5000
+        sentinel failover-timeout omp-master 60000
+        sentinel parallel-syncs omp-master 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # KAFKA — 3 brokers, RF=3, no auto-create, TLS+SASL
+  # ----------------------------------------------------------------------------
+  # This is the largest change from dev. We override the base `kafka` to be
+  # broker-1 and add broker-2 and broker-3. Each broker gets:
+  #   - Unique node.id
+  #   - Fixed broker.rack (spread across racks/zones if multi-host)
+  #   - min.insync.replicas=2
+  #   - auto.create.topics.enable=false
+  #   - SASL/SCRAM authentication
+  #   - No host port exposure
+  #
+  # NOTE: for a real production Kafka you'd usually run on dedicated hosts or
+  # Kubernetes with Strimzi. This is the "single-host, 3-broker" version.
+  # ============================================================================
+  kafka:
+    environment:
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENERS: "INTERNAL://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "INTERNAL://kafka:9092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_CFG_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+      KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "SCRAM-SHA-512"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_CFG_NUM_PARTITIONS: "6"
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+      KAFKA_CFG_LOG_RETENTION_HOURS: "168"
+      KAFKA_CFG_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  kafka-2:
+    image: bitnami/kafka:3.8
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: "2"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENERS: "INTERNAL://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "INTERNAL://kafka-2:9092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_CFG_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+      KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "SCRAM-SHA-512"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+    volumes:
+      - kafka-data-2:/bitnami/kafka
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  kafka-3:
+    image: bitnami/kafka:3.8
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: "3"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENERS: "INTERNAL://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "INTERNAL://kafka-3:9092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_CFG_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+      KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "SCRAM-SHA-512"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+    volumes:
+      - kafka-data-3:/bitnami/kafka
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ============================================================================
+  # PRODUCT SERVICE — production overrides
+  # ============================================================================
+  product-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      # Datasource URL: same as dev but without the currentSchema hack
+      # (the prod role has a proper default search_path).
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp
+      SPRING_DATASOURCE_USERNAME: products_svc
+      # Password comes from a Docker secret, not an env var.
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/products_svc_password
+
+      # Keycloak uses prod domain.
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+
+      # CORS for prod origins.
+      APP_CORS_ALLOWED_ORIGINS: https://web.${OMP_DOMAIN},https://admin.${OMP_DOMAIN}
+    secrets:
+      - products_svc_password
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: start-first     # rolling update: start new before stopping old
+        delay: 10s
+    labels:
+      # Prod Traefik routing — via HTTPS on the prod domain.
+      - traefik.enable=true
+      - traefik.http.routers.product-service.rule=Host(`api.${OMP_DOMAIN}`) && PathPrefix(`/api/v1/products`) || Host(`api.${OMP_DOMAIN}`) && PathPrefix(`/api/v1/categories`)
+      - traefik.http.routers.product-service.entrypoints=websecure
+      - traefik.http.routers.product-service.tls.certresolver=le
+      - traefik.http.services.product-service.loadbalancer.server.port=8081
+  # ============================================================================
+  # CUSTOMER SERVICE — production overrides
+  # ============================================================================
+  customer-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp
+      SPRING_DATASOURCE_USERNAME: customers_svc
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/customers_svc_password
+
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+
+      APP_CORS_ALLOWED_ORIGINS: https://web.${OMP_DOMAIN},https://admin.${OMP_DOMAIN}
+    secrets:
+      - customers_svc_password
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: start-first
+        delay: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.customer-service.rule=Host(`api.${OMP_DOMAIN}`) && PathPrefix(`/api/v1/customers`)
+      - traefik.http.routers.customer-service.entrypoints=websecure
+      - traefik.http.routers.customer-service.tls.certresolver=le
+      - traefik.http.services.customer-service.loadbalancer.server.port=8082
+
+  # ============================================================================
+  # ORDER SERVICE — production overrides
+  # ============================================================================
+  order-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp
+      SPRING_DATASOURCE_USERNAME: orders_svc
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/orders_svc_password
+
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      # In prod, downstream URLs point at the load-balanced service names.
+      PRODUCT_SERVICE_URL: http://product-service:8081
+      CUSTOMER_SERVICE_URL: http://customer-service:8082
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+
+      APP_CORS_ALLOWED_ORIGINS: https://web.${OMP_DOMAIN},https://admin.${OMP_DOMAIN}
+    secrets:
+      - orders_svc_password
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: start-first
+        delay: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.order-service.rule=Host(`api.${OMP_DOMAIN}`) && PathPrefix(`/api/v1/orders`)
+      - traefik.http.routers.order-service.entrypoints=websecure
+      - traefik.http.routers.order-service.tls.certresolver=le
+      - traefik.http.services.order-service.loadbalancer.server.port=8083
+
+    volumes:
+      - /etc/omp/tls/order-service/tls.crt:/etc/tls/tls.crt:ro
+      - /etc/omp/tls/order-service/tls.key:/etc/tls/tls.key:ro
+      - /etc/omp/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+
+  graphql-gateway:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      PRODUCT_SERVICE_URL: http://product-service:8081
+      CUSTOMER_SERVICE_URL: http://customer-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+
+      APP_CORS_ALLOWED_ORIGINS: https://web.${OMP_DOMAIN},https://admin.${OMP_DOMAIN}
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: start-first
+        delay: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.graphql-gateway.rule=Host(`graphql.${OMP_DOMAIN}`)
+      - traefik.http.routers.graphql-gateway.entrypoints=websecure
+      - traefik.http.routers.graphql-gateway.tls.certresolver=le
+      - traefik.http.services.graphql-gateway.loadbalancer.server.port=8000
+
+
+  # ============================================================================
+  # INVENTORY SERVICE — production overrides
+  # ============================================================================
+  inventory-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp
+      SPRING_DATASOURCE_USERNAME: inventory_svc
+      # Password from Docker secret, not env var.
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/inventory_svc_password
+
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+
+      # gRPC reflection disabled in prod (no grpcurl).
+      GRPC_REFLECTION_ENABLED: "false"
+    secrets:
+      - inventory_svc_password
+    deploy:
+      # Stream subscriptions are local to this process; overlapping replicas lose events.
+      replicas: 1
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: stop-first
+        delay: 10s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+    # No Traefik labels — internal only.
+    volumes:
+      - /etc/omp/tls/inventory-service/tls.crt:/etc/tls/tls.crt:ro
+      - /etc/omp/tls/inventory-service/tls.key:/etc/tls/tls.key:ro
+      - /etc/omp/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+
+  # ============================================================================
+  # PAYMENT SERVICE — production overrides
+  # ============================================================================
+  payment-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp
+      SPRING_DATASOURCE_USERNAME: payments_svc
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/payments_svc_password
+
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+
+      GRPC_REFLECTION_ENABLED: "false"
+    secrets:
+      - payments_svc_password
+    deploy:
+      # Stream subscriptions are local to this process; overlapping replicas lose events.
+      replicas: 1
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: stop-first
+        delay: 10s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+
+    volumes:
+      - /etc/omp/tls/payment-service/tls.crt:/etc/tls/tls.crt:ro
+      - /etc/omp/tls/payment-service/tls.key:/etc/tls/tls.key:ro
+      - /etc/omp/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+
+  notification-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092,kafka-2:9092,kafka-3:9092
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      PROMETHEUS_ENV: prod
+    secrets:
+      - redis_password
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 0
+      update_config:
+        parallelism: 1
+        order: start-first
+        delay: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.notification-service.rule=Host(`notification.${OMP_DOMAIN}`)
+      - traefik.http.routers.notification-service.entrypoints=websecure
+      - traefik.http.routers.notification-service.tls.certresolver=le
+      - traefik.http.services.notification-service.loadbalancer.server.port=8084
+    stop_grace_period: 90s
+
+  # ============================================================================
+  # KEYCLOAK — production mode
+  # ----------------------------------------------------------------------------
+  # Changes vs dev:
+  #   - start --optimized (no dev conveniences)
+  #   - No realm import on boot (realms are applied via CI, not container boot)
+  #   - Admin console on admin host only, not public host
+  #   - Password from Docker secret
+  #   - TLS terminated by Traefik (already)
+  # ============================================================================
+  keycloak:
+    command:
+      - start
+      - --optimized
+      - --http-port=8080
+      - --http-enabled=true
+      - --hostname=${OMP_DOMAIN}
+      - --hostname-strict=true
+      - --proxy-headers=xforwarded
+      - --health-enabled=true
+      - --metrics-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      # Remove KEYCLOAK_ADMIN_PASSWORD env — it must come from secret file
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}?currentSchema=keycloak
+      KC_DB_USERNAME: ${POSTGRES_SUPERUSER}
+      KC_DB_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+      KC_DB_SCHEMA: keycloak
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_LOG_LEVEL: INFO
+      KC_PROXY_HEADERS: xforwarded
+    secrets:
+      - keycloak_admin_password
+      - postgres_superuser_password
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      # Public: token endpoint only
+      - traefik.http.routers.keycloak.rule=Host(`auth.${OMP_DOMAIN}`)
+      - traefik.http.routers.keycloak.entrypoints=websecure
+      - traefik.http.routers.keycloak.tls.certresolver=le
+      - traefik.http.services.keycloak.loadbalancer.server.port=8080
+      # Admin console: separate host, extra auth layer
+      - traefik.http.routers.keycloak-admin.rule=Host(`keycloak-admin.${OMP_DOMAIN}`)
+      - traefik.http.routers.keycloak-admin.entrypoints=websecure
+      - traefik.http.routers.keycloak-admin.tls.certresolver=le
+      - traefik.http.routers.keycloak-admin.middlewares=admin-auth
+  # ============================================================================
+  # PROMTAIL — log shipper (prod tuning)
+  # ----------------------------------------------------------------------------
+  # Identical to dev, with production resource limits and the DEBUG-log-drop
+  # rule enabled.
+  #
+  # The only config difference is a note in promtail-config.yml about
+  # enabling the drop-DEBUG stage. For prod, we could mount a separate
+  # promtail.prod.yml, but for a single difference, we handle it via a
+  # comment in the shared config and skip the mount.
+  #
+  # (If more prod/dev differences accumulate, split into two config files
+  # like we did for Traefik and Postgres.)
+  # ============================================================================
+  promtail:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  # ============================================================================
+  # OBSERVABILITY — resource limits + log rotation
+  # ----------------------------------------------------------------------------
+  # All observability services remain, but get resource caps and log rotation.
+  # Prometheus and Grafana get the largest budgets (they index a lot).
+  # ============================================================================
+  prometheus:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.prometheus.rule=Host(`prometheus.${OMP_DOMAIN}`)
+      - traefik.http.routers.prometheus.entrypoints=websecure
+      - traefik.http.routers.prometheus.tls.certresolver=le
+      - traefik.http.routers.prometheus.middlewares=admin-auth
+      - traefik.http.services.prometheus.loadbalancer.server.port=9090
+
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_SERVER_ROOT_URL: https://grafana.${OMP_DOMAIN}
+      GF_AUTH_PROXY_ENABLED: "false"
+    secrets:
+      - grafana_admin_password
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`grafana.${OMP_DOMAIN}`)
+      - traefik.http.routers.grafana.entrypoints=websecure
+      - traefik.http.routers.grafana.tls.certresolver=le
+      - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+  loki:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  tempo:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  otel-collector:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ==============================================================================
+# NOTE ON OVERLAY LIMITATIONS
+# ------------------------------------------------------------------------------
+# Requires Compose 2.24.4+ for !override. Maps merge by key; ordinary
+# sequences merge, and ports/volumes use their documented uniqueness keys.
+# An empty ordinary list does not remove inherited ports. !override explicitly
+# replaces ingress ports and clears the database/cache/broker host bindings.
+# command and entrypoint replace the base values. Volume entries with the same
+# container target replace that target; other base mounts remain inherited.
+# Inspect the resolved configuration before any production deployment.
+# ==============================================================================

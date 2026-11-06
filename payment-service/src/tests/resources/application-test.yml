@@ -1,0 +1,22 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payments
+  flyway:
+    enabled: true
+    schemas: payments
+    default-schema: payments
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+payment:
+  provider: noop
+
+logging:
+  level:
+    com.omp.payment: DEBUG

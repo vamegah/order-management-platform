@@ -1,0 +1,30 @@
+# ==============================================================================
+# Production overrides
+# ==============================================================================
+
+logging:
+  level:
+    root: WARN
+    com.example.omp: INFO
+    net.devh.boot.grpc: WARN
+    io.grpc: WARN
+    org.hibernate: WARN
+
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:0.1}
+  endpoint:
+    health:
+      show-details: when-authorized
+
+grpc:
+  server:
+    enable-reflection: false   # no grpcurl in prod

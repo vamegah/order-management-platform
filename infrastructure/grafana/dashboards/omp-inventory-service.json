@@ -1,0 +1,590 @@
+{
+  "uid": "omp-inventory-service",
+  "title": "OMP — Inventory Service",
+  "tags": ["omp", "service", "inventory-service", "grpc"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": false,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h"],
+    "time_options": ["5m", "15m", "1h", "6h", "24h", "7d", "30d"]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "Environment",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(up{job=\"omp-services\"}, env)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "method",
+        "label": "gRPC Method",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(grpc_server_requests_received_total{application=\"inventory-service\"}, grpc_method)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "gRPC — RED Metrics",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "RPC Rate (5m)",
+      "description": "Total gRPC requests per second across all methods.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\"}[5m]))",
+          "instant": true,
+          "legendFormat": "req/s"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Error Rate (5m)",
+      "description": "Percentage of gRPC requests that did NOT return OK. Should be < 1% in steady state.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\",grpc_code!=\"OK\"}[5m])) / clamp_min(sum(rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\"}[5m])), 0.001)",
+          "instant": true,
+          "legendFormat": "error %"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "p99 Latency (5m)",
+      "description": "99th percentile RPC duration (excluding server streaming).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(grpc_server_requests_duration_seconds_bucket{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\",grpc_method!=\"StreamStockUpdates\"}[5m])))",
+          "instant": true,
+          "legendFormat": "p99"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Active Replicas",
+      "description": "Number of inventory-service replicas currently reporting.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(up{application=\"inventory-service\",env=~\"$env\"})",
+          "instant": true,
+          "legendFormat": "replicas"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 2 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "RPC Rate by Method",
+      "description": "Requests per second, split by gRPC method.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (grpc_method) (rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\"}[5m]))",
+          "legendFormat": "{{grpc_method}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "RPCs by Status Code",
+      "description": "Requests per second, split by gRPC status code. Non-OK codes indicate errors.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (grpc_code) (rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\"}[5m]))",
+          "legendFormat": "{{grpc_code}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "stacking": { "mode": "normal" },
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "OK" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "NOT_FOUND" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "FAILED_PRECONDITION" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "INTERNAL" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "UNAVAILABLE" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Latency Percentiles by Method",
+      "description": "p50, p95, p99 RPC duration per method. Streaming RPCs excluded.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le, grpc_method) (rate(grpc_server_requests_duration_seconds_bucket{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\",grpc_method!=\"StreamStockUpdates\"}[5m])))",
+          "legendFormat": "p50 {{grpc_method}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le, grpc_method) (rate(grpc_server_requests_duration_seconds_bucket{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\",grpc_method!=\"StreamStockUpdates\"}[5m])))",
+          "legendFormat": "p95 {{grpc_method}}"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le, grpc_method) (rate(grpc_server_requests_duration_seconds_bucket{application=\"inventory-service\",env=~\"$env\",grpc_method=~\"$method\",grpc_method!=\"StreamStockUpdates\"}[5m])))",
+          "legendFormat": "p99 {{grpc_method}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Server Streaming",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "StreamStockUpdates Completions",
+      "description": "Rate of StreamStockUpdates RPCs that completed (either by client cancel or server close). Each completion represents a client that was subscribed for some period. Note: this metric counts completions, not concurrent subscriptions. A separate gauge for active subscriptions is a Phase 7 refinement.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=\"StreamStockUpdates\"}[5m]))",
+          "legendFormat": "completions/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (grpc_code) (rate(grpc_server_requests_received_total{application=\"inventory-service\",env=~\"$env\",grpc_method=\"StreamStockUpdates\"}[5m]))",
+          "legendFormat": "{{grpc_code}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "type": "text",
+      "title": "Streaming Behavior",
+      "description": "Notes about server-streaming RPC metrics.",
+      "datasource": null,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Streaming Metrics\n\nThe `grpc_server_requests_received_total` metric counts a streaming RPC **once, when it completes**. It does not track ongoing streams.\n\n**Consequences:**\n- The **rate** shown is the rate at which streams *finish* (by client cancel or server close).\n- Long-running subscriptions (e.g., a client subscribed for hours) won't appear in this rate until they end.\n- Concurrent subscription count is not directly visible.\n\n**Phase 7 will add** a custom Micrometer gauge (`grpc_server_active_streams`) that reports the current number of open subscriptions per method.\n\n**Known limitation** in Phase 3: server-streaming subscriptions are per-replica. A subscriber on replica A does not receive events triggered on replica B. Phase 7 will introduce Redis pub/sub for cross-replica fan-out."
+      }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "JVM",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Heap Memory",
+      "description": "JVM heap usage vs. max.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(jvm_memory_used_bytes{application=\"inventory-service\",env=~\"$env\",area=\"heap\"})",
+          "legendFormat": "used"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(jvm_memory_max_bytes{application=\"inventory-service\",env=~\"$env\",area=\"heap\"})",
+          "legendFormat": "max"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "GC Pause Time",
+      "description": "Time spent in garbage collection, by cause.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(jvm_gc_pause_seconds_sum{application=\"inventory-service\",env=~\"$env\"}[5m])",
+          "legendFormat": "{{cause}}"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Business Metrics (Phase 7)",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 }
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Reservations Created / Released / Committed",
+      "description": "Reservation lifecycle counters. Metrics not yet exposed — will be added in Phase 7.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(inventory_reservations_created_total{application=\"inventory-service\",env=~\"$env\"}[5m]))",
+          "legendFormat": "created"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(inventory_reservations_released_total{application=\"inventory-service\",env=~\"$env\"}[5m]))",
+          "legendFormat": "released"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(inventory_reservations_committed_total{application=\"inventory-service\",env=~\"$env\"}[5m]))",
+          "legendFormat": "committed"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 42,
+      "type": "stat",
+      "title": "Active Reservations",
+      "description": "Current count of ACTIVE reservations. Metric not yet exposed — Phase 7.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "inventory_active_reservations{application=\"inventory-service\",env=~\"$env\"}",
+          "instant": true,
+          "legendFormat": "active"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 50,
+      "type": "row",
+      "title": "Quick Links",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 48 }
+    },
+    {
+      "id": 51,
+      "type": "text",
+      "title": "",
+      "datasource": null,
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 49 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Deeper Investigation\n\n- [**Prometheus** (direct UI)](http://prometheus.localhost) — PromQL queries\n- [**Grafana Explore → Prometheus**](/explore?left=%7B%22datasource%22:%22prometheus%22%7D)\n- [**Grafana Explore → Loki**](/explore?left=%7B%22datasource%22:%22loki%22%7D) — search `service=\"inventory-service\"`\n- [**Grafana Explore → Tempo**](/explore?left=%7B%22datasource%22:%22tempo%22%7D) — search traces by service name\n\n### gRPC Tooling\n\nFrom inside the Docker network:\n\n```bash\ndocker compose exec inventory-service \\\n  grpcurl -plaintext localhost:9091 list\ndocker compose exec inventory-service \\\n  grpcurl -plaintext localhost:9091 describe omp.inventory.InventoryService\n```\n\n### Service Notes\n\n- **No REST API.** This service is gRPC-only (port 9091). The management HTTP port (9092) serves only actuator endpoints.\n- **No external access.** Not routed through Traefik. Internal-only.\n- **Called by order-service** for stock reservations."
+      }
+    }
+  ],
+  "links": [
+    {
+      "title": "Platform Overview",
+      "type": "dashboards",
+      "tags": ["overview"],
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false
+    }
+  ]
+}

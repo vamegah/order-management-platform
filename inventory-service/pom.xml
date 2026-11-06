@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- =====================================================================
+         PARENT
+         ===================================================================== -->
+    <parent>
+        <groupId>com.example.omp</groupId>
+        <artifactId>order-management-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!-- =====================================================================
+         MODULE COORDINATES
+         ===================================================================== -->
+    <artifactId>inventory-service</artifactId>
+    <name>Inventory Service</name>
+    <description>
+        gRPC-only service for stock levels and reservations.
+
+        No REST API. Exposes InventoryService over gRPC on port 9091.
+        Management HTTP (actuator) on port 9092.
+
+        Owns the `inventory` schema in the shared Postgres instance.
+
+        Publishes reservation lifecycle events to Kafka (RESERVATION_CREATED,
+        RESERVATION_COMMITTED, RESERVATION_RELEASED, RESERVATION_EXPIRED).
+    </description>
+
+    <!-- =====================================================================
+         DEPENDENCIES
+         ===================================================================== -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ================================================================
+             Internal shared modules
+             ================================================================ -->
+
+        <!-- gRPC service stubs and messages. Provides
+             InventoryServiceGrpc.InventoryServiceImplBase, StockLevel,
+             Reservation, ReserveStockRequest, etc. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-proto</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Kafka event base classes and inventory event records. Provides
+             KafkaEventPublisher, TransactionEventScheduler, and
+             InventoryEvents.*. -->
+        <dependency>
+            <groupId>com.example.omp</groupId>
+            <artifactId>omp-shared-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Note: omp-shared-domain is not declared. This service does not
+             use Money, Email, or PhoneNumber in Phase 3/4 code. -->
+
+        <!-- Note: omp-shared-web is not declared. This service has no REST
+             endpoints, so PageResponse, ProblemDetails, and the shared
+             auto-configuration are not used. -->
+
+        <!-- ================================================================
+             Spring Boot starters
+             ================================================================ -->
+
+        <!-- Servlet infrastructure hosts management endpoints and enables the
+             resource-server JWT decoder. Business operations remain gRPC-only. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             gRPC server
+             ================================================================ -->
+
+        <!-- Server-side gRPC starter. Provides @GrpcService discovery,
+             @GrpcAdvice, @GrpcExceptionHandler, and the gRPC server
+             lifecycle. This is the SERVER starter
+             (net.devh:grpc-spring-boot-starter), not the client one. -->
+        <dependency>
+            <groupId>net.devh</groupId>
+            <artifactId>grpc-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- Netty-based gRPC transport. Required at runtime; the starter
+             does not bundle a transport. The shaded variant packages Netty
+             under a distinct namespace to avoid version conflicts with
+             Spring Boot's own Netty (if any). -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+        </dependency>
+
+        <!-- Note: org.apache.tomcat:annotations-api is not declared here.
+             It's provided transitively by omp-shared-proto at compile time.
+             Not needed at runtime (source-retention annotation). -->
+
+        <!-- ================================================================
+             Kafka producer
+             ================================================================ -->
+
+        <!-- KafkaTemplate for publishing reservation events. -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+                <!-- ================================================================
+             Retry — for optimistic-lock retries on reservations
+             ================================================================ -->
+
+        <!-- Used by @Retryable on ReservationHandler.reserve/release/commit
+             to retry on OptimisticLockingFailureException when two
+             transactions race on the same StockLevel. -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Persistence — drivers and migrations
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- ================================================================
+             Observability
+             ================================================================ -->
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
+
+        <!-- Note: no springdoc-openapi. gRPC APIs are documented by the
+             .proto files themselves. -->
+
+        <!-- ================================================================
+             Test dependencies
+             ================================================================ -->
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- gRPC in-process transport. Contains InProcessServerBuilder and
+             InProcessChannelBuilder for testing gRPC servers and clients
+             without a network. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-inprocess</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- gRPC testing utilities: ServerInterceptor test harness,
+             StreamRecorder for capturing server-streaming responses, etc. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Client-side starter (test only). Provides @GrpcClient
+             injection so integration tests can call the running gRPC
+             server through the framework path. -->
+        <dependency>
+            <groupId>net.devh</groupId>
+            <artifactId>grpc-client-spring-boot-starter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Kafka test support. Provides @EmbeddedKafka for testing
+             event publication without a running Kafka broker. -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- =====================================================================
+         BUILD
+         ===================================================================== -->
+    <build>
+        <plugins>
+
+            <!-- ============================================================
+                 Spring Boot Maven Plugin — executable jar packaging
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Surefire — unit tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 Failsafe — integration tests
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+
+            <!-- ============================================================
+                 JaCoCo — 80% coverage enforcement
+                 ============================================================
+                 Excludes:
+                   - InventoryServiceApplication (main class)
+                   - config/**       (Spring configuration)
+                   - events/**       (publisher + factory; framework glue
+                                      verified by integration tests)
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/example/omp/inventory/InventoryServiceApplication.class</exclude>
+                                <exclude>com/example/omp/inventory/config/**</exclude>
+                                <exclude>com/example/omp/inventory/events/**</exclude>
+                            </excludes>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

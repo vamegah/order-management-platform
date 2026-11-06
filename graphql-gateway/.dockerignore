@@ -1,0 +1,62 @@
+# ==============================================================================
+# Product Service — Docker build context exclusions
+# ==============================================================================
+# Files matched here are not sent to the Docker daemon during `docker build`.
+# This reduces context transfer size and prevents accidental inclusion of
+# secrets, IDE state, or build artifacts.
+# ==============================================================================
+
+# Build output
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven (but keep the wrapper and pom)
+.mvn/timing.properties
+dependency-reduced-pom.xml
+
+# Source and build configuration not needed at runtime
+src/test/
+README.md
+*.md
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+nbproject/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (never in the image)
+.env
+.env.*
+!.env.example
+
+# Docker (not needed inside the image)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Local data, logs, temporary files
+*.log
+logs/
+tmp/
+target/
+node_modules/

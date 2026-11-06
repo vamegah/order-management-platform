@@ -1,0 +1,15 @@
+# ==============================================================================
+# Prometheus scrape target — graphql-gateway
+# ------------------------------------------------------------------------------
+# Picked up by the `omp-services` job in prometheus.yml (File 15).
+#
+# The `__metrics_path__` label overrides the job's default path. Spring Boot
+# services expose Prometheus metrics at /actuator/prometheus, not /metrics.
+# ==============================================================================
+
+- targets:
+    - graphql-gateway:8000
+  labels:
+    service: graphql-gateway
+    tier: app
+    __metrics_path__: /actuator/prometheus

@@ -1,0 +1,17 @@
+# ==============================================================================
+# Prometheus scrape target — product-service
+# ------------------------------------------------------------------------------
+# Picked up by the `omp-services` job in prometheus.yml (File 15). Prometheus
+# watches this directory and applies new targets without restart.
+#
+# The `__metrics_path__` label overrides the job's default path. Spring Boot
+# services expose Prometheus metrics at /actuator/prometheus, not /metrics.
+# ==============================================================================
+
+- targets:
+    - product-service:8081
+  labels:
+    service: product-service
+    tier: app
+    # Spring Boot exposes metrics at this path by default (see application.yml).
+    __metrics_path__: /actuator/prometheus
