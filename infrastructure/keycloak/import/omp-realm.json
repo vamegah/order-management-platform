@@ -103,6 +103,24 @@
 
   "clients": [
     {
+      "clientId": "order-recovery",
+      "name": "Development order recovery workload",
+      "description": "Development-only client credentials; provision production workload credentials separately",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "secret": "dev-only-order-recovery-secret",
+      "defaultClientScopes": ["basic", "order.reconcile"],
+      "optionalClientScopes": []
+    },
+    {
       "clientId": "order-service",
       "name": "Order Service",
       "description": "Backend service managing orders",
@@ -212,6 +230,26 @@
   ],
 
   "clientScopes": [
+    {
+      "name": "order.reconcile",
+      "description": "Privileged order recovery discovery and compensation",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "inventory recovery audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "inventory-service", "access.token.claim": "true", "id.token.claim": "false" }
+        },
+        {
+          "name": "payment recovery audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "payment-service", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
     {
       "name": "basic",
       "protocol": "openid-connect",
