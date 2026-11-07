@@ -1,5 +1,25 @@
 # Order verification and access policy
 
+The November 7 recovery-discovery continuation validates each complete lookup
+result before adding its cleanup tasks: every resource must belong to the
+journal attempt's order, have a distinct non-null identity and fit the existing
+100-resource bound. Generated inventory and payment clients exercise foreign
+ownership, malformed UUIDs, duplicate identities, oversized results, corrected
+response retry, continued unrelated attempts, maximum valid batches and empty
+lookups. Invalid results do not queue a valid-looking prefix. Verified
+reservations remain queued when a later payment lookup fails, and existing
+cleanup retries still run.
+
+The clean seven-module order/shared static-analysis build passes 318 unit and
+42 PostgreSQL/HTTP integration cases without failures, errors or skips, including
+all thirteen new real-RPC cases. Six complete static reports have zero findings,
+errors or missing classes; all five coverage policies pass. Order coverage is
+82.77% against its unchanged 80% gate, and the evidence checker accepts all 214
+order-service cases. Source-bound reports are retained in
+`coverage/checkout-recovery-discovery-evidence.zip` and JSON; log:
+`checkout-recovery-discovery-verification.log` (8:44, exit 0). This local scope
+does not establish deployed workload identity or process-crash recovery.
+
 Order integration tests run HTTP, JPA, Flyway and the transactional outbox against
 PostgreSQL 16.4. Product/customer HTTP calls use WireMock, and inventory/payment
 RPCs use in-process fixture servers through the real generated clients. These

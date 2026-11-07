@@ -27,6 +27,7 @@ class CheckoutRecoveryJobTest {
         var reservation = mock(ReservationDto.class);
         UUID reservationId = UUID.randomUUID();
         when(reservation.id()).thenReturn(reservationId);
+        when(reservation.orderId()).thenReturn(attempt.orderId());
         List<String> identities = new ArrayList<>();
         when(inventory.findByOrder(attempt.orderId()))
                 .thenAnswer(
