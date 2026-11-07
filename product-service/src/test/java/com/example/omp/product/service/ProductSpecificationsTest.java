@@ -1,8 +1,16 @@
 package com.example.omp.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.example.omp.product.domain.Product;
 import com.example.omp.product.dto.ProductFilter;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,12 +25,32 @@ class ProductSpecificationsTest {
     void emptyFilterProducesNoOpSpecification() {
         var spec = ProductSpecifications.fromFilter(ProductFilter.empty());
         assertThat(spec).isNotNull();
+        assertThat(spec.toPredicate(null, null, null)).isNull();
     }
 
     @Test
     void nullFilterProducesNoOpSpecification() {
         var spec = ProductSpecifications.fromFilter(null);
         assertThat(spec).isNotNull();
+        assertThat(spec.toPredicate(null, null, null)).isNull();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void unknownStatusProducesAnAlwaysFalsePredicate() {
+        Root<Product> root = mock(Root.class);
+        CriteriaBuilder builder = mock(CriteriaBuilder.class);
+        Predicate deny = mock(Predicate.class);
+        Predicate combined = mock(Predicate.class);
+        when(builder.disjunction()).thenReturn(deny);
+        when(builder.and(new Predicate[] {deny})).thenReturn(combined);
+
+        var spec = ProductSpecifications.fromFilter(new ProductFilter(null, null, "unknown", null));
+
+        assertThat(spec.toPredicate(root, null, builder)).isSameAs(combined);
+        verify(builder).disjunction();
+        verify(builder).and(new Predicate[] {deny});
+        verifyNoInteractions(root);
     }
 
     @Test

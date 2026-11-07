@@ -8,8 +8,10 @@ jobs cover the notification client package, contract compatibility, external dep
 builds. It publishes verification artifacts and defines only an isolated
 acceptance deployment; production image publication/promotion remains separate. The final `quality-gate`
 job requires every job (including the full image matrix) to succeed; failed,
-cancelled or skipped prerequisites cannot produce success. Repository owners must
-require `quality-gate` in branch protection before treating it as a merge gate.
+cancelled or skipped prerequisites cannot produce success. Main branch protection
+now requires `quality-gate` from GitHub Actions (app ID 15368), strict branch
+freshness and administrator enforcement. The configuration was independently
+read back on November 6; no additional approving-review requirement was added.
 
 The reviewed sources were published to `vamegah/order-management-platform/main`
 on 2026-11-06 as `0fc7202`. The [first Actions run](https://github.com/vamegah/order-management-platform/actions/runs/42278291122)
@@ -22,6 +24,20 @@ wrapper downloads now have bounded retries. Dependency analysis failed before
 scanning because of the upstream 13.0.0 empty-API-key bug; the configuration now
 uses official NVD JSON feeds. Complete workflow execution and required checks
 remain necessary before CI acceptance can close.
+
+Subsequent approved repairs through `b5c95e4` pass every default-branch
+prerequisite except dependency-policy, which completes analysis and rejects
+the old dependency inventory. The separately approved migration is now
+[draft PR #1](https://github.com/vamegah/order-management-platform/pull/1).
+Its [first PR run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
+passes static analysis, the client package, exact-base SOAP/protobuf checks and
+all ten source image builds. Real HTTP/runtime, dependency and exact-base
+coverage diagnostics are being repaired under the unchanged policies; see
+[the security migration](dependency-security-baseline.md). The aggregate gate
+has not passed yet. The original PR was merged externally during verification.
+The first repair [PR #2](https://github.com/vamegah/order-management-platform/pull/2)
+was subsequently closed without merging; further fixes continue on the repair
+branch with the required branch protection configured.
 
 The required `contract-compatibility` job verifies protobuf descriptors against
 the published v1 fixture and the exact PR base, checks SOAP WSDL/XSD parity and

@@ -37,7 +37,7 @@ jobs:
         run: |
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --format json | python scripts/check_stream_topology.py
       - name: Build and test reactor, including container integration tests
-        run: bash mvnw --batch-mode --no-transfer-progress clean verify
+        run: bash mvnw --batch-mode --no-transfer-progress --fail-at-end clean verify
       - name: Reject missing, skipped or incomplete test and coverage evidence
         run: python scripts/check_verification.py
       - name: Publish test and coverage evidence

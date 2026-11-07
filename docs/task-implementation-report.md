@@ -1541,3 +1541,85 @@ Boot tools-mode launcher/layer extraction. Logs are
 `boot4-complete-unit-package-verification.log` and `boot4-packaging-verification.log`.
 Complete service/container, static, image, vulnerability and PR coverage acceptance remains
 required on the migration revision; see [the migration scope](dependency-security-baseline.md).
+
+## 2026-11-06 approved migration PR and verification repairs
+
+The user explicitly approved publication of the reviewed 75-file migration and
+its necessary verification fixes. Commit `2a8e9e5` is published on
+`ci/security-baseline`; [draft PR #1](https://github.com/vamegah/order-management-platform/pull/1)
+preserves `main`. The [first migration run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
+passes all ten source image builds, strict static analysis, client packaging and
+exact-base SOAP/protobuf compatibility. Its remaining failures are diagnostic
+evidence, not accepted verification.
+
+The HTTP suites reproduce the upstream REST Assured 5.5/Groovy 5 failure. Both
+REST Assured artifacts now select 6.0.1, and an independent real HTTP/JSON probe
+passes on the service classpath. Runtime payment startup additionally exposes a
+missing Jackson 2 auto-configuration dependency hidden by broader test fixtures;
+that dependency is now explicit. The seven existing traced services include
+Boot's dedicated OpenTelemetry integration and current collector/transport
+property bindings. Product HTTP verification also checks incoming W3C trace
+identity and actual Swagger UI resource routing.
+
+The scanner's remaining findings are the bundled DOMPurify 3.4.16 in Swagger UI.
+The selected 5.34.1 webjar has been inspected and contains the vendor-patched
+3.4.17 in both JavaScript bundles. No suppression or policy reduction is added.
+The real PR coverage comparison detects a one-instruction product decrease after
+the JPA API replacement; an invalid-status predicate regression now checks the
+fail-closed behavior and extends coverage without changing the comparison gate.
+Focused container verification and a fresh complete workflow remain required.
+
+The focused repair build subsequently passes all 156 shared/product cases:
+37 shared-domain, 36 shared-web and 83 product cases (32 unit and 51 container
+integration). No case fails, errors or skips; all three coverage policies pass.
+The product checks include actual W3C trace identity and Swagger UI JavaScript
+resource routing. Log: `boot4-product-http-migration-verification.log`.
+
+During verification, PR #1 was merged externally as `9bc76d9`, and its source
+branch was deleted. The published repair commit `9315979` is now reviewed in
+[draft PR #2](https://github.com/vamegah/order-management-platform/pull/2).
+Main protection is configured and independently verified: require the actual
+GitHub Actions `quality-gate` check (app ID 15368), up-to-date branches and
+administrator enforcement. Force pushes/deletion are disabled; no additional
+approving-review policy is introduced. A complete successful repair workflow
+and subsequent default-branch verification remain required.
+
+## 2026-11-06 final startup and broker fixture repairs
+
+The repair run `42312503607` passes the actual NVD policy across 211 dependencies
+with no CVSS >= 7 findings, exact PR-base unit coverage, all fifteen complete
+static reports, client, contracts and ten source image builds. Complete reactor
+diagnostics identify only the duplicated payment HTTP catch-all chains and the
+notification fixture's obsolete embedded-broker listener override; 948 other
+executed cases pass, while the dependent platform suite remains absent.
+
+Payment HTTP policy now has one catch-all chain in `PaymentSecurityConfig` and
+the existing specific webhook chain. Its gRPC configuration retains the JWT
+authentication manager and required bearer reader. The real RPC regression now
+loads both production configurations together and passes valid/missing/invalid
+credentials, health calls and worker-context cleanup. The complete changed
+payment unit suite passes 222 cases. Ten focused provider cases also pass,
+including two additional success/replay and decline contracts; measured unit
+coverage over unchanged production classes exceeds the exact base ratio. A
+clean two-revision CI measurement remains authoritative.
+
+The notification fixture now uses the current embedded KRaft broker's default
+compatible listeners and ephemeral ports. Its clean five-module verification
+passes all 214 cases: 201 unit/in-process and thirteen PostgreSQL/Redis/Kafka/
+HTTP/STOMP integration cases. No case fails, errors or skips; all four module
+coverage policies pass. Log: `boot4-notification-broker-verification.log`.
+
+PR #2 was closed externally without merging during the pause. Main remains at
+`9bc76d9` with the required quality check, strict freshness and administrator
+enforcement. The approved repair branch continues through a new draft review;
+complete final-revision and subsequent default-branch acceptance remain open.
+
+The `f55a3f6` workflow subsequently passes every prerequisite except the complete
+reactor. Downloaded reports contain 779 unit and 231 integration cases: 1,009
+pass, with one missing `TestRestTemplate` bean in the outbound test endpoint
+fixture and no skipped cases. The twelve deployed, two independently packaged
+and seventeen client cases all pass; the fresh PR-base comparison also passes.
+Explicit Boot 4 test-client auto-configuration repairs the isolated fixture.
+Its focused real HTTP/PostgreSQL/Kafka/Redis/subscriber case now passes in
+`boot4-outbound-http-fixture-verification.log`; complete final-revision CI remains
+required. PR #2 was reopened externally and its review state is preserved.

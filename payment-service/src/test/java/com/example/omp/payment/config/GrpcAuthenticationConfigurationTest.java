@@ -2,6 +2,7 @@ package com.example.omp.payment.config;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.example.omp.payment.security.PaymentSecurityConfig;
 import com.example.omp.proto.payment.*;
 import com.example.omp.shared.grpc.GrpcAuthenticationAutoConfiguration;
 import io.grpc.*;
@@ -46,7 +47,8 @@ class GrpcAuthenticationConfigurationTest {
                                         .ServletWebSecurityAutoConfiguration.class,
                                 WebMvcAutoConfiguration.class,
                                 GrpcAuthenticationAutoConfiguration.class))
-                .withUserConfiguration(SecurityConfig.class, Tokens.class)
+                .withUserConfiguration(
+                        SecurityConfig.class, PaymentSecurityConfig.class, Tokens.class)
                 .run(
                         context -> {
                             assertThat(context)

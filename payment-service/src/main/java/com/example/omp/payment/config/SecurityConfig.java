@@ -12,8 +12,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 /**
  * Configures gRPC authentication.
  *
- * <p>There is no HTTP security filter chain here — the service has no REST endpoints.
- * Authentication happens via gRPC interceptors:
+ * <p>HTTP payment/webhook and management security is configured by {@link
+ * com.example.omp.payment.security.PaymentSecurityConfig}. Business RPC authentication happens via
+ * gRPC interceptors:
  *
  * <ol>
  *   <li>The {@code GrpcAuthenticationReader} extracts the JWT from gRPC metadata (the {@code
@@ -31,37 +32,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 @Configuration
 @org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 public class SecurityConfig {
-
-    @Bean
-    public org.springframework.security.web.SecurityFilterChain httpSecurity(
-            org.springframework.security.config.annotation.web.builders.HttpSecurity http)
-            throws Exception {
-        return http.csrf(csrf -> csrf.disable())
-                .sessionManagement(
-                        session ->
-                                session.sessionCreationPolicy(
-                                        org.springframework.security.config.http
-                                                .SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(
-                        auth ->
-                                auth.requestMatchers(
-                                                "/actuator/health",
-                                                "/actuator/health/**",
-                                                "/actuator/info")
-                                        .permitAll()
-                                        .requestMatchers(
-                                                org.springframework.http.HttpMethod.POST,
-                                                "/api/v1/payments/webhooks/*")
-                                        .permitAll()
-                                        .anyRequest()
-                                        .authenticated())
-                .oauth2ResourceServer(
-                        resource ->
-                                resource.jwt(
-                                        org.springframework.security.config.Customizer
-                                                .withDefaults()))
-                .build();
-    }
 
     /**
      * The JWT decoder, provided by the OAuth2 resource server starter. Validates tokens against
