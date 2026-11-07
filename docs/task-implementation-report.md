@@ -1613,3 +1613,13 @@ PR #2 was closed externally without merging during the pause. Main remains at
 `9bc76d9` with the required quality check, strict freshness and administrator
 enforcement. The approved repair branch continues through a new draft review;
 complete final-revision and subsequent default-branch acceptance remain open.
+
+The `f55a3f6` workflow subsequently passes every prerequisite except the complete
+reactor. Downloaded reports contain 779 unit and 231 integration cases: 1,009
+pass, with one missing `TestRestTemplate` bean in the outbound test endpoint
+fixture and no skipped cases. The twelve deployed, two independently packaged
+and seventeen client cases all pass; the fresh PR-base comparison also passes.
+Explicit Boot 4 test-client auto-configuration repairs the isolated fixture.
+Its focused real HTTP/PostgreSQL/Kafka/Redis/subscriber case now passes in
+`boot4-outbound-http-fixture-verification.log`; complete final-revision CI remains
+required. PR #2 was reopened externally and its review state is preserved.

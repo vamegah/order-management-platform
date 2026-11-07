@@ -164,3 +164,11 @@ combined unit measurement is diagnostic; the required PR job still measures
 both revisions from clean checkouts. Logs:
 `boot4-payment-unit-coverage-verification.log` and
 `boot4-noop-provider-contract-verification.log`.
+
+The complete `f55a3f6` reactor executes 1,010 cases (779 unit and 231 integration):
+1,009 pass, with one platform fixture error and no skipped cases. All other
+workflow prerequisites pass, including deployed and independently packaged
+journeys. The outbound test endpoint fixture now explicitly enables Boot 4's
+`@AutoConfigureTestRestTemplate`; its focused real HTTP/database/broker/subscriber
+case passes (`boot4-outbound-http-fixture-verification.log`). A fresh complete
+workflow on this final fixture correction remains required.

@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -29,6 +30,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * <p>This test exercises the controller + delivery path end to end. JWT auth is faked via a mocked
  * JwtDecoder that returns a JWT for the subscription's owner.
  */
+@AutoConfigureTestRestTemplate
 class OutboundWebhookTestEndpointIT extends OutboundWebhookBase {
 
     @Autowired TestRestTemplate rest;
