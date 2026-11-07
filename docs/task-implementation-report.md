@@ -1869,3 +1869,91 @@ complete CI for the payment follow-up remains required before merging it.
 Historical-row repair, deployed workload identity, process-crash compensation
 and accepted-order/payment expiry coordination remain open. No recovery or
 expiry worker is enabled by this change.
+
+## 2026-11-07 historical reservation reference repair
+
+The next core-lifecycle continuation adds an administrator-only inspection and
+repair resource for historical NULL reservation pointers. Flyway V11 adds a
+durable per-line audit without rewriting historical rows. A complete plan must
+identify every order line and distinct existing inventory reservations; existing
+references cannot be replaced. Only DRAFT, PLACED and CONFIRMED orders can receive
+missing pointers. The inventory identity, order, SKU, quantity and active state
+must match before the write transaction begins. No stock is allocated or mutated.
+
+The short JDBC transaction locks the root order, rechecks its version, state
+and complete binding plan, restores NULL references, writes the audit and bumps
+the aggregate version once. A failed audit rolls back the reference and version.
+This also fences JPA transitions that loaded the earlier version. Matching
+already-bound plans are idempotent, including a lost-response retry with an old
+version: they add no audit, inventory call or version increment. Metadata repair
+preserves order state/history and emits no new public domain event. The verified
+operator subject and bounded reason are retained without storing a bearer token.
+See [the operator procedure](order-reservation-repair.md).
+
+Clean seven-module order/shared `-Pstatic-analysis spotless:apply clean verify`
+passes all 435 cases: 384 unit (238 order and 146 shared) and 51 PostgreSQL/HTTP
+integration cases, with no failures, errors, skips or missing suites. The 46 new
+cases cover malformed/ambiguous plans, downstream mismatches, forbidden states,
+transaction boundaries, durable audit/idempotence, complete multi-line repair,
+audit-failure rollback, both concurrency directions, administrator policy and
+foreign-reservation rejection. Six complete static reports contain zero findings,
+errors or missing classes. All five existing coverage policies pass; order
+instruction coverage is 84.59% against its unchanged 80% gate. The evidence
+checker accepts all 289 order-service cases. Exact source, reports and the full
+successful log are retained in `coverage/legacy-reservation-repair-evidence.zip`
+and JSON; log: `legacy-reservation-repair-verification.log` (9:13, exit 0).
+
+The initial build exposed an authorization-test assumption: invalid JSON is
+validated before controller method authorization. The denial case now submits a
+well-formed plan and proves HTTP 403; administrator validation separately proves
+HTTP 400. A subsequent clean attempt stopped on Windows read-only attributes in
+generated target directories. The local Maven helper now resolves the requested
+worktree and clears those attributes only inside its generated targets; the
+fresh corrected build above passes. Neither correction changes runtime policy.
+
+This work does not invent missing inventory history, establish warehouse
+provenance, repair terminal orders or coordinate inventory state across services.
+A separate clean unit-only package/report build passes all 384 cases in 3:09.
+All five focused module comparisons pass the unchanged CI instruction policy
+against the accepted main source. Order counts improve from 3,819 covered/2,727
+missed to 4,250/2,994. Unit-only reports and baseline source proof are retained
+in `coverage/legacy-reservation-repair-unit-evidence.zip` and JSON; archive
+SHA-256: `0ed729865cf99bd24ee1dbb53c47e9436e3f9e541dffbf28eef51885809a90bc`.
+The combined archive SHA-256 is
+`5c657cbeb4821d5e7aa0a252e62254b0f5a62c00051732aa80aafafd52ac2eba`.
+The verified source is `5c3f3fa` in the isolated repair worktree; its runtime,
+tests and build inputs are identical in the main-workspace review branch, where
+only documentation records subsequent verification. Complete PR verification,
+including fourteen-module unit comparison, remains required before merging.
+Deployed identity, process-crash compensation and
+accepted-order/payment expiry coordination remain open. Workers stay disabled
+by default, and the broader lifecycle checkboxes remain unchecked.
+
+## 2026-11-07 payment correlation publication acceptance
+
+With explicit publication approval, payment correlation `7d782f4` was published
+as [draft PR #6](https://github.com/vamegah/order-management-platform/pull/6).
+Its [complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42386392989)
+passes all 1,091 reactor cases (857 unit and 234 integration), twelve deployed
+service/client cases, two independently packaged payment-to-webhook cases,
+seventeen client transport cases and 32 contract-job cases. Required reports
+contain no failures, errors or skips. All fourteen exact-base unit coverage
+comparisons pass, all fifteen complete static reports are clean, the NVD policy
+passes across 211 dependencies and all ten source images build. The tested PR
+merge reference has the same source tree as the reviewed revision. Reports,
+workflow logs and exact source are retained in
+`coverage/checkout-payment-ci-evidence.zip` and JSON; archive SHA-256:
+`183a82b4cbfb65155508bb43b1c08243c190879ded8b3984bc7f793acaead6d9`.
+
+After separate user approval, PR #6 was marked ready and merged as
+`2e038f8be5e9f18cb5a4750f26dfd4d28daa1cd4` under unchanged strict freshness,
+administrator enforcement and the required quality gate. The
+[complete default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42388231306)
+passes every gate on its first attempt. Downloaded reports confirm the same
+1,091 reactor cases and deployed/packaged/client/contract scopes, fifteen clean
+static reports, accepted NVD policy and ten image builds. All seven artifact
+sets, full workflow logs and the exact merged source are retained in
+`coverage/checkout-payment-main-ci-evidence.zip` and JSON; archive SHA-256:
+`f88b65758917affec6db7ade41aa0ae9c935b7424d45549c7ceecd49185dd317`.
+PR-only coverage comparison remains in the PR archive. This acceptance does not
+publish the separate historical repair work or close deployed recovery tasks.
