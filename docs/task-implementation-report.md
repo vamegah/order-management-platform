@@ -1793,3 +1793,79 @@ Reports and exact source are retained in
 `checkout-recovery-discovery-verification.log` (8:44, exit 0).
 This work does not enable recovery or expiry, provision a workload identity,
 repair historical rows or establish deployed crash/compensation acceptance.
+
+## 2026-11-07 recovery discovery publication
+
+The user approved publication and verification fixes for recovery-discovery
+commit `53708b6`. [PR #5](https://github.com/vamegah/order-management-platform/pull/5)
+passes its [complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42382106790):
+all 1,062 reactor cases (828 unit and 234 integration), twelve deployed
+service/client cases, two packaged payment journeys, seventeen client cases and
+thirty-two contract-job cases, without failures, errors or skips. All fourteen
+exact-base unit coverage comparisons pass; order counts improve from 3,566
+covered / 2,801 missed to 3,686 / 2,755. All fifteen complete static reports are
+clean, the NVD policy accepts 211 dependencies without CVSS >= 7 findings, and
+all ten source images build. The eight artifact sets, full logs, exact source
+and tested-merge source proof are retained in
+`coverage/recovery-discovery-ci-evidence.zip` and JSON; archive SHA-256:
+`54c8a6d6efdcca16bd51d4f3113780bdd53d4c26acb246d6c087e7486e865a54`.
+
+The user separately approved marking the draft ready, merging and verifying
+main. PR #5 is merged as `3525418a668da43ae01965aed5c7b72c9231f624` under the
+unchanged required GitHub Actions check, strict freshness and administrator
+enforcement. Its [default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42384161158)
+also passes every prerequisite and `quality-gate`. The initial image job failed
+during BuildKit setup because a Docker CDN connection reset interrupted its
+download before the application build. After the other jobs completed
+successfully, a targeted failed-job retry passed the image build and aggregate
+gate on the same source revision. No application change was needed.
+
+Downloaded main reports confirm all 1,062 reactor cases and the same deployed,
+packaged, client and contract scopes without failures, errors or skips. All
+fifteen complete static reports are clean, the NVD policy passes across 211
+dependencies, and all ten source images build. Its seven artifact sets, exact
+merged source, both attempts' full workflow logs, original job/run metadata and
+retry request are retained in `coverage/recovery-discovery-main-ci-evidence.zip`
+and JSON; archive SHA-256:
+`ab5960d121d71317ab0bb6ad19d258d4fd100338f0b834028dd4460a6480fbc4`.
+The PR-only coverage comparison remains in the PR archive.
+
+## 2026-11-07 payment checkout correlation
+
+The payment continuation was verified in
+`.scratch/checkout-payment-worktree` on `implementation/checkout-payment-correlation`
+at `78c07f4`, from source revision `53708b6`. The publication candidate is on
+`implementation/checkout-payment-followup`, based on merged main `3525418`.
+Its runtime files, tests and build inputs match the verified snapshot; only
+TASKS.md and this report record subsequent parent verification.
+The payment client previously retained the
+returned payment ID without checking that its owner or amount matched checkout.
+It now verifies order/customer identity, currency and a bounded positive decimal
+amount before returning a durable reference. Numeric comparison permits equivalent
+decimal representations. Only pending or confirmed-with-reference results are
+usable. The confirmed case preserves the payment service's existing idempotent
+replay behavior, which returns the original payment's current state.
+
+Malformed or mismatched replies fail through the existing generic downstream
+HTTP 502 contract before payment reference retention or aggregate acceptance.
+Compensation queues only verified inventory holds after a rejected payment reply;
+the journal retains discovery of unknown side effects. A verified payment still
+enters compensation if the local acceptance transaction fails.
+
+The clean seven-module order/shared static-analysis build passes all 389 cases:
+347 unit (201 order and 146 shared) and all 42 PostgreSQL/HTTP integration cases,
+without failures, errors, skips or missing suites. All twenty-nine new real-RPC
+regressions pass, including decimal equivalence, confirmed replay, invalid
+identities/owners/amounts/states, rejected-reply compensation and compensation
+after a failed local save. Six complete static reports contain zero findings,
+errors or missing classes. All five existing coverage policies pass; order
+instruction coverage is 83.15% against its unchanged 80% gate. The evidence
+checker independently accepts all 243 order-service cases. Source-bound reports
+are retained in `coverage/checkout-payment-correlation-evidence.zip` and JSON;
+log: `checkout-payment-correlation-verification.log` (8:25, exit 0).
+
+This local verification is separate from recovery-discovery publication;
+complete CI for the payment follow-up remains required before merging it.
+Historical-row repair, deployed workload identity, process-crash compensation
+and accepted-order/payment expiry coordination remain open. No recovery or
+expiry worker is enabled by this change.

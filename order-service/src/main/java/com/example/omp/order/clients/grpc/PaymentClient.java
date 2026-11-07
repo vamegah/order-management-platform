@@ -2,10 +2,12 @@ package com.example.omp.order.clients.grpc;
 
 import com.example.omp.order.clients.grpc.dto.PaymentIntentDto;
 import com.example.omp.order.clients.grpc.dto.RefundDto;
+import com.example.omp.order.error.DownstreamServiceException;
 import com.example.omp.proto.payment.*;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.grpc.StatusRuntimeException;
+import java.math.BigDecimal;
 import java.util.UUID;
 import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.slf4j.Logger;
@@ -80,8 +82,9 @@ public class PaymentClient {
             Payment response =
                     stub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                             .createPaymentIntent(request);
-            log.debug("Created payment intent for order {}: id={}", orderId, response.getId());
-            return toDomain(response);
+            PaymentIntentDto payment = verifyIntent(request, response);
+            log.debug("Created payment intent for order {}: id={}", orderId, payment.id());
+            return payment;
         } catch (StatusRuntimeException e) {
             throw exceptionMapper.map(e, "payment-service");
         }
@@ -166,6 +169,33 @@ public class PaymentClient {
                     .toList();
         } catch (StatusRuntimeException failure) {
             throw exceptionMapper.map(failure, "payment-service");
+        }
+    }
+
+    private PaymentIntentDto verifyIntent(CreatePaymentIntentRequest request, Payment response) {
+        if (!request.getOrderId().equals(response.getOrderId())
+                || !request.getCustomerId().equals(response.getCustomerId())
+                || !request.getAmount().getCurrency().equals(response.getAmount().getCurrency())
+                || !response.getAmount().getAmount().matches("[0-9]{1,15}(\\.[0-9]{1,4})?"))
+            throw new DownstreamServiceException(
+                    "payment-service", 502, "Payment response does not match checkout");
+        boolean pending = response.getStatus() == PaymentStatus.PAYMENT_STATUS_PENDING;
+        boolean confirmed =
+                response.getStatus() == PaymentStatus.PAYMENT_STATUS_CONFIRMED
+                        && !response.getProviderReference().isBlank();
+        if (!pending && !confirmed)
+            throw new DownstreamServiceException(
+                    "payment-service", 502, "Payment response is not usable for checkout");
+        try {
+            BigDecimal amount = new BigDecimal(response.getAmount().getAmount());
+            if (amount.signum() <= 0
+                    || amount.compareTo(new BigDecimal(request.getAmount().getAmount())) != 0)
+                throw new DownstreamServiceException(
+                        "payment-service", 502, "Payment response does not match checkout");
+            return toDomain(response);
+        } catch (IllegalArgumentException malformedIdentity) {
+            throw new DownstreamServiceException(
+                    "payment-service", 502, "Payment response has an invalid identity");
         }
     }
 
