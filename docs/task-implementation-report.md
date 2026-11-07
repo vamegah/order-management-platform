@@ -1957,3 +1957,85 @@ sets, full workflow logs and the exact merged source are retained in
 `f88b65758917affec6db7ade41aa0ae9c935b7424d45549c7ceecd49185dd317`.
 PR-only coverage comparison remains in the PR archive. This acceptance does not
 publish the separate historical repair work or close deployed recovery tasks.
+
+## 2026-11-07 historical repair PR acceptance
+
+With explicit publication approval, historical repair `06d056d` was published as
+[draft PR #7](https://github.com/vamegah/order-management-platform/pull/7).
+Its [complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42389856101)
+passes all 1,137 reactor cases (894 unit and 243 integration), twelve deployed
+service/client cases, two packaged payment-to-webhook cases, seventeen client
+transport cases and 32 contract-job cases. Required JUnit evidence has no
+failures, errors or skips. All fourteen exact-base unit coverage comparisons
+pass; GitHub's tested merge reference has the reviewed source tree. All fifteen
+complete static reports are clean, the NVD policy passes across 211 dependencies
+and all ten source images build. Reports, full logs and exact source are retained
+in `coverage/legacy-reservation-repair-ci-evidence.zip` and JSON; archive SHA-256:
+`bcda07d4dc5e2cc11af172beb02e881eb9a90355bb26c6d194534a3fdbc1092b`.
+After separate user approval, PR #7 was marked ready and merged as
+`d17fbacd274b1c224ef9929ea0d55b8f7f1c8355` under the unchanged required quality
+gate, strict freshness and administrator enforcement. Its
+[complete default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42414034870)
+passes every gate on its first attempt. Downloaded reports confirm all 1,137
+reactor cases and the same deployed/packaged/client/contract scopes without
+failures, errors or skips. All fifteen complete static reports are clean,
+the NVD policy passes across 211 dependencies and all ten source images build.
+The seven artifact sets, exact merged source, full workflow logs and protected
+merge evidence are retained in
+`coverage/legacy-reservation-repair-main-ci-evidence.zip` and JSON; archive SHA-256:
+`8806209a8bb6a0450c06be94af0c0d684a969d8c597e80d0f354331069efd4ce`.
+PR-only coverage comparison remains in the PR archive. This acceptance excludes
+the separate identity continuation below and does not close deployed recovery.
+
+## 2026-11-07 scoped recovery identity continuation
+
+The next isolated local branch, `implementation/checkout-recovery-identity`,
+supplies a development-only `order-recovery` service account without customer
+claims or administrator roles. Only its dedicated scope permits cross-order
+recovery; ordinary development clients cannot request that scope. Explicit
+inventory/payment audiences accompany the scope. Browser/password grants and
+full-scope access are disabled for the workload client.
+
+The standard-library projector reads a bounded credential file, requests a
+short-lived client-credentials JWT, checks issuer/client/scope/audience/lifetime
+metadata and atomically replaces a private token file. It rejects redirects,
+oversized or unusable responses, and plaintext endpoints unless explicitly
+configured for isolated development. Failed exchanges preserve the previous
+projection, and logs contain neither credentials, tokens nor issuer bodies.
+Downstream JWT verification remains authoritative. The projector reloads client
+credentials during rotation; the optional overlay mounts its directory read-only
+so replacements become visible to the existing worker.
+
+All 57 Python tooling cases pass, including ten new HTTP/file cases with bounded
+response handling, credential/token rotation, denial behavior, secret-free
+diagnostics and failed atomic replacement. The portable issuer acceptance script
+starts a fresh, labelled Keycloak 25 container and passes five checks: scoped
+issuance without owner/admin claims, distinct renewed tokens, invalid-credential
+rejection, ordinary-client scope denial and an issued signing-key identity that
+matches the issuer's published keys. The fixture removes only its own container
+and temporary credentials. Matching a published key is not a cryptographic
+downstream acceptance test.
+
+Five read-only Compose 2.39.4 checks prove disabled defaults, explicit checkout
+recovery enablement, a read-only directory mount without implicit path creation,
+preservation of all other service/environment settings and rejection of missing
+projection configuration. Workflow YAML parses and requires the new
+`workload-identity` job through the existing protected aggregate gate. The new
+job runs the portable issuer fixture and retains its report; complete CI for
+this follow-up remains required after separate publication approval.
+
+Source-bound reports, logs and exact source are retained in
+`coverage/recovery-workload-identity-evidence.zip` and JSON. The
+[operator procedure](order-recovery-identity.md) explains UID/file permissions,
+supervision, existing-realm updates, explicit enablement and safe disablement.
+Production workload credentials/secret management, downstream JWT/mTLS behavior,
+process-crash recovery and accepted-order/payment expiry compensation remain
+open. No recovery or expiry worker is enabled by default, and the parent
+lifecycle tasks remain unchecked.
+
+The verified identity source is `0cdff48` in its isolated worktree; its archive
+SHA-256 is `2e9057e0a5a9f9ecb3a78fd778f31cfe85cf42b7de51b621c96bc69294e9356b`.
+The publication review branch is based on accepted main `d17fbac`. Runtime,
+tests, realm, Compose and CI inputs match the verified source exactly; only
+TASKS.md and this report record subsequent parent acceptance. Complete workflow
+verification, including the new issuer gate, remains required after publication.

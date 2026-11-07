@@ -413,9 +413,29 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
+  workload-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify imported recovery identity and atomic token rotation
+        run: python scripts/verify_recovery_identity.py --report coverage/recovery-identity-issuer.json
+      - name: Retain issuer verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workload-identity-reports
+          path: coverage/recovery-identity-issuer.json
+          if-no-files-found: error
+
   quality-gate:
     if: always()
-    needs: [verify, packaged-payment-journey, external-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images]
+    needs: [verify, packaged-payment-journey, external-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -430,8 +450,9 @@ jobs:
           COVERAGE_RESULT: ${{ needs['coverage-regression'].result }}
           DEPENDENCY_RESULT: ${{ needs['dependency-policy'].result }}
           IMAGE_RESULT: ${{ needs.images.result }}
+          IDENTITY_RESULT: ${{ needs['workload-identity'].result }}
         run: |
-          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT"; do
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required verification job failed, was cancelled, or was skipped."
               exit 1
