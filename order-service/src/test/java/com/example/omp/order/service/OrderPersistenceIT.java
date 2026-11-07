@@ -1,9 +1,15 @@
 package com.example.omp.order.service;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import com.example.omp.order.clients.dto.CustomerDto;
+import com.example.omp.order.clients.grpc.InventoryClient;
+import com.example.omp.order.clients.grpc.dto.ReservationDto;
 import com.example.omp.order.domain.*;
+import com.example.omp.order.dto.ReservationReferenceRepairRequest;
+import com.example.omp.order.dto.ReservationReferenceRepairRequest.Binding;
+import com.example.omp.order.error.InvalidOrderStateException;
 import com.example.omp.order.events.OrderEventPublisher;
 import com.example.omp.order.repository.OrderRepository;
 import com.example.omp.shared.domain.Money;
@@ -115,6 +121,22 @@ class OrderPersistenceIT {
                 JdbcTemplate jdbc, OrderTransactionService orders, OrderEventPublisher events) {
             return new OrderFulfillmentStore(jdbc, orders, events);
         }
+
+        @Bean
+        OrderReservationRepairStore repairStore(JdbcTemplate jdbc) {
+            return new OrderReservationRepairStore(jdbc);
+        }
+
+        @Bean
+        InventoryClient repairInventory() {
+            return mock(InventoryClient.class);
+        }
+
+        @Bean
+        OrderReservationRepairService repairs(
+                OrderReservationRepairStore store, InventoryClient inventory) {
+            return new OrderReservationRepairService(store, inventory);
+        }
     }
 
     private static AnnotationConfigApplicationContext context;
@@ -124,6 +146,8 @@ class OrderPersistenceIT {
     private static OrderRepository repository;
     private static OrderEventPublisher events;
     private static OrderFulfillmentStore fulfillment;
+    private static OrderReservationRepairService repairs;
+    private static InventoryClient repairInventory;
 
     @BeforeAll
     static void start() {
@@ -134,6 +158,13 @@ class OrderPersistenceIT {
         repository = context.getBean(OrderRepository.class);
         events = context.getBean(OrderEventPublisher.class);
         fulfillment = context.getBean(OrderFulfillmentStore.class);
+        repairs = context.getBean(OrderReservationRepairService.class);
+        repairInventory = context.getBean(InventoryClient.class);
+    }
+
+    @BeforeEach
+    void resetRepairLookup() {
+        reset(repairInventory);
     }
 
     @AfterAll
@@ -170,6 +201,263 @@ class OrderPersistenceIT {
                 "SELECT count(*) FROM orders.outbox_event WHERE aggregate_id = ?",
                 Long.class,
                 id.toString());
+    }
+
+    private UUID legacyOrder() {
+        UUID id = create(UUID.randomUUID());
+        // Reproduce pre-reference/pre-journal historical rows in this owned test database.
+        jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
+        jdbc.update("DELETE FROM orders.checkout_attempt WHERE order_id = ?", id);
+        jdbc.update("DELETE FROM orders.outbox_event WHERE aggregate_id = ?", id.toString());
+        return id;
+    }
+
+    private ReservationReferenceRepairRequest repairRequest(UUID id, UUID reservation) {
+        var state = repairs.inspect(id);
+        return new ReservationReferenceRepairRequest(
+                state.version(),
+                "Verified inventory ownership",
+                List.of(new Binding(state.lines().getFirst().lineId(), reservation)));
+    }
+
+    private void verifiedHold(UUID id, UUID reservation) {
+        when(repairInventory.get(reservation))
+                .thenAnswer(
+                        invocation -> {
+                            assertThat(
+                                            org.springframework.transaction.support
+                                                    .TransactionSynchronizationManager
+                                                    .isActualTransactionActive())
+                                    .isFalse();
+                            return new ReservationDto(
+                                    reservation,
+                                    "SKU",
+                                    "WH-1",
+                                    1,
+                                    id,
+                                    "RESERVATION_STATUS_ACTIVE",
+                                    0,
+                                    0);
+                        });
+    }
+
+    private long repairAuditCount(UUID id) {
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM orders.reservation_reference_repair WHERE order_id = ?",
+                Long.class,
+                id);
+    }
+
+    @Test
+    void legacyReferenceRepairIsAuditedVersionedAndIdempotentWithoutAllocatingStock() {
+        UUID id = legacyOrder(), reservation = UUID.randomUUID();
+        var request = repairRequest(id, reservation);
+        verifiedHold(id, reservation);
+
+        var result = repairs.restore(id, request, "operator-subject");
+
+        assertThat(result.restored()).isEqualTo(1);
+        assertThat(result.missing()).isZero();
+        assertThat(result.version()).isEqualTo(request.expectedVersion() + 1);
+        assertThat(result.status()).isEqualTo("DRAFT");
+        assertThat(orders.findByIdFull(id).getLines().getFirst().getReservationId())
+                .isEqualTo(reservation);
+        var audit =
+                jdbc.queryForMap(
+                        "SELECT actor, reason, previous_order_version FROM orders.reservation_reference_repair WHERE order_id = ?",
+                        id);
+        assertThat(audit)
+                .containsEntry("actor", "operator-subject")
+                .containsEntry("reason", "Verified inventory ownership")
+                .containsEntry("previous_order_version", request.expectedVersion());
+        assertThat(orders.findByIdFull(id).getStatusHistory()).hasSize(1);
+        assertThat(eventCount(id)).isZero();
+        assertThat(repairs.restore(id, request, "operator-subject").restored()).isZero();
+        assertThat(repairAuditCount(id)).isEqualTo(1);
+        verify(repairInventory).get(reservation);
+        verifyNoMoreInteractions(repairInventory);
+    }
+
+    @Test
+    void completeMultiLineRepairPreservesExistingReferencesAndAuditsOnlyMissingOnes() {
+        UUID id = legacyOrder(), restored = UUID.randomUUID(), existing = UUID.randomUUID();
+        orders.findAndApply(
+                id,
+                order -> {
+                    var second =
+                            new OrderLine(UUID.randomUUID(), "SKU-2", "Second", Money.usd("10"), 1);
+                    second.setReservationId(existing);
+                    order.addLine(second);
+                });
+        var before = repairs.inspect(id);
+        var missing =
+                before.lines().stream()
+                        .filter(line -> line.reservationId() == null)
+                        .findFirst()
+                        .orElseThrow();
+        var partial =
+                new ReservationReferenceRepairRequest(
+                        before.version(),
+                        "Verified inventory ownership",
+                        List.of(new Binding(missing.lineId(), restored)));
+        assertThatThrownBy(() -> repairs.restore(id, partial, "operator-subject"))
+                .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        verifyNoInteractions(repairInventory);
+        assertThat(repairAuditCount(id)).isZero();
+        var complete =
+                new ReservationReferenceRepairRequest(
+                        before.version(),
+                        partial.reason(),
+                        before.lines().stream()
+                                .map(
+                                        line ->
+                                                new Binding(
+                                                        line.lineId(),
+                                                        line.reservationId() == null
+                                                                ? restored
+                                                                : line.reservationId()))
+                                .toList());
+        verifiedHold(id, restored);
+        when(repairInventory.get(existing))
+                .thenReturn(
+                        new ReservationDto(
+                                existing,
+                                "SKU-2",
+                                "WH-1",
+                                1,
+                                id,
+                                "RESERVATION_STATUS_ACTIVE",
+                                0,
+                                0));
+
+        var result = repairs.restore(id, complete, "operator-subject");
+
+        assertThat(result.restored()).isEqualTo(1);
+        assertThat(result.missing()).isZero();
+        assertThat(result.version()).isEqualTo(before.version() + 1);
+        assertThat(result.lines())
+                .extracting(line -> line.reservationId())
+                .containsExactlyInAnyOrder(restored, existing);
+        assertThat(repairAuditCount(id)).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT reservation_id FROM orders.reservation_reference_repair WHERE order_id = ?",
+                                UUID.class,
+                                id))
+                .isEqualTo(restored);
+        assertThat(eventCount(id)).isZero();
+    }
+
+    @Test
+    void referenceRepairRollsBackWithItsAuditAndCanRetryAfterTheFaultIsRemoved() {
+        UUID id = legacyOrder(), reservation = UUID.randomUUID();
+        var request = repairRequest(id, reservation);
+        verifiedHold(id, reservation);
+        jdbc.execute(
+                "ALTER TABLE orders.reservation_reference_repair ADD CONSTRAINT injected_repair_failure CHECK (false) NOT VALID");
+        try {
+            assertThatThrownBy(() -> repairs.restore(id, request, "operator-subject"))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        } finally {
+            jdbc.execute(
+                    "ALTER TABLE orders.reservation_reference_repair DROP CONSTRAINT injected_repair_failure");
+        }
+        assertThat(repairs.inspect(id).missing()).isEqualTo(1);
+        assertThat(repairs.inspect(id).version()).isEqualTo(request.expectedVersion());
+        assertThat(repairAuditCount(id)).isZero();
+        assertThat(eventCount(id)).isZero();
+        assertThat(repairs.restore(id, request, "operator-subject").restored()).isEqualTo(1);
+        assertThat(repairAuditCount(id)).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentStateChangeAfterVerificationPreventsRepairWithoutPartialReferences() {
+        UUID id = legacyOrder(), reservation = UUID.randomUUID();
+        var request = repairRequest(id, reservation);
+        when(repairInventory.get(reservation))
+                .thenAnswer(
+                        invocation -> {
+                            assertThat(
+                                            org.springframework.transaction.support
+                                                    .TransactionSynchronizationManager
+                                                    .isActualTransactionActive())
+                                    .isFalse();
+                            orders.findAndApply(
+                                    id,
+                                    order -> {
+                                        order.place("customer");
+                                        events.publishPlaced(order, "customer");
+                                    });
+                            return new ReservationDto(
+                                    reservation,
+                                    "SKU",
+                                    "WH-1",
+                                    1,
+                                    id,
+                                    "RESERVATION_STATUS_ACTIVE",
+                                    0,
+                                    0);
+                        });
+
+        assertThatThrownBy(() -> repairs.restore(id, request, "operator-subject"))
+                .isInstanceOf(InvalidOrderStateException.class);
+
+        assertThat(repairs.inspect(id).missing()).isEqualTo(1);
+        assertThat(repairs.inspect(id).status()).isEqualTo("PLACED");
+        assertThat(repairAuditCount(id)).isZero();
+        assertThat(eventCount(id)).isEqualTo(1);
+    }
+
+    @Test
+    void referenceRepairFencesAConcurrentJpaTransitionLoadedBeforeTheRepair() throws Exception {
+        UUID id = legacyOrder(), reservation = UUID.randomUUID();
+        var request = repairRequest(id, reservation);
+        verifiedHold(id, reservation);
+        var loaded = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var stale =
+                    executor.submit(
+                            () ->
+                                    transactions.execute(
+                                            status -> {
+                                                var order =
+                                                        repository
+                                                                .findByIdWithFullDetails(id)
+                                                                .orElseThrow();
+                                                loaded.countDown();
+                                                try {
+                                                    if (!release.await(15, TimeUnit.SECONDS))
+                                                        throw new AssertionError(
+                                                                "Repair barrier timed out");
+                                                } catch (InterruptedException failure) {
+                                                    Thread.currentThread().interrupt();
+                                                    throw new IllegalStateException(failure);
+                                                }
+                                                order.place("stale-customer");
+                                                events.publishPlaced(order, "stale-customer");
+                                                return null;
+                                            }));
+            try {
+                assertThat(loaded.await(10, TimeUnit.SECONDS)).isTrue();
+                assertThat(repairs.restore(id, request, "operator-subject").restored())
+                        .isEqualTo(1);
+            } finally {
+                release.countDown();
+            }
+            assertThatThrownBy(() -> stale.get(15, TimeUnit.SECONDS))
+                    .isInstanceOfSatisfying(
+                            ExecutionException.class,
+                            failure ->
+                                    assertThat(failure.getCause())
+                                            .isInstanceOf(
+                                                    org.springframework.dao
+                                                            .OptimisticLockingFailureException
+                                                            .class));
+        }
+        assertThat(repairs.inspect(id).status()).isEqualTo("DRAFT");
+        assertThat(repairAuditCount(id)).isEqualTo(1);
+        assertThat(eventCount(id)).isZero();
     }
 
     @Test
