@@ -1710,3 +1710,28 @@ missing classes. The order evidence checker accepts all 201 order cases. Reports
 are retained in `coverage/checkout-reservation-correlation-evidence.zip` and JSON;
 log: `checkout-reservation-correlation-verification.log` (7:37, exit 0). These
 local changes are not part of PR #3's workflow or publication approval.
+
+## 2026-11-06 PostgreSQL reservation-expiry acceptance
+
+The next local continuation adds three actual PostgreSQL cases to
+`InventoryPersistenceIT`. They execute the existing production expiry worker
+and transaction proxies. Oldest-first bounded batches exclude recent/terminal
+holds and conserve stock. A real outbox check-constraint failure rolls back
+stock/hold changes; after removing the injected fault, retry commits exactly once.
+A competing worker skips a row locked by another transaction, expires the
+available hold and later reclaims the unlocked row without double release.
+Completion/failure counters and committed outbox counts are asserted.
+
+The clean five-module inventory/shared static-analysis build passes all 118
+cases: 110 unit (37 inventory and 73 shared) and eight PostgreSQL integration,
+without failures, errors or skips. Four complete static reports contain zero
+findings/errors/missing classes. All three coverage policies pass; inventory
+coverage is 91.35% against its unchanged 80% gate. The inventory evidence checker
+independently accepts all 45 service cases. Reports and exact source are retained
+in `coverage/inventory-expiry-acceptance-evidence.zip` and JSON; log:
+`inventory-expiry-acceptance-verification.log` (4:21, exit 0).
+
+No production expiry behavior or enablement changes are included. The worker
+stays opt-in. Process-crash/deployed recovery, expired accepted-order/payment
+coordination and operator retry acceptance remain open in `TASKS.md`. This local
+acceptance work is separate from the merged cleanup revision and its workflow.
