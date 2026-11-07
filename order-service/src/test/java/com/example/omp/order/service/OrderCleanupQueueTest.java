@@ -66,6 +66,17 @@ class OrderCleanupQueueTest {
                                         failedTask, order, "RESERVATION", reservation, 1),
                                 new OrderCleanupQueue.Task(
                                         completedTask, order, "PAYMENT", payment, 1)));
+        when(inventory.get(reservation))
+                .thenReturn(
+                        new com.example.omp.order.clients.grpc.dto.ReservationDto(
+                                reservation,
+                                "SKU",
+                                "WH-1",
+                                1,
+                                order,
+                                "RESERVATION_STATUS_ACTIVE",
+                                0,
+                                0));
         when(inventory.release(reservation.toString()))
                 .thenThrow(new IllegalStateException("secret remote details"));
         when(jdbc.update(contains("completed = true"), eq(completedTask), any())).thenReturn(1);

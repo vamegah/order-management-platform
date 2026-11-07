@@ -1,6 +1,7 @@
 # Dependency security baseline migration
 
-Status: implementation under verification; not release acceptance.
+Status: complete PR/default-branch verification accepted and merged.
+Production release acceptance remains separate.
 Reviewed: 2026-11-06.
 
 The [executed baseline workflow](https://github.com/vamegah/order-management-platform/actions/runs/42279516153)
@@ -20,12 +21,12 @@ therefore selects the compatible Boot 4.1 / Cloud 2025.1 generation, following
 the [Boot migration guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide)
 and [Spring Cloud compatibility table](https://cloud.spring.io/).
 
-The initial migration was merged externally during verification. Its first repair
-[PR #2](https://github.com/vamegah/order-management-platform/pull/2) was subsequently
-closed without merging; further fixes remain under verification on `ci/security-baseline`.
+The initial migration was merged externally during verification. The repaired
+[PR #2](https://github.com/vamegah/order-management-platform/pull/2) subsequently
+passed its complete workflow and was merged with user approval as `1a38671`.
 Main requires the up-to-date GitHub Actions `quality-gate`, including for
-administrators. Dependency updates do not establish acceptance until the complete test, coverage, packaging, image,
-external journey, compatibility and vulnerability jobs pass on the new revision.
+administrators. The accepted PR and subsequent default-branch results are
+recorded below; production promotion remains a separate requirement.
 
 ## Selected families
 
@@ -172,3 +173,35 @@ journeys. The outbound test endpoint fixture now explicitly enables Boot 4's
 `@AutoConfigureTestRestTemplate`; its focused real HTTP/database/broker/subscriber
 case passes (`boot4-outbound-http-fixture-verification.log`). A fresh complete
 workflow on this final fixture correction remains required.
+
+## Accepted PR and protected merge
+
+The [final PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42334961223)
+passes at `e25735e8dff195d9a7542ccb2ecf37ddd5fa948c`. Its downloaded reports
+contain 1,010 passing reactor cases (779 unit and 231 integration) with no
+failures, errors or skips. All twelve deployed service/client, two independently
+packaged payment-to-webhook, seventeen client transport and thirty-two contract
+cases pass in their respective jobs. The packaged cases also execute in the
+reactor. Exact PR-base unit coverage passes for fourteen production modules;
+existing absolute gates also pass.
+
+The scan analyzes 211 dependencies with no CVSS >= 7 findings. Fifteen complete
+static reports contain zero findings/errors/missing classes, all ten source image
+builds pass, and the aggregate `quality-gate` succeeds. All eight artifact sets,
+workflow logs and exact source/tree are retained in
+`coverage/security-baseline-ci-evidence.zip` and JSON; archive SHA-256 is
+`3e38bd7d7fa9026915ef64bcf3ab76ad24c5047f1f62ad26dace60167c42360f`.
+
+With explicit user approval, PR #2 was merged as
+`1a38671a39e20b9c91ac6f498f50027360fd9f29` after the required gate passed.
+Main protection was read back immediately before the merge. The
+[default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42336296845)
+also passes its complete gate, with the same 1,010 reactor cases and successful
+deployed, packaged, client, contract, static, dependency and ten-image checks.
+Its seven artifact sets, logs and exact source tree are archived in
+`coverage/security-baseline-main-ci-evidence.zip` and JSON; archive SHA-256 is
+`d7767abdb9c31a82bf1e4e9783e16357600045989dd069ea04dc6ae49ba8da01`.
+Push workflows validate coverage tooling; the PR's separate exact-base comparison
+is preserved in the PR evidence archive. This acceptance covers the dependency/runtime migration; production
+restore, promotion, certificate rotation and remaining feature requirements are
+tracked independently in `TASKS.md`.
