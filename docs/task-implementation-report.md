@@ -1743,3 +1743,53 @@ No production expiry behavior or enablement changes are included. The worker
 stays opt-in. Process-crash/deployed recovery, expired accepted-order/payment
 coordination and operator retry acceptance remain open in `TASKS.md`. This local
 acceptance work is separate from the merged cleanup revision and its workflow.
+
+## 2026-11-07 checkout/expiry publication and recovery discovery
+
+The user approved publishing the reviewed checkout/expiry follow-up and its
+verification fixes. [PR #4](https://github.com/vamegah/order-management-platform/pull/4)
+passes its [complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42344605687)
+at `c0e8b62`: all 1,049 reactor cases (815 unit and 234 integration), twelve
+deployed service/client cases, both independently packaged payment journeys,
+seventeen client cases and thirty-two contract-job cases, without failures,
+errors or skips. All fourteen exact-base unit coverage comparisons pass; order
+instruction counts improve from 3,491 covered / 2,808 missed to 3,566 / 2,801.
+All fifteen complete static reports are clean, the NVD policy accepts 211
+dependencies without CVSS >= 7 findings, and all ten source images build.
+
+The eight artifact sets, full workflow logs, exact reviewed source and proof that
+GitHub's tested merge reference has the same source tree are retained in
+`coverage/checkout-expiry-ci-evidence.zip` and JSON. Archive SHA-256:
+`14689e63fa72ec246214a72f7ae2deb18190a99fa2189a0139b41c93860a31c6`.
+The user separately approved marking the draft ready, merging and verifying main.
+PR #4 is merged as `4fa2123fa0a578501693179f1ea7ea6138b90561` under the unchanged
+required GitHub Actions check, strict freshness and administrator enforcement.
+Its [default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42380679185)
+also passes every prerequisite and `quality-gate`. Downloaded reports confirm
+all 1,049 reactor cases and the same deployed, packaged, client and contract
+scopes without failures, errors or skips. Fifteen complete static reports, the
+211-dependency NVD policy and all ten source images pass. Its seven artifact
+sets, full logs and exact merged source are retained separately in
+`coverage/checkout-expiry-main-ci-evidence.zip` and JSON; archive SHA-256:
+`90f267949c1b1091d492d3e041238c430b36e02cc7b07d85572414752f6c9200`.
+The PR-only coverage comparison remains in the PR archive.
+
+The next local branch, `implementation/recovery-discovery`, validates complete
+inventory/payment discovery results before enqueueing each result's resources.
+Every resource must have a distinct non-null identity and match the journal
+attempt's order; each result is bounded to the documented 100-resource contract.
+Invalid scans remain retryable and increment the existing failure metric. No
+prefix of a failed result is queued, while already verified reservations survive
+a later payment-lookup failure and unrelated journal attempts continue.
+The clean seven-module order/shared static-analysis build passes all 360 cases:
+318 unit (172 order and 146 shared, including seven protobuf cases) and all 42
+PostgreSQL/HTTP integration cases, without failures, errors, skips or missing
+suites. All thirteen new real-RPC regressions pass. Six complete static reports
+contain zero findings/errors/missing classes, and all five existing coverage
+policies pass. Order instruction coverage is 82.77% against its unchanged 80%
+gate. The evidence checker independently accepts all 214 order-service cases.
+Reports and exact source are retained in
+`coverage/checkout-recovery-discovery-evidence.zip` and JSON; log:
+`checkout-recovery-discovery-verification.log` (8:44, exit 0).
+This work does not enable recovery or expiry, provision a workload identity,
+repair historical rows or establish deployed crash/compensation acceptance.

@@ -50,6 +50,17 @@ Each tick rereads the file (maximum 16 KiB), opens a thread-local service identi
 
 `FindReservationsByOrder` and `FindPaymentsByOrder` are additive unary RPCs restricted to the recovery scope. They return at most 100 resources and fail explicitly above that bound, without creating resources. They return stable INVALID_ARGUMENT, PERMISSION_DENIED, FAILED_PRECONDITION, and INTERNAL errors. The in-process gRPC tests exercise the method scope check; deployed JWT validation and TLS acceptance are separate checks.
 
+Recovery validates each complete lookup result before queueing resources from it.
+The result must contain at most 100 distinct, non-null resource IDs, and every
+resource must belong to the journal attempt's order. A malformed UUID, duplicate
+identity, foreign order or invalid result keeps the scan retryable and increments
+`order.recovery.failures`; no prefix of that invalid result is queued. Verified
+reservations already queued before a failed payment lookup remain available for
+cleanup. Invalid discovery for one attempt does not prevent discovery for the
+other claimed attempts or retries of existing cleanup tasks. Resource state does not determine
+ownership: cleanup still reads and validates the current remote state before any
+mutation or acknowledgment.
+
 Monitor `order.recovery.scans`, `order.recovery.failures`, and `order.recovery.worker.failures` alongside cleanup counters. Inspect attempts with:
 
 ```sql
