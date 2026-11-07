@@ -2039,3 +2039,80 @@ The publication review branch is based on accepted main `d17fbac`. Runtime,
 tests, realm, Compose and CI inputs match the verified source exactly; only
 TASKS.md and this report record subsequent parent acceptance. Complete workflow
 verification, including the new issuer gate, remains required after publication.
+
+The complete [PR #8 workflow](https://github.com/vamegah/order-management-platform/actions/runs/42416321108)
+subsequently passes all 1,137 reactor cases (894 unit and 243 integration), twelve
+deployed service/client cases, two packaged payment-to-webhook cases, seventeen
+client transport cases and 32 contract cases. All fourteen exact-base unit
+coverage comparisons, fifteen complete static reports, the 211-dependency NVD
+policy and all ten image builds pass. The new required issuer job passes five
+checks bound to its three exact tested source files without recording credentials.
+
+With separate user approval, PR #8 is merged as `3fb7e4a` after verifying strict
+freshness, the GitHub Actions quality gate and administrator enforcement. Its
+[complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42418181493)
+passes every gate on the first attempt with the same 1,137 reactor cases and five
+issuer checks. Exact-source PR reports are archived in
+`coverage/recovery-workload-identity-ci-evidence.zip` and JSON, SHA-256
+`2bb34a41d47e2cab95e6dc61614ffaf1458dcbef569df4e9b8ecb5f9e40a76f2`.
+Main reports, logs and merge/protection records are retained separately in
+`coverage/recovery-workload-identity-main-ci-evidence.zip` and JSON, SHA-256
+`a133d0f91b57124a02047234d1bcf4d17a2cc89d5f67f2f2375ee65a4b1dbeb4`.
+Deployed downstream JWT/mTLS acceptance, process-crash compensation and production
+identity/secret provisioning remain open.
+
+## Historical orphan recovery admission (2026-11-07)
+
+An administrator can now submit a reviewed historical order UUID to the existing
+checkout recovery journal. The admission stores the verified operator subject,
+bounded reason and timestamp in a new Flyway V12 audit table. It creates no
+aggregate, remote resource or cleanup task and makes no RPC. Existing discovery
+and cleanup still validate downstream ownership and resource states.
+
+Existing aggregates in every lifecycle state and all normal checkout attempts
+are excluded. The unique journal row serializes admission with checkout start;
+normal acceptance rejects an admitted recovery attempt. Journal creation and its
+audit commit together, and an audit failure rolls both back. Repeated admission
+preserves the first audit, current recovery status, active lease and backoff.
+Recovery sees no unaudited, uncommitted admission.
+
+The complete clean order/shared build passes all **480 cases**: 408 unit and
+72 PostgreSQL/HTTP integration, with no failures, errors or skips. This includes
+45 new regressions: 18 service policy cases, six HTTP contract cases and 21
+database/authenticated HTTP cases. Real PostgreSQL covers all existing order and
+journal states, competing operators, a race with normal checkout, audit rollback,
+retry and worker visibility. The full application verifies 401/403, bounded
+reasons, idempotent admission and conflicts using the real Flyway schema.
+
+A malformed UUID regression first reproduced HTTP 500. A specific typed-parameter
+exception mapping now returns the stable 400 problem detail `Invalid request
+parameter`; both standalone and authenticated application HTTP checks pass.
+All six complete static reports are clean. Existing coverage gates are unchanged;
+order instruction coverage is **85.04%** against its 80% gate. Exact-source
+reports and logs are retained in `coverage/orphan-recovery-adoption-evidence.zip`
+and JSON. A separate clean unit-only build passes all 408 cases and all five
+focused comparisons using the unchanged CI instruction policy. Order instruction
+counts are 4,250 covered/2,994 missed at the tested baseline and 4,450/3,021 at
+head. The baseline source tree equals accepted main `3fb7e4a`. Unit-only reports
+are retained in `coverage/orphan-recovery-adoption-unit-evidence.zip` and JSON;
+complete fourteen-module PR comparison and full follow-up CI remain required.
+
+The [operator procedure](order-orphan-adoption.md) provides a bounded, read-only
+cross-ledger candidate query and requires review of each original UUID. Older
+writers must first adopt journal-first checkout. Missing references on existing
+cancelled orders, complete historical ledger discovery, production identity,
+deployed JWT/mTLS/process-crash compensation, committed-stock handling and
+accepted-order/payment expiry coordination remain open. No worker is enabled by
+default, and the parent lifecycle task remains unchecked.
+
+With user approval, this feature is published in
+[draft PR #9](https://github.com/vamegah/order-management-platform/pull/9).
+The verification follow-up adds four required deployed HTTP cases using the real
+issuer and ingress: administrator policy, invalid requests without admission,
+verified subject/first-audit retention without aggregate creation, and rejection
+of a test-owned existing order without changing its payment/reservation. That
+order is cancelled afterward. The focused integration-client build compiles and
+formats the new fixture; the existing evidence checker rejects its missing
+report, so CI must execute it. Complete follow-up CI remains required before
+separate ready/merge and main-verification approval. Runtime, migration and
+focused test sources are unchanged from the archived 480-case local build.

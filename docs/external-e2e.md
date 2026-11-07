@@ -108,6 +108,12 @@ resources by these references rather than creating replacements to discover IDs.
 The cases cover draft/placed/confirmed/fulfilling/shipped/delivered transitions,
 rejection before payment, idempotent confirmation/shipment/cancellation, committed
 inventory, reservation release, payment cancellation and partial/full refunds.
+The orphan-admission suite uses real issuer tokens through ingress to verify
+administrator-only access, bounded reasons, malformed UUID problems, the verified
+operator subject and preservation of the first audit on repeats. Its test-owned
+order proves admission cannot reclassify an accepted aggregate or change its
+inventory/payment resources; that order is cancelled afterward. Admission-only
+UUIDs have no remote resources and disappear with the isolated test database.
 The WebSocket case first waits for the public SockJS ingress route after container
 replacement, then waits for the authenticated subscription gauge, triggers a
 new order event, verifies its identity, and checks unsubscribe cleanup. It uses

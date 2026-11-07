@@ -73,6 +73,11 @@ LIMIT 100;
 
 ## Remaining acceptance
 
+For a reviewed historical orphan UUID with no aggregate or normal checkout
+attempt, use the audited [orphan admission procedure](order-orphan-adoption.md).
+It creates a recovery intent and preserves normal discovery/cleanup checks.
+Existing attempts and orders retain their ordinary lifecycle/retry paths.
+
 Deploy and verify the rotating issuer identity and full checkout failure-injection journeys. The five `CheckoutJournalIT` PostgreSQL cases now pass, covering fencing, rollback, SKIP LOCKED acceptance, expired leases and repeat discovery. Run them from the reactor with `./mvnw -pl order-service -am verify -Dit.test=CheckoutJournalIT -Dfailsafe.failIfNoSpecifiedTests=false`. See [order verification](order-verification.md) for the executed local scope; deployed recovery identity and full-stack acceptance remain open.
 
 Completed tasks and orphan journal rows are retained. Orphan attempts are intentionally rescanned indefinitely; define a retention/archive policy only with a bounded remote-write horizon and recovery evidence. Legacy orphan resources created before the journal migration have no discoverable attempt record and require an initial audit. Confirmed-payment cleanup now uses the provider-backed refund workflow; permanent failures, legacy intents and missing-webhook reconciliation still need operator handling. Inventory TTL expiry remains disabled until the accepted-order lifecycle handles expired holds. The broader gRPC authorization and mTLS review remains open.

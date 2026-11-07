@@ -38,6 +38,14 @@ public class GlobalExceptionHandler {
                 .body(factory.badRequest("Malformed JSON request", request));
     }
 
+    @ExceptionHandler(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ProblemDetails> invalidParameter(HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
+                .body(factory.badRequest("Invalid request parameter", request));
+    }
+
     @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ProblemDetails> unsupportedMediaType(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)

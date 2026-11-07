@@ -15,6 +15,128 @@ import org.springframework.context.annotation.Import;
 class OrderControllerIT extends AbstractIntegrationTest {
 
     @Test
+    void orphanAdmissionRequiresAdministratorAndAValidatedReason() {
+        String path = "/api/v1/order-recovery/" + java.util.UUID.randomUUID() + "/adopt";
+        given().contentType(ContentType.JSON)
+                .body("{\"reason\":\"Reviewed orphan\"}")
+                .post(path)
+                .then()
+                .statusCode(401);
+        given().auth()
+                .oauth2(TestSecurityConfig.aliceToken())
+                .contentType(ContentType.JSON)
+                .body("{\"reason\":\"Reviewed orphan\"}")
+                .post(path)
+                .then()
+                .statusCode(403);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{}")
+                .post(path)
+                .then()
+                .statusCode(400)
+                .body("status", equalTo(400));
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{\"reason\":\"Reviewed orphan\"}")
+                .post("/api/v1/order-recovery/not-a-uuid/adopt")
+                .then()
+                .statusCode(400)
+                .body("detail", equalTo("Invalid request parameter"));
+    }
+
+    @Test
+    void administratorCanAdmitAKnownOrphanOnceWithoutCreatingAnOrder() {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        String path = "/api/v1/order-recovery/" + id + "/adopt";
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{\"reason\":\"Reviewed historical orphan\"}")
+                .post(path)
+                .then()
+                .statusCode(200)
+                .body("submitted", equalTo(true))
+                .body("status", equalTo("FAILED"))
+                .body("reason", equalTo("Reviewed historical orphan"));
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{\"reason\":\"Repeated request\"}")
+                .post(path)
+                .then()
+                .statusCode(200)
+                .body("submitted", equalTo(false))
+                .body("reason", equalTo("Reviewed historical orphan"));
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.checkout_recovery_adoption WHERE order_id = ?",
+                                Long.class,
+                                id))
+                .isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.purchase_order WHERE id = ?",
+                                Long.class,
+                                id))
+                .isZero();
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.cleanup_task WHERE order_id = ?",
+                                Long.class,
+                                id))
+                .isZero();
+    }
+
+    @Test
+    void existingHistoricalAggregateCannotBeAdmittedAsAnOrphan() {
+        java.util.UUID id = java.util.UUID.fromString("00000000-0000-0000-0000-000000000301");
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{\"reason\":\"Reviewed orphan\"}")
+                .post("/api/v1/order-recovery/" + id + "/adopt")
+                .then()
+                .statusCode(409)
+                .body("detail", equalTo("An existing order cannot be admitted as an orphan"));
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.checkout_recovery_adoption WHERE order_id = ?",
+                                Long.class,
+                                id))
+                .isZero();
+    }
+
+    @Test
+    void normalFailedCheckoutCannotBeReclassifiedByTheAdministratorAdmissionAction() {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO orders.checkout_attempt (order_id, status) VALUES (?, 'FAILED')", id);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{\"reason\":\"Reviewed orphan\"}")
+                .post("/api/v1/order-recovery/" + id + "/adopt")
+                .then()
+                .statusCode(409)
+                .body("detail", equalTo("An existing checkout attempt cannot be adopted"));
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT status FROM orders.checkout_attempt WHERE order_id = ?",
+                                String.class,
+                                id))
+                .isEqualTo("FAILED");
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.checkout_recovery_adoption WHERE order_id = ?",
+                                Long.class,
+                                id))
+                .isZero();
+    }
+
+    @Test
     void reservationRepairInspectionRequiresAdministrator() {
         String path = "/api/v1/order-reservation-repairs/00000000-0000-0000-0000-000000000301";
         given().get(path).then().statusCode(401);
