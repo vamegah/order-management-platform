@@ -1694,7 +1694,15 @@ All eight artifacts, full logs and exact source tree are retained separately in
 The user explicitly approved marking the draft ready, merging and verifying main.
 PR #3 is merged as `82732be5b3a1aa4f50e32ac974057c47d4eabe42`; its
 [default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42343178370)
-is running under the unchanged required gate, freshness and administrator policy.
+also passes every prerequisite and `quality-gate` under the unchanged freshness
+and administrator policy. Downloaded reports confirm all 1,030 reactor cases and
+the same successful deployed, packaged, client and contract scopes, without
+failures, errors or skips. The NVD policy, fifteen complete static reports and
+ten source images pass. Its seven artifact sets, full logs and exact source tree
+are retained in `coverage/reservation-cleanup-main-ci-evidence.zip` and JSON;
+archive SHA-256 is
+`3b217efaa8ae0484d1868f3c4bc46a3e823c407ffa1d63f0ac8fddb90a2817cd`.
+The PR-only exact-base coverage artifact remains in the PR archive.
 
 The next local branch, `implementation/checkout-correlation`, is separate from
 PR #3. Inventory reservation replies must match the requested order, SKU,
