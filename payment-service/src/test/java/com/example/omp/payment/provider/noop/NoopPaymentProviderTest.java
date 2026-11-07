@@ -14,6 +14,44 @@ class NoopPaymentProviderTest {
     private final NoopPaymentProvider provider = new NoopPaymentProvider(new ObjectMapper());
 
     @Test
+    void successfulChargeReplayReturnsTheOriginalProviderReference() {
+        var request =
+                new ChargeRequest(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        1550,
+                        "USD",
+                        "successful-charge",
+                        "test");
+
+        var first = provider.charge(request);
+
+        assertThat(first.status()).isEqualTo(ProviderChargeResult.Status.SUCCEEDED);
+        assertThat(first.providerReference()).isNotBlank();
+        assertThat(provider.charge(request)).isEqualTo(first);
+    }
+
+    @Test
+    void simulatedDeclineIsDistinctFromARetryableProviderError() {
+        var request =
+                new ChargeRequest(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        1500,
+                        "USD",
+                        "declined-charge",
+                        "test");
+
+        var result = provider.charge(request);
+
+        assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.DECLINED);
+        assertThat(result.declineCode()).isEqualTo("card_declined");
+        assertThat(result.providerReference()).isNull();
+    }
+
+    @Test
     void refundReplayAndLookupUseTheSameReferenceWithoutInventingMissingRefunds() {
         var request =
                 new RefundRequest(UUID.randomUUID(), "pi", 500, "USD", "refund-key", "cancelled");

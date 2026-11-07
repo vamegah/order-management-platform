@@ -55,8 +55,8 @@ realms are not migrated by initialization scripts; see [external e2e setup](docs
 Production topology and secret/certificate rotation remain separate work.
 
 The [GitHub repository](https://github.com/vamegah/order-management-platform) now
-contains the published baseline and executed workflows. The migration is being
-verified with follow-up repairs in [draft PR #2](https://github.com/vamegah/order-management-platform/pull/2).
+contains the published baseline and executed workflows. Follow-up runtime repairs
+are being verified on [the repair branch](https://github.com/vamegah/order-management-platform/tree/ci/security-baseline).
 The initial migration was merged separately; `main` now requires a passing,
 up-to-date `quality-gate`, including for administrators.
 

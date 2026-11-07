@@ -29,8 +29,7 @@ import org.testcontainers.utility.DockerImageName;
             KafkaTopics.PAYMENTS_EVENTS_PAYMENT,
             KafkaTopics.INVENTORY_EVENTS_RESERVATION
         },
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        brokerProperties = {"listeners=PLAINTEXT://localhost:0"})
+        bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 public abstract class AbstractNotificationTest {
 
     @TestConfiguration(proxyBeanMethods = false)

@@ -20,8 +20,9 @@ therefore selects the compatible Boot 4.1 / Cloud 2025.1 generation, following
 the [Boot migration guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide)
 and [Spring Cloud compatibility table](https://cloud.spring.io/).
 
-The initial migration was merged externally during verification; repairs now
-continue in [draft PR #2](https://github.com/vamegah/order-management-platform/pull/2).
+The initial migration was merged externally during verification. Its first repair
+[PR #2](https://github.com/vamegah/order-management-platform/pull/2) was subsequently
+closed without merging; further fixes remain under verification on `ci/security-baseline`.
 Main requires the up-to-date GitHub Actions `quality-gate`, including for
 administrators. Dependency updates do not establish acceptance until the complete test, coverage, packaging, image,
 external journey, compatibility and vulnerability jobs pass on the new revision.
@@ -130,3 +131,36 @@ HTTP/PostgreSQL integration), including trace identity and UI assets, with no
 failures, errors or skips. Its existing 80% coverage gate and both shared-module
 coverage gates pass (`boot4-product-http-migration-verification.log`). Complete
 PR verification still determines acceptance of the repaired migration.
+
+The subsequent [repair run](https://github.com/vamegah/order-management-platform/actions/runs/42312503607)
+passes the NVD policy, exact PR-base coverage, contracts, client, static analysis
+and ten source images. The downloaded scanner report covers 211 dependencies
+with no remaining CVSS >= 7 findings; fifteen SpotBugs reports contain no
+findings, errors or missing classes. Its complete reactor diagnostic isolates
+the remaining errors to payment startup and the notification broker fixture;
+948 other executed cases pass, with the dependent platform suite still missing.
+
+Spring Security 7 detects two existing payment catch-all HTTP filter chains.
+Payment's HTTP policy now resides solely in `PaymentSecurityConfig`; the gRPC
+configuration retains its authentication manager/readers. The real RPC fixture
+now loads both production configurations together and passes accepted, missing
+and invalid credentials, health probes and worker-context cleanup. The obsolete
+notification test override for the embedded broker's listener is removed so
+the current KRaft fixture selects its compatible listeners and ephemeral ports.
+Existing real database/broker cases and complete CI must pass before acceptance.
+
+The clean five-module notification verification subsequently passes 214 cases:
+36 shared-web, 63 shared-events, three shared-gRPC, 99 notification unit and all
+13 PostgreSQL/Redis/Kafka/HTTP/STOMP integration cases. No case fails, errors or
+skips; all four module coverage policies pass. Log:
+`boot4-notification-broker-verification.log`.
+
+The changed payment unit build passes its complete 222-case suite and shared
+dependencies. Ten focused development-provider cases then pass, including two
+new success/replay and decline contracts. Measured unit coverage over the same
+production classes is 6,339 covered / 2,462 missed instructions, above the PR
+base ratio of 6,368 / 2,488 after removing the redundant chain. This local
+combined unit measurement is diagnostic; the required PR job still measures
+both revisions from clean checkouts. Logs:
+`boot4-payment-unit-coverage-verification.log` and
+`boot4-noop-provider-contract-verification.log`.

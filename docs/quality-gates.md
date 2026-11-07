@@ -34,9 +34,10 @@ passes static analysis, the client package, exact-base SOAP/protobuf checks and
 all ten source image builds. Real HTTP/runtime, dependency and exact-base
 coverage diagnostics are being repaired under the unchanged policies; see
 [the security migration](dependency-security-baseline.md). The aggregate gate
-has not passed yet. The original PR was merged externally
-during verification; repairs continue in [draft PR #2](https://github.com/vamegah/order-management-platform/pull/2)
-with the required branch protection now configured.
+has not passed yet. The original PR was merged externally during verification.
+The first repair [PR #2](https://github.com/vamegah/order-management-platform/pull/2)
+was subsequently closed without merging; further fixes continue on the repair
+branch with the required branch protection configured.
 
 The required `contract-compatibility` job verifies protobuf descriptors against
 the published v1 fixture and the exact PR base, checks SOAP WSDL/XSD parity and

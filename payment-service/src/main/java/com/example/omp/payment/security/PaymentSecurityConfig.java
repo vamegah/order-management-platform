@@ -36,7 +36,10 @@ public class PaymentSecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
                         auth ->
-                                auth.requestMatchers("/actuator/health", "/actuator/info")
+                                auth.requestMatchers(
+                                                "/actuator/health",
+                                                "/actuator/health/**",
+                                                "/actuator/info")
                                         .permitAll()
                                         .anyRequest()
                                         .authenticated())

@@ -1583,3 +1583,33 @@ GitHub Actions `quality-gate` check (app ID 15368), up-to-date branches and
 administrator enforcement. Force pushes/deletion are disabled; no additional
 approving-review policy is introduced. A complete successful repair workflow
 and subsequent default-branch verification remain required.
+
+## 2026-11-06 final startup and broker fixture repairs
+
+The repair run `42312503607` passes the actual NVD policy across 211 dependencies
+with no CVSS >= 7 findings, exact PR-base unit coverage, all fifteen complete
+static reports, client, contracts and ten source image builds. Complete reactor
+diagnostics identify only the duplicated payment HTTP catch-all chains and the
+notification fixture's obsolete embedded-broker listener override; 948 other
+executed cases pass, while the dependent platform suite remains absent.
+
+Payment HTTP policy now has one catch-all chain in `PaymentSecurityConfig` and
+the existing specific webhook chain. Its gRPC configuration retains the JWT
+authentication manager and required bearer reader. The real RPC regression now
+loads both production configurations together and passes valid/missing/invalid
+credentials, health calls and worker-context cleanup. The complete changed
+payment unit suite passes 222 cases. Ten focused provider cases also pass,
+including two additional success/replay and decline contracts; measured unit
+coverage over unchanged production classes exceeds the exact base ratio. A
+clean two-revision CI measurement remains authoritative.
+
+The notification fixture now uses the current embedded KRaft broker's default
+compatible listeners and ephemeral ports. Its clean five-module verification
+passes all 214 cases: 201 unit/in-process and thirteen PostgreSQL/Redis/Kafka/
+HTTP/STOMP integration cases. No case fails, errors or skips; all four module
+coverage policies pass. Log: `boot4-notification-broker-verification.log`.
+
+PR #2 was closed externally without merging during the pause. Main remains at
+`9bc76d9` with the required quality check, strict freshness and administrator
+enforcement. The approved repair branch continues through a new draft review;
+complete final-revision and subsequent default-branch acceptance remain open.
