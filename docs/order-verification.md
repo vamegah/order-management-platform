@@ -36,6 +36,7 @@ the real inventory/payment services' behavior.
 | Place or cancel an order | Administrator or verified owner |
 | Confirm, ship or deliver | Administrator |
 | Inspect or restore historical reservation references | Administrator |
+| Admit a reviewed historical orphan to recovery | Administrator |
 
 Ownership uses a canonical UUID string in the verified JWT's `customer_id` claim.
 It does not infer customer identity from the subject or request body. Existing
