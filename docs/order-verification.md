@@ -50,6 +50,29 @@ test credentials replace that decoder only in fixtures.
 
 ## Startup and persistence repairs
 
+Checkout also validates payment-intent replies before retaining a payment ID.
+The order, customer, currency and positive bounded decimal amount must match
+the request; numeric equality permits equivalent decimal representations. The
+reply must have a valid UUID and be pending, or already confirmed with a provider
+reference. A matching confirmed replay remains valid because the payment
+service's idempotency lookup returns the existing payment's current state.
+Cancelled, failed, refunded, unspecified and unknown results are unusable for
+checkout. Invalid replies return the existing generic downstream HTTP 502
+contract before aggregate acceptance. Only verified reservations enter immediate
+compensation; an unverified payment identity remains on journal discovery.
+If a verified payment precedes a failed local acceptance transaction, both that
+payment and its known reservations still enter compensation.
+
+The November 7 payment-correlation build passes a clean seven-module
+`-pl order-service -am -Pstatic-analysis spotless:apply clean verify`: 347 unit
+and 42 PostgreSQL/HTTP integration cases without failures, errors or skips.
+All twenty-nine new generated-client cases pass. Six complete static reports
+contain zero findings/errors/missing classes, and all five existing coverage
+policies pass; order coverage is 83.15% against its unchanged 80% gate. The
+evidence checker accepts all 243 order-service cases. Reports and exact source
+are retained in `coverage/checkout-payment-correlation-evidence.zip` and JSON;
+log: `checkout-payment-correlation-verification.log` (8:25, exit 0).
+
 Checkout accepts an inventory reservation reply only when its order, SKU,
 warehouse, quantity and active state match the request and its identity parses as
 a UUID. Distinct order lines must receive distinct reservation IDs. Invalid
