@@ -1623,3 +1623,53 @@ Explicit Boot 4 test-client auto-configuration repairs the isolated fixture.
 Its focused real HTTP/PostgreSQL/Kafka/Redis/subscriber case now passes in
 `boot4-outbound-http-fixture-verification.log`; complete final-revision CI remains
 required. PR #2 was reopened externally and its review state is preserved.
+
+## 2026-11-06 accepted security baseline and lifecycle continuation
+
+The [complete PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42334961223)
+passes at `e25735e`. Downloaded XML independently confirms all 1,010 reactor
+cases (779 unit and 231 integration), twelve deployed service/client cases,
+two packaged payment-to-webhook cases, seventeen client transport cases and
+thirty-two contract-job cases without failures, errors or skips. The packaged
+cases also execute in the full reactor; the separate job is an independent
+verification scope. Exact-base coverage passes for fourteen production modules,
+all fifteen complete static reports are clean, and all ten source images build.
+The NVD job analyzes 211 dependencies with no CVSS >= 7 findings; SBOM generation
+and the aggregate `quality-gate` pass.
+
+All eight artifact sets, workflow logs, exact source commit/tree, independently
+verified main protection and file hashes are archived in
+`coverage/security-baseline-ci-evidence.zip` and JSON. The archive SHA-256 is
+`3e38bd7d7fa9026915ef64bcf3ab76ad24c5047f1f62ad26dace60167c42360f`.
+PR #2's review description contains the actual accepted results. The user then
+explicitly approved merging and default-branch verification. The protected merge
+is `1a38671a39e20b9c91ac6f498f50027360fd9f29`; its
+[main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42336296845)
+also passes every prerequisite and `quality-gate`. Downloaded reports confirm
+the same 1,010 reactor cases and successful deployed, packaged, client and
+contract scopes without failures, errors or skips. The scan, fifteen complete
+static reports and ten image builds pass. Its seven artifact sets, full logs and
+exact source tree are retained separately in
+`coverage/security-baseline-main-ci-evidence.zip` and JSON; archive SHA-256 is
+`d7767abdb9c31a82bf1e4e9783e16357600045989dd069ea04dc6ae49ba8da01`.
+The PR-only exact-base coverage artifact remains in the PR archive. No status
+or freshness policy was bypassed. Baseline CI and quality-gate tasks are now
+accepted; production release and the remaining feature requirements stay open.
+
+The next section's local work is isolated on `implementation/reservation-cleanup`
+from the merged baseline. Reservation cleanup previously released an unchecked
+reference and ignored the result. It now validates reservation/order identity
+before mutation and before acknowledgment, accepts only released/expired final
+states, and retains unsupported/unresolved outcomes for retry. Regressions cover
+foreign identities, already resolved holds, unsupported states, invalid release
+responses, expiry races and a lost response followed by an idempotent retry.
+The clean seven-module changed-order/shared build subsequently passes all 331
+cases: 289 unit cases (including seven protobuf compatibility cases) and all
+42 order integration cases, with no failures, errors or skips. All twenty new
+cleanup regressions pass. Six complete static reports contain zero findings,
+errors or missing classes, and all five coverage policies pass. Order coverage
+is 81.54% against its unchanged 80% gate. The order evidence checker independently
+accepts all 185 order cases. Source-bound reports are retained in
+`coverage/order-reservation-cleanup-evidence.zip` and JSON; log:
+`order-reservation-cleanup-verification.log` (7:55, exit 0). This local follow-up
+is not included in the accepted migration workflow above.

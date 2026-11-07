@@ -20,14 +20,13 @@ records executed checks. Unchecked requirements remain open.
 | SOAP | Banking facade/simulator, WS-Security, fault mapping and frozen contracts | Deployed trusted TLS and resilience acceptance |
 | Operations | Compose, telemetry, alerts and CI workflows | Security/performance/recovery evidence and release approval |
 
-Before the current dependency migration, the accepted baseline passed 999 Java
-tests, ten external core journeys, client tests, static analysis and all ten
-image builds on GitHub. Its NVD scan correctly blocks vulnerable dependencies.
-The [security baseline migration](docs/dependency-security-baseline.md) upgrades
-the runtime and preserves the existing transport/JSON contracts. Focused HTTP
-and gRPC integration checks pass; complete migration verification is in progress.
-Remaining feature work and production acceptance are
-tracked separately.
+The [security baseline migration](docs/dependency-security-baseline.md) passes its
+complete PR workflow: 1,010 reactor cases, twelve deployed service/client cases,
+the packaged payment journey, exact-base coverage, contracts, static analysis,
+dependency policy and all ten image builds. The NVD scan covers 211 dependencies
+with no CVSS >= 7 findings. [PR #2](https://github.com/vamegah/order-management-platform/pull/2)
+is merged, and its complete default-branch workflow also passes. Remaining feature
+work and production acceptance are tracked separately.
 
 ## Development setup
 
@@ -55,10 +54,9 @@ realms are not migrated by initialization scripts; see [external e2e setup](docs
 Production topology and secret/certificate rotation remain separate work.
 
 The [GitHub repository](https://github.com/vamegah/order-management-platform) now
-contains the published baseline and executed workflows. Follow-up runtime repairs
-are being verified on [the repair branch](https://github.com/vamegah/order-management-platform/tree/ci/security-baseline).
-The initial migration was merged separately; `main` now requires a passing,
-up-to-date `quality-gate`, including for administrators.
+contains the published baseline, merged runtime repairs and executed workflows.
+`main` requires a passing, up-to-date GitHub Actions `quality-gate`, including
+for administrators.
 
 Development realm logins are `alice` / `alice-dev-password` and `admin` /
 `admin-dev-password`. Keycloak administration uses `.env`. Alice's managed

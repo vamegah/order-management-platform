@@ -1,6 +1,6 @@
 # Build and dependency quality gates
 
-> **Status:** CI published; complete workflow and merge-gate acceptance pending
+> **Status:** complete PR/default-branch gates accepted; production promotion remains separate
 > **Last reviewed:** 2026-11-06
 
 The PR/default-branch workflow is `.github/workflows/verify.yml`. Its independent
@@ -13,31 +13,27 @@ now requires `quality-gate` from GitHub Actions (app ID 15368), strict branch
 freshness and administrator enforcement. The configuration was independently
 read back on November 6; no additional approving-review requirement was added.
 
-The reviewed sources were published to `vamegah/order-management-platform/main`
-on 2026-11-06 as `0fc7202`. The [first Actions run](https://github.com/vamegah/order-management-platform/actions/runs/42278291122)
-passed the client package, static analysis, packaged payment journey and all ten
-image builds. It failed the tooling/contract jobs because the initial upload
-omitted the published SOAP fixtures, and the external job failed during a Maven
-distribution download. The corrected snapshot includes those fixtures and passes
-all 47 tooling tests and SOAP parity from a separately extracted source archive;
-wrapper downloads now have bounded retries. Dependency analysis failed before
-scanning because of the upstream 13.0.0 empty-API-key bug; the configuration now
-uses official NVD JSON feeds. Complete workflow execution and required checks
-remain necessary before CI acceptance can close.
+The [complete PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42334961223)
+passes at `e25735e`, including `quality-gate`. Downloaded reports independently
+confirm 1,010 reactor cases, twelve deployed service/client cases, both packaged
+payment-to-webhook cases, seventeen client transport cases and thirty-two
+contract-job cases, without failures, errors or skips. The packaged cases also
+run in the reactor; these are separate verification scopes. Exact-base unit
+coverage passes for all fourteen production modules. Fifteen complete static
+reports contain zero findings/errors/missing classes, all ten source image builds
+pass, and the NVD scan analyzes 211 dependencies with no CVSS >= 7 findings.
+All eight artifact sets, workflow logs, source commit/tree and file hashes are
+retained in `coverage/security-baseline-ci-evidence.zip` and JSON.
 
-Subsequent approved repairs through `b5c95e4` pass every default-branch
-prerequisite except dependency-policy, which completes analysis and rejects
-the old dependency inventory. The separately approved migration is now
-[draft PR #1](https://github.com/vamegah/order-management-platform/pull/1).
-Its [first PR run](https://github.com/vamegah/order-management-platform/actions/runs/42310116688)
-passes static analysis, the client package, exact-base SOAP/protobuf checks and
-all ten source image builds. Real HTTP/runtime, dependency and exact-base
-coverage diagnostics are being repaired under the unchanged policies; see
-[the security migration](dependency-security-baseline.md). The aggregate gate
-has not passed yet. The original PR was merged externally during verification.
-The first repair [PR #2](https://github.com/vamegah/order-management-platform/pull/2)
-was subsequently closed without merging; further fixes continue on the repair
-branch with the required branch protection configured.
+The user-approved merge of [PR #2](https://github.com/vamegah/order-management-platform/pull/2)
+is `1a38671`. Its [default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42336296845)
+also passes every gate, including all 1,010 reactor cases. Its seven artifact sets
+and full workflow logs are archived separately in
+`coverage/security-baseline-main-ci-evidence.zip` and JSON (push workflows do not
+produce the PR-only two-revision coverage artifact). Earlier fixture, bootstrap, scanner, runtime and coverage diagnostics
+are preserved in [the implementation report](task-implementation-report.md) and
+[security migration](dependency-security-baseline.md). Main protection was
+verified before merging; no quality policy was bypassed or reduced.
 
 The required `contract-compatibility` job verifies protobuf descriptors against
 the published v1 fixture and the exact PR base, checks SOAP WSDL/XSD parity and
@@ -176,8 +172,8 @@ above; snapshots do not authenticate arbitrary externally supplied reports.
 
 The job runs under `pull_request`, without secrets or persisted checkout
 credentials. Push/manual runs validate the tooling without a PR-base comparison;
-the job itself still must succeed for `quality-gate`. A real two-revision PR
-comparison remains necessary before accepting coverage regression enforcement.
+the job itself still must succeed for `quality-gate`. The accepted PR run above
+executes the real two-revision comparison against exact base `9bc76d9`.
 
 ## Static analysis
 
@@ -247,9 +243,9 @@ Boot's so the selected version takes effect across all modules. Do not interpret
 that client error or a missing CLI as proof that the engine is unavailable. Container tests still need
 permission to access the Docker socket and pull their images.
 
-Local results and remaining integration failures are recorded in the
-implementation report. The source is now published and the workflow has executed;
-complete fresh-stack acceptance and branch protection remain open.
+Historical local diagnostics and accepted integration results are recorded in
+the implementation report. The accepted PR workflow runs a fresh deployed stack;
+main protection requires its aggregate gate. Production promotion remains separate.
 
 
 The static job also requires nonempty reports for every production/protobuf module

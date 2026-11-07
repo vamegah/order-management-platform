@@ -3,6 +3,7 @@ package com.example.omp.order.service;
 import com.example.omp.order.clients.grpc.InventoryClient;
 import com.example.omp.order.clients.grpc.PaymentClient;
 import com.example.omp.order.clients.grpc.dto.PaymentIntentDto;
+import com.example.omp.order.clients.grpc.dto.ReservationDto;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.UUID;
@@ -116,8 +117,7 @@ public class OrderCleanupQueue {
         int completed = 0;
         for (Task task : tasks == null ? List.<Task>of() : tasks) {
             try {
-                if (task.resourceType().equals("RESERVATION"))
-                    inventory.release(task.resourceId().toString());
+                if (task.resourceType().equals("RESERVATION")) cleanupReservation(task);
                 else if (task.resourceType().equals("PAYMENT")) cleanupPayment(task);
                 else throw new IllegalStateException("Unknown cleanup type");
                 int updated =
@@ -144,6 +144,31 @@ public class OrderCleanupQueue {
             }
         }
         return completed;
+    }
+
+    private void cleanupReservation(Task task) {
+        ReservationDto reservation = inventory.get(task.resourceId());
+        validateReservation(task, reservation);
+        if (isReleased(reservation)) return;
+        if (!"RESERVATION_STATUS_ACTIVE".equals(reservation.status()))
+            throw new IllegalStateException("Reservation cleanup state is unsupported");
+
+        ReservationDto released = inventory.release(task.resourceId().toString());
+        validateReservation(task, released);
+        if (!isReleased(released))
+            throw new IllegalStateException("Reservation cleanup remains unresolved");
+    }
+
+    private static void validateReservation(Task task, ReservationDto reservation) {
+        if (reservation == null
+                || !task.resourceId().equals(reservation.id())
+                || !task.orderId().equals(reservation.orderId()))
+            throw new IllegalStateException("Cleanup reservation identity mismatch");
+    }
+
+    private static boolean isReleased(ReservationDto reservation) {
+        return "RESERVATION_STATUS_RELEASED".equals(reservation.status())
+                || "RESERVATION_STATUS_EXPIRED".equals(reservation.status());
     }
 
     private void cleanupPayment(Task task) {

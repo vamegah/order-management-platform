@@ -48,6 +48,21 @@ test credentials replace that decoder only in fixtures.
 
 ## Verification
 
+Reservation cleanup reads the remote reservation before mutation and requires
+both its ID and order ID to match the durable task. Already released or expired
+reservations complete without another mutation. Only active reservations are
+released, and the response must still match both IDs and be released or expired
+before the task is acknowledged. Missing/mismatched identities, committed or
+unknown states, failed calls and unresolved responses retain the task with its
+existing backoff and failure metric. Retrying a lost release response re-reads
+the final state, so an already released hold needs no further mutation.
+
+The reservation cleanup regressions exercise these outcomes and ensure that
+RPCs follow the task-claim transaction. Existing HTTP/PostgreSQL boundary tests
+exercise cancellation and repeated cleanup through generated inventory clients.
+Complete deployed compensation and legacy-row repair remain separate acceptance
+items in `TASKS.md`.
+
 With Java 21 and a reachable Docker engine, run from the root:
 
 ```sh
@@ -68,3 +83,15 @@ is retained.
 
 Actual execution results and remaining full-reactor/e2e acceptance are recorded
 in [the implementation report](task-implementation-report.md).
+
+The November 6 cleanup continuation passes a clean seven-module
+`-pl order-service -am -Pstatic-analysis spotless:apply clean verify` build in
+7:55. Its reports contain 289 unit cases (including seven protobuf compatibility
+cases) and all 42 order integration cases, with no failures, errors or skips.
+All twenty new reservation cleanup cases pass. Six complete static reports have
+zero findings/errors/missing classes; all five coverage policies pass, including
+the unchanged 80% order gate at 81.54%. The order evidence checker independently
+accepts all 185 order cases. Source-bound reports are retained in
+`coverage/order-reservation-cleanup-evidence.zip` and JSON; log:
+`order-reservation-cleanup-verification.log`. This local follow-up is separate
+from the accepted migration PR/default-branch workflows.
