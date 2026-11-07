@@ -35,6 +35,7 @@ the real inventory/payment services' behavior.
 | Create an order | Administrator or matching requested customer |
 | Place or cancel an order | Administrator or verified owner |
 | Confirm, ship or deliver | Administrator |
+| Inspect or restore historical reservation references | Administrator |
 
 Ownership uses a canonical UUID string in the verified JWT's `customer_id` claim.
 It does not infer customer identity from the subject or request body. Existing
@@ -47,6 +48,34 @@ Clients with a legacy token lacking `customer_id` need an updated issuer claim
 before using owner routes. Administrator access remains available. The incoming
 JWT decoder remains the production authority for signature/issuer validation;
 test credentials replace that decoder only in fixtures.
+
+Historical NULL reservation references have a separate administrator repair
+resource. It verifies existing inventory holds outside the database transaction,
+then restores a complete version-checked plan with an atomic per-line audit and
+one aggregate version increment. It cannot replace references, allocate stock or
+repair terminal orders. See [the operator procedure](order-reservation-repair.md)
+for request, retry, audit and unresolved-data behavior.
+
+The clean November 7 historical-repair build passes all 435 cases: 384 unit and
+51 PostgreSQL/HTTP integration cases, including 46 new regressions. Six complete
+static reports contain zero findings, errors or missing classes; all five
+existing coverage policies pass. Order instruction coverage is 84.59% against
+its unchanged 80% gate, and the evidence checker accepts all 289 order-service
+cases. Real database cases cover audited idempotent repair, complete multi-line
+plans, audit failure rollback and both directions of an optimistic concurrency
+race. HTTP cases verify administrator access, validation, matching retry and
+foreign-reservation rejection through generated inventory clients. Reports,
+exact source and the 9:13 successful build log are retained in
+`coverage/legacy-reservation-repair-evidence.zip` and JSON;
+log: `legacy-reservation-repair-verification.log`.
+
+A separate clean unit-only package/report build passes all 384 cases in 3:09.
+All five focused module comparisons pass the unchanged CI instruction policy
+against the accepted main source. Order counts improve from 3,819 covered/2,727
+missed to 4,250/2,994. Its reports and baseline source proof are retained in
+`coverage/legacy-reservation-repair-unit-evidence.zip` and JSON;
+log: `legacy-reservation-repair-unit-verification.log`. This preflight leaves the
+complete fourteen-module PR comparison and deployed repair acceptance separate.
 
 ## Startup and persistence repairs
 

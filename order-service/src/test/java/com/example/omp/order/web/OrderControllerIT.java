@@ -14,6 +14,120 @@ import org.springframework.context.annotation.Import;
 @Import(TestSecurityConfig.class)
 class OrderControllerIT extends AbstractIntegrationTest {
 
+    @Test
+    void reservationRepairInspectionRequiresAdministrator() {
+        String path = "/api/v1/order-reservation-repairs/00000000-0000-0000-0000-000000000301";
+        given().get(path).then().statusCode(401);
+        given().auth().oauth2(TestSecurityConfig.aliceToken()).get(path).then().statusCode(403);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .get(path)
+                .then()
+                .statusCode(200)
+                .body("version", notNullValue())
+                .body("lines", hasSize(1))
+                .body("missing", equalTo(1));
+    }
+
+    @Test
+    void reservationRepairRejectsNonAdminAndIncompleteBody() {
+        String path = "/api/v1/order-reservation-repairs/00000000-0000-0000-0000-000000000301";
+        given().auth()
+                .oauth2(TestSecurityConfig.aliceToken())
+                .contentType(ContentType.JSON)
+                .body(repairBody(0L, java.util.UUID.randomUUID(), java.util.UUID.randomUUID()))
+                .post(path)
+                .then()
+                .statusCode(403);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body("{}")
+                .post(path)
+                .then()
+                .statusCode(400)
+                .body("status", equalTo(400));
+    }
+
+    @Test
+    void administratorRestoresAnExistingHoldOnceAndKeepsTheRetryIdempotent() {
+        java.util.UUID id = java.util.UUID.fromString(createDraft());
+        var line =
+                jdbc.queryForMap(
+                        "SELECT id, reservation_id FROM orders.order_line WHERE order_id = ?", id);
+        Long version =
+                jdbc.queryForObject(
+                        "SELECT version FROM orders.purchase_order WHERE id = ?", Long.class, id);
+        jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
+        String body = repairBody(version, line.get("id"), line.get("reservation_id"));
+        String path = "/api/v1/order-reservation-repairs/" + id;
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(body)
+                .post(path)
+                .then()
+                .statusCode(200)
+                .body("restored", equalTo(1))
+                .body("missing", equalTo(0))
+                .body("status", equalTo("DRAFT"));
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(body)
+                .post(path)
+                .then()
+                .statusCode(200)
+                .body("restored", equalTo(0));
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.reservation_reference_repair WHERE order_id = ?",
+                                Long.class,
+                                id))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void administratorCannotBindAnotherOrdersReservation() {
+        java.util.UUID id = java.util.UUID.fromString(createDraft());
+        java.util.UUID foreign = java.util.UUID.fromString(createDraft());
+        Object foreignReservation =
+                jdbc.queryForObject(
+                        "SELECT reservation_id FROM orders.order_line WHERE order_id = ?",
+                        java.util.UUID.class,
+                        foreign);
+        Object line =
+                jdbc.queryForObject(
+                        "SELECT id FROM orders.order_line WHERE order_id = ?",
+                        java.util.UUID.class,
+                        id);
+        Long version =
+                jdbc.queryForObject(
+                        "SELECT version FROM orders.purchase_order WHERE id = ?", Long.class, id);
+        jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(repairBody(version, line, foreignReservation))
+                .post("/api/v1/order-reservation-repairs/" + id)
+                .then()
+                .statusCode(400)
+                .body("detail", equalTo("The reservation does not match the order line"));
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject(
+                                "SELECT reservation_id FROM orders.order_line WHERE order_id = ?",
+                                java.util.UUID.class,
+                                id))
+                .isNull();
+    }
+
+    private String repairBody(Long version, Object line, Object reservation) {
+        return """
+                {"expectedVersion":%s,"reason":"Verified existing inventory hold","bindings":[{"lineId":"%s","reservationId":"%s"}]}
+                """
+                .formatted(version, line, reservation);
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbc;
 

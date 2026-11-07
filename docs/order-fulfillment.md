@@ -8,6 +8,8 @@ payment is required to request shipment. The first local transaction records the
 FULFILLING history entry, one fulfillment request and one task per order line.
 Each line must have its own reservation reference. Existing legacy orders without
 those references cannot begin shipment until their data has been reconciled.
+The [administrator repair procedure](order-reservation-repair.md) can restore
+missing references to verified existing holds before fulfillment begins.
 
 The intent commits before inventory RPCs. Optimistic order versions resolve a
 concurrent cancellation/request race; after FULFILLING commits, cancellation is
