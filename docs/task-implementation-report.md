@@ -1673,3 +1673,40 @@ accepts all 185 order cases. Source-bound reports are retained in
 `coverage/order-reservation-cleanup-evidence.zip` and JSON; log:
 `order-reservation-cleanup-verification.log` (7:55, exit 0). This local follow-up
 is not included in the accepted migration workflow above.
+
+## 2026-11-06 cleanup publication and checkout correlation
+
+The user approved publication and verification fixes for the reviewed cleanup
+commit `2f9de5b`. [Draft PR #3](https://github.com/vamegah/order-management-platform/pull/3)
+publishes that exact nine-file follow-up. Its
+[full workflow](https://github.com/vamegah/order-management-platform/actions/runs/42341917633)
+passes every prerequisite and `quality-gate`. Downloaded reports contain all
+1,030 reactor cases (799 unit and 231 integration), twelve deployed service/client
+cases, both packaged journeys, seventeen client cases and thirty-two contract-job
+cases without failures, errors or skips. All fifteen complete static reports are
+clean, the NVD policy passes across 211 dependencies, and all ten images build.
+The coverage artifact records 779 base
+and 799 head unit cases, with all fourteen production modules passing. Order
+unit coverage increases from 3,411 covered / 2,816 missed to 3,491 / 2,808.
+All eight artifacts, full logs and exact source tree are retained separately in
+`coverage/reservation-cleanup-ci-evidence.zip` and JSON; archive SHA-256 is
+`62b06fa0932e10375765a8ce377ba24819337ba76e3f703837581620a715ca12`.
+The user explicitly approved marking the draft ready, merging and verifying main.
+PR #3 is merged as `82732be5b3a1aa4f50e32ac974057c47d4eabe42`; its
+[default-branch workflow](https://github.com/vamegah/order-management-platform/actions/runs/42343178370)
+is running under the unchanged required gate, freshness and administrator policy.
+
+The next local branch, `implementation/checkout-correlation`, is separate from
+PR #3. Inventory reservation replies must match the requested order, SKU,
+warehouse, quantity and active state before returning a durable reference.
+Malformed identities and duplicate reservation IDs across order lines fail as
+downstream errors before payment/acceptance. Real in-process RPC regressions
+exercise mismatched replies, and a partial-checkout case requires compensation
+of only the verified first hold. The clean seven-module changed-order/shared
+verification passes all 347 cases: 305 unit and 42 integration, including sixteen
+new regressions. All five coverage gates pass; order coverage is 81.84% against
+its unchanged 80% gate. Six complete static reports contain zero findings/errors/
+missing classes. The order evidence checker accepts all 201 order cases. Reports
+are retained in `coverage/checkout-reservation-correlation-evidence.zip` and JSON;
+log: `checkout-reservation-correlation-verification.log` (7:37, exit 0). These
+local changes are not part of PR #3's workflow or publication approval.

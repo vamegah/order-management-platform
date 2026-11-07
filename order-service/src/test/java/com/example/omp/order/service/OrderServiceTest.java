@@ -153,6 +153,61 @@ class OrderServiceTest {
     }
 
     @Test
+    void duplicateReservationIdentityCannotAcceptAnOrderAndCompensatesOnlyOnce() {
+        when(customerClient.getCustomer(customerId))
+                .thenReturn(
+                        new CustomerDto(
+                                customerId, "a@b.com", "A", "B", "ACTIVE", List.of(), null));
+        UUID secondProduct = UUID.randomUUID();
+        when(productClient.getProduct(any()))
+                .thenAnswer(
+                        invocation -> {
+                            UUID id = invocation.getArgument(0);
+                            return new ProductDto(
+                                    id,
+                                    id.equals(productId) ? "SKU-1" : "SKU-2",
+                                    "Product",
+                                    null,
+                                    new ProductDto.MoneyDto(new BigDecimal("9.99"), "USD"),
+                                    "ACTIVE");
+                        });
+        UUID reservationId = UUID.randomUUID();
+        when(inventoryClient.reserve(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenAnswer(
+                        invocation ->
+                                new com.example.omp.order.clients.grpc.dto.ReservationDto(
+                                        reservationId,
+                                        invocation.getArgument(1),
+                                        invocation.getArgument(2),
+                                        invocation.getArgument(3),
+                                        invocation.getArgument(0),
+                                        "RESERVATION_STATUS_ACTIVE",
+                                        0,
+                                        0));
+        var request =
+                new CreateOrderRequest(
+                        customerId,
+                        new CreateOrderRequest.ShippingAddressRequest(
+                                "1", null, "City", null, "12345", "US"),
+                        List.of(
+                                new CreateOrderRequest.LineRequest(productId, 1),
+                                new CreateOrderRequest.LineRequest(secondProduct, 1)),
+                        null);
+
+        assertThatThrownBy(() -> orderService.create(request))
+                .isInstanceOf(com.example.omp.order.error.DownstreamServiceException.class)
+                .hasMessageContaining("Duplicate checkout reservation identity");
+        org.mockito.Mockito.verify(journal).fail(any());
+        org.mockito.Mockito.verify(cleanup)
+                .enqueue(
+                        any(),
+                        org.mockito.ArgumentMatchers.eq("RESERVATION"),
+                        org.mockito.ArgumentMatchers.eq(reservationId));
+        org.mockito.Mockito.verify(cleanup).retryOrder(any(), org.mockito.ArgumentMatchers.eq(100));
+        org.mockito.Mockito.verifyNoInteractions(tx, paymentClient, eventPublisher);
+    }
+
+    @Test
     void duplicateSkuIsRejectedBeforeReservingOrCharging() {
         when(customerClient.getCustomer(customerId))
                 .thenReturn(
