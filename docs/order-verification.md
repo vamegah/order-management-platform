@@ -30,6 +30,15 @@ test credentials replace that decoder only in fixtures.
 
 ## Startup and persistence repairs
 
+Checkout accepts an inventory reservation reply only when its order, SKU,
+warehouse, quantity and active state match the request and its identity parses as
+a UUID. Distinct order lines must receive distinct reservation IDs. Invalid
+replies fail as downstream HTTP 502 errors before payment creation or aggregate
+acceptance. The checkout journal records the failed attempt, and immediate
+compensation queues only verified earlier holds. Unknown side effects remain
+discoverable through the separately configured recovery worker; an unverified
+foreign response is never added as a cleanup reference.
+
 - HTTP and gRPC authentication interceptors have distinct bean names, and JPA
   auditing is enabled once through the existing JPA configuration.
 - Order email matches the existing `citext` column. Currency/country mappings
@@ -95,3 +104,14 @@ accepts all 185 order cases. Source-bound reports are retained in
 `coverage/order-reservation-cleanup-evidence.zip` and JSON; log:
 `order-reservation-cleanup-verification.log`. This local follow-up is separate
 from the accepted migration PR/default-branch workflows.
+
+The separate checkout-correlation continuation passes the same clean seven-module
+build in 7:37: all 305 unit and 42 integration cases pass, including sixteen new
+real-RPC/service cases. The partial-checkout case rejects a foreign second reply,
+queues only the verified first hold, and prevents payment or aggregate acceptance.
+All five coverage gates pass (order 81.84% against its unchanged 80% gate), and
+six complete static reports contain zero findings/errors/missing classes. The
+order evidence checker accepts all 201 order cases. Source-bound reports are in
+`coverage/checkout-reservation-correlation-evidence.zip` and JSON; log:
+`checkout-reservation-correlation-verification.log`. This local follow-up is
+separate from PR #3's accepted cleanup workflow.

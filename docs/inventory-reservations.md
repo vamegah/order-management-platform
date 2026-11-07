@@ -54,6 +54,18 @@ all RPC patterns, multi-replica streaming or the complete checkout lifecycle.
 Executed results and the unchanged coverage gate are tracked in
 [the implementation report](task-implementation-report.md).
 
-Latest focused acceptance: all 34 unit/in-process and five PostgreSQL cases pass
-without failures, errors or skips. The unchanged configured 80% instruction
-gate passes at 90.56%. See the implementation report for the log and archive.
+The initial focused milestone passed 34 unit/in-process and five PostgreSQL
+cases. The November 6 expiry continuation passes a clean five-module static-analysis
+build with 110 unit cases (37 inventory and 73 shared) and all eight PostgreSQL
+cases. No case fails, errors or skips; four complete static reports contain zero
+findings/errors/missing classes. All three coverage policies pass, including
+inventory at 91.35% against its unchanged 80% gate. The inventory evidence checker
+accepts all 45 service cases. Reports and exact source are retained in
+`coverage/inventory-expiry-acceptance-evidence.zip` and JSON; log:
+`inventory-expiry-acceptance-verification.log` (4:21, exit 0).
+
+The three added persistence cases execute the production expiry worker against
+PostgreSQL. They prove oldest-first bounded processing, recent/terminal exclusion,
+event-failure rollback with idempotent retry, and competing workers skipping a
+locked reservation before reclaiming it after the owning transaction commits.
+See [expiry configuration and remaining acceptance](reservation-expiry.md).

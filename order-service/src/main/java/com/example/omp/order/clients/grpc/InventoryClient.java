@@ -104,13 +104,14 @@ public class InventoryClient {
             Reservation response =
                     stub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                             .reserveStock(request);
+            ReservationDto reservation = verifyReservation(request, response);
             log.debug(
                     "Reserved {}x{} for order {}: reservation={}",
                     quantity,
                     sku,
                     orderId,
                     response.getId());
-            return toDomain(response);
+            return reservation;
         } catch (StatusRuntimeException e) {
             throw exceptionMapper.map(e, "inventory-service");
         }
@@ -166,6 +167,22 @@ public class InventoryClient {
                     .toList();
         } catch (StatusRuntimeException failure) {
             throw exceptionMapper.map(failure, "inventory-service");
+        }
+    }
+
+    private ReservationDto verifyReservation(ReserveStockRequest request, Reservation response) {
+        if (!request.getOrderId().equals(response.getOrderId())
+                || !request.getSku().equals(response.getSku())
+                || !request.getWarehouseId().equals(response.getWarehouseId())
+                || request.getQuantity() != response.getQuantity()
+                || response.getStatus() != ReservationStatus.RESERVATION_STATUS_ACTIVE)
+            throw new DownstreamServiceException(
+                    "inventory-service", 502, "Reservation response does not match checkout");
+        try {
+            return toDomain(response);
+        } catch (IllegalArgumentException malformedIdentity) {
+            throw new DownstreamServiceException(
+                    "inventory-service", 502, "Reservation response has an invalid identity");
         }
     }
 

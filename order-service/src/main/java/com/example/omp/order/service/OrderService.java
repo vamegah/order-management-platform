@@ -207,6 +207,9 @@ public class OrderService {
             for (OrderTransactionService.OrderLineDraft draft : drafts) {
                 ReservationDto reservation =
                         inventoryClient.reserve(orderId, draft.sku(), "WH-1", draft.quantity());
+                if (reservations.stream().anyMatch(known -> known.id().equals(reservation.id())))
+                    throw new com.example.omp.order.error.DownstreamServiceException(
+                            "inventory-service", 502, "Duplicate checkout reservation identity");
                 reservations.add(reservation);
             }
 
