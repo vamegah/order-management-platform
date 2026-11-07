@@ -2103,5 +2103,16 @@ writers must first adopt journal-first checkout. Missing references on existing
 cancelled orders, complete historical ledger discovery, production identity,
 deployed JWT/mTLS/process-crash compensation, committed-stock handling and
 accepted-order/payment expiry coordination remain open. No worker is enabled by
-default, and the parent lifecycle task remains unchecked. This feature has not
-been published; separate approval is required for publication and later merge.
+default, and the parent lifecycle task remains unchecked.
+
+With user approval, this feature is published in
+[draft PR #9](https://github.com/vamegah/order-management-platform/pull/9).
+The verification follow-up adds four required deployed HTTP cases using the real
+issuer and ingress: administrator policy, invalid requests without admission,
+verified subject/first-audit retention without aggregate creation, and rejection
+of a test-owned existing order without changing its payment/reservation. That
+order is cancelled afterward. The focused integration-client build compiles and
+formats the new fixture; the existing evidence checker rejects its missing
+report, so CI must execute it. Complete follow-up CI remains required before
+separate ready/merge and main-verification approval. Runtime, migration and
+focused test sources are unchanged from the archived 480-case local build.
