@@ -2390,3 +2390,60 @@ fixture; they do not restart or exercise a production refund processor. Schedule
 application/container recovery, downstream restart, additional crash points and
 accepted-order expiry coordination remain open. Recovery and expiry stay
 disabled by default, and no parent task is marked complete.
+
+## Payment crash PR and main acceptance (2026-11-08)
+
+[PR #14](https://github.com/vamegah/order-management-platform/pull/14) passes its
+[complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42486543600) at `b31a5a8`: 1,195 reactor cases (918 unit and
+277 integration), 23 deployed service/client cases, two packaged payment journeys,
+seventeen client transport and 32 contract-job cases. All fourteen exact-base
+unit coverage comparisons pass with unchanged production instruction counts.
+Fifteen complete static reports, the 211-dependency policy, all ten images and
+five source-bound issuer checks pass.
+
+With explicit approval it is merged as `19c8032` under strict protected checks.
+[The complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42488828502) passes all twenty jobs on its first
+attempt with the same 1,195 reactor and 23 deployed cases. Required JUnit reports
+have no failures, errors or skips. Each of the three process cases exceeds its
+explicit 120-second minimum. PR durations are 125.293, 124.904, 124.721 seconds;
+main durations are 124.461, 123.681, 123.837 seconds. Ten worker and seven
+transport cases are checked explicitly. The merged source tree equals the
+reviewed tree, and its parents match the approved base and head. Reports,
+workflow logs and source/merge/protection records are retained separately:
+
+- `coverage/checkout-recovery-payment-crash-ci-evidence.zip` and JSON:
+  SHA-256 `0ce16cbcbff00c3f01db265210c8aef92a925ba17e282e60169a64e67f4d3aec`.
+- `coverage/checkout-recovery-payment-crash-main-ci-evidence.zip` and JSON:
+  SHA-256 `92300f9551fff48a4817c971a4cf3afade3f9993586af1518069ec4b4f77367e`.
+
+This accepts worker-JVM termination after reservation release, pending cancellation
+and a completed fixture refund with real cleanup-lease expiry. The parent retains
+synthetic downstream state. Scheduled application/container/downstream restart,
+production-provider behavior and accepted-order expiry coordination remain open.
+
+## Spring scheduler and context restart specifications (2026-11-08)
+
+`CheckoutRecoverySchedulerIT` adds one default PostgreSQL case registering the
+production recovery bean under real Spring scheduling. No test invokes worker
+ticks. Invalid projections increment failure metrics without claiming the journal
+or calling RPCs. Atomic replacements allow automatic reservation release and
+payment cancellation. Closing the context must terminate the scheduler; a new
+context against the same database then recovers another orphan with a new token.
+Further ticks preserve completion without more RPCs or mutations. Assertions
+cover acknowledged metrics, durable attempts/leases, forwarded identity, cleared
+scheduler-thread scope and RPCs outside transactions. The fixture advances no
+journal/cleanup timestamp.
+
+The final seven-module formatting/compilation and focused package/Failsafe builds
+pass all fourteen cases (three worker unit and eleven PostgreSQL), without
+failures, errors or skips. The new method runs for 12.795 seconds; its metric
+waits include acknowledgment and its shutdown assertion checks executor termination.
+Exact-source reports, compiled classes and logs are retained in
+`coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON. Complete PR CI
+must execute 1,196 reactor and 23 deployed cases before acceptance.
+
+This changes tests and documentation. Synthetic in-process endpoints and same-JVM
+Spring contexts bound the scope. Full Boot/container/JVM or downstream restart,
+deployed scheduler identity, production-provider behavior and accepted-order
+expiry coordination remain open. Default workers and expiry stay disabled; parent
+lifecycle tasks remain unchecked.

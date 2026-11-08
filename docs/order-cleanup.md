@@ -135,12 +135,50 @@ The payment crash follow-up passes all sixteen cases without failures, errors or
 skips. Cancellation and refund crash methods take 138.277 and 134.130 seconds;
 the release case takes 158.039 seconds. Exact-source reports are retained in
 `coverage/checkout-recovery-payment-crash-local-evidence.zip` and JSON.
-It does not run the complete reactor or its combined coverage gate; full CI is
-still required. The process fixture uses a directly invoked tick, plaintext
+The focused command does not run the complete reactor or its combined coverage
+gate. [PR #14](https://github.com/vamegah/order-management-platform/pull/14) and
+its merged main workflow pass all 1,195 reactor and 23 deployed cases; exact
+reports and merge records are retained in the payment crash CI evidence archives.
+The process fixture uses a directly invoked tick, plaintext
 loopback RPCs and synthetic credentials. Scheduler restart, a full application
 container crash, downstream-service restart, other payment/refund crash points and
 production JWT/mTLS provisioning remain separate acceptance work. Recovery and
 expiry remain disabled by default.
+
+## Spring scheduler and context restart verification
+
+`CheckoutRecoverySchedulerIT` registers the production recovery bean with Spring's
+actual scheduling post-processor and a single managed scheduler thread. Its
+100-millisecond fixture interval leaves the production default unchanged. No
+worker tick is invoked directly by the test. Real PostgreSQL uses V7/V8 and
+retains the journal/cleanup rows across two Spring contexts.
+
+Invalid projections increment worker failure metrics while leaving the journal
+unclaimed and making no RPC. Atomic replacement permits automatic reservation
+release and payment cancellation. Context shutdown must terminate its executor
+and stop ticks. A fresh context against the same database repeats recovery for a
+second orphan with a replacement token. Further scheduled ticks preserve completed
+rows without extra RPC or mutation. Assertions cover metrics after acknowledgment,
+attempts/leases, forwarded identity, cleared worker scope and RPCs outside database
+transactions. All resources belong to the fixture.
+
+```sh
+./mvnw -pl order-service -am package failsafe:integration-test failsafe:verify \
+  -Dtest=CheckoutRecoveryJobTest -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dit.test=CheckoutRecoverySchedulerIT,CheckoutRecoveryWorkerIT \
+  -Dfailsafe.failIfNoSpecifiedTests=false
+```
+
+Formatting/compilation and all fourteen focused cases pass (three unit and eleven
+PostgreSQL), without failures, errors or skips. The scheduler method runs for
+12.795 seconds. Exact-source reports, compiled classes and logs are retained
+in `coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON. Full CI must
+execute 1,196 reactor and 23 deployed service/client cases before acceptance.
+
+The fixture uses synthetic credentials and generated in-process endpoints.
+Context restart occurs within one JVM. Full Boot/container/JVM or downstream
+restart, deployed scheduler identity and accepted-order expiry coordination remain
+separate work; default workers and inventory expiry remain disabled.
 
 ## Remaining acceptance
 

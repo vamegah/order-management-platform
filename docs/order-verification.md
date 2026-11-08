@@ -243,6 +243,27 @@ cancellation/refund process cases take 138.277/134.130 seconds, and the original
 release case takes 158.039 seconds. Each waits for the real lease deadline.
 Long-classpath JVM-launch preflight also passes. Exact-source reports, compiled
 classes and logs are retained separately in
-`coverage/checkout-recovery-payment-crash-local-evidence.zip` and JSON. Complete
-CI must execute 1,195 reactor and 23 deployed service/client cases before
-acceptance. The earlier evidence belongs to the original one-case fixture.
+`coverage/checkout-recovery-payment-crash-local-evidence.zip` and JSON.
+[PR #14](https://github.com/vamegah/order-management-platform/pull/14) and its
+merged main workflow pass 1,195 reactor and 23 deployed service/client cases,
+with each of the three process cases exceeding 120 seconds. Exact CI reports
+and approved merge records are retained in the payment crash evidence archives;
+see the implementation report. The earlier evidence belongs to the original fixture.
+
+## Spring-managed scheduler fixture
+
+`CheckoutRecoverySchedulerIT` adds one required default PostgreSQL case with actual
+Spring scheduling and the production recovery bean. It exercises invalid-token
+exclusion, atomic projection replacement, automatic cleanup, two contexts against
+the same database and continued ticks without repeat mutations. Executor shutdown,
+acknowledged metrics, durable attempts/leases and worker identity/transaction
+boundaries are asserted. No worker tick is invoked and no database eligibility
+timestamp is advanced manually. See [the focused command and scope](order-cleanup.md#spring-scheduler-and-context-restart-verification).
+
+Formatting/compilation, three worker unit and eleven PostgreSQL cases pass without
+failures, errors or skips. The scheduler method takes 12.795 seconds. Exact
+source, reports, classes and logs are retained in
+`coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON. Full CI must
+execute 1,196 reactor and 23 deployed cases before acceptance. Synthetic in-process
+endpoints and same-JVM context restart do not establish full Boot/container/JVM or
+downstream restart or deployed scheduler identity acceptance.
