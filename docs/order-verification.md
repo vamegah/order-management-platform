@@ -188,3 +188,22 @@ order evidence checker accepts all 201 order cases. Source-bound reports are in
 `coverage/checkout-reservation-correlation-evidence.zip` and JSON; log:
 `checkout-reservation-correlation-verification.log`. This local follow-up is
 separate from PR #3's accepted cleanup workflow.
+## Durable worker failure fixture
+
+`CheckoutRecoveryWorkerIT` adds ten default PostgreSQL integration cases using
+the actual worker/journal/cleanup transactions and generated RPC endpoints.
+Four cases cover partial discovery, a lost release acknowledgment, lease
+fencing and token-file replacement; six parameterized cases protect accepted
+active order states. Assertions check durable rows, recovery/cleanup metrics,
+synthetic worker identity forwarding and RPCs outside database transactions.
+
+Ticks are invoked directly and database eligibility is advanced explicitly.
+Process termination, scheduler timing, elapsed lease recovery and full-service
+failure acceptance remain separate. See [the fixture command and scope](order-cleanup.md#worker-transaction-and-retry-verification).
+
+The reconstructed seven-module build passes formatting, compilation and all
+three targeted `CheckoutRecoveryJobTest` unit cases without failures, errors or
+skips. The ten new PostgreSQL cases compile but have not executed locally because
+the Docker engine is unavailable. Source-bound evidence is retained in
+`coverage/recovered-worker-failure-acceptance-local-evidence.zip` and JSON.
+Full CI execution remains required before accepting these integration cases.

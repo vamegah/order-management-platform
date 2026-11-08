@@ -2161,12 +2161,65 @@ none of the five deployed cases has executed locally. The unchanged evidence
 checker discovers `RecoveryTransportIT` and rejects its absent Failsafe report.
 The fresh-stack CI job already provides Python 3.12, the updated realm and mTLS;
 custom caller images must also supply Python (`E2E_PYTHON` selects its executable).
-Full CI and deployed execution remain required after separate publication
-approval. The expected external count increases from sixteen to twenty-one;
-the default reactor still excludes the e2e tag.
+With publication approval, [PR #10](https://github.com/vamegah/order-management-platform/pull/10)
+passes its [complete workflow at `a8385f6`](https://github.com/vamegah/order-management-platform/actions/runs/42427073174)
+on its first attempt: all 1,182 reactor cases (918 unit and 264 integration),
+21 deployed service/client cases (nineteen Java and two client), two packaged
+payment-to-webhook cases, seventeen client transport cases and 32 contract
+cases. All fourteen exact-base unit coverage comparisons have unchanged
+instruction counts. Fifteen complete static reports, the 211-dependency NVD
+policy, ten image builds and five isolated issuer checks pass. All five new
+transport cases execute with no failures, errors or skips.
+
+With separate user approval, PR #10 is marked ready and merged as `b93a582`
+after checking strict freshness, the required GitHub Actions gate and
+administrator enforcement. Its [complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42428663795)
+passes every gate on its first attempt with the same counts. The default
+reactor continues excluding the e2e tag.
 
 This follow-up changes tests and documentation only. It does not enable recovery
 or expiry workers or establish process-crash/lease recovery, invalid client
 certificate rejection, production issuer/secret rotation, complete historical
 ledger discovery or accepted-order expiry/payment coordination. The parent
 lifecycle tasks remain unchecked.
+
+## Workspace recovery and durable worker failure specifications (2026-11-07)
+
+After accidental workspace deletion, the restored checkpoint was preserved in
+a source archive and local Git branch. Accepted main `b93a582` was recovered
+in the original OneDrive workspace. Main's completed reports and logs are
+reacquired from GitHub and bound to its exact published Git source in
+`coverage/recovery-transport-restored-main-ci-evidence.zip` and JSON. This
+recovered archive has a new digest; its current protection record is separate
+from the original premerge records lost with the workspace.
+Its SHA-256 is
+`b9e8dd346749ea03be110afaedd330876b50b3ec6ac89c47cbc7c0c5d9ab391f`.
+
+The unpublished worker fixture was reconstructed with explicit JUnit imports
+and isolated test configuration. Ten `CheckoutRecoveryWorkerIT` cases combine
+the actual worker, proxied journal and cleanup queue, V7/V8 schema and PostgreSQL
+with generated fault-injecting RPC endpoints. Partial payment discovery retains
+verified reservation cleanup. A later tick discovers and cancels the pending
+payment without repeating completed mutations. A release that changes state
+but loses its reply leaves a durable retry; a fresh worker object observes the
+released state and acknowledges the task. Other cases check live lease
+exclusion, stale completion fencing, malformed token replacement and six
+accepted active order states.
+
+Assertions inspect durable rows and recovery/cleanup metrics, forwarded identity
+and RPC execution outside transactions. Eligibility is advanced explicitly in
+the database and ticks are called directly. Synthetic credentials and controlled
+RPC endpoints keep these checks separate from the deployed issuer/mTLS suite.
+Process termination, scheduler timing, actual elapsed lease recovery and full
+downstream failures remain open. No worker is enabled by default.
+
+The reconstructed seven-module build passes formatting, compilation and all
+three existing targeted worker unit cases without failures, errors or skips
+(`recovered-worker-compilation-and-unit.log`, 13:24, exit 0). The existing source
+evidence checker requires the new Failsafe suite. The ten new PostgreSQL cases
+remain unexecuted locally because the Docker engine is unavailable; CI execution
+is required after separate publication approval. Source-bound local reports,
+logs and exact source are retained in
+`coverage/recovered-worker-failure-acceptance-local-evidence.zip` and JSON.
+Full CI is expected to execute 1,192 reactor cases and the unchanged 21 external
+cases. No passing integration result is claimed for this reconstructed fixture.
