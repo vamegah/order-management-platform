@@ -7,13 +7,26 @@ import static org.hamcrest.Matchers.equalTo;
 import com.example.omp.integration.support.AuthSupport;
 import com.example.omp.integration.support.GrpcClientFactory;
 import com.example.omp.integration.support.OrderJourney;
+import com.example.omp.proto.common.Money;
 import com.example.omp.proto.inventory.FindReservationsByOrderRequest;
+import com.example.omp.proto.inventory.GetReservationRequest;
+import com.example.omp.proto.inventory.ReleaseReservationRequest;
 import com.example.omp.proto.inventory.Reservation;
+import com.example.omp.proto.inventory.ReservationStatus;
+import com.example.omp.proto.inventory.ReserveStockRequest;
+import com.example.omp.proto.payment.CancelPaymentRequest;
+import com.example.omp.proto.payment.ConfirmPaymentRequest;
+import com.example.omp.proto.payment.CreatePaymentIntentRequest;
 import com.example.omp.proto.payment.FindPaymentsByOrderRequest;
+import com.example.omp.proto.payment.GetPaymentRequest;
 import com.example.omp.proto.payment.Payment;
+import com.example.omp.proto.payment.PaymentStatus;
+import com.example.omp.proto.payment.RefundPaymentRequest;
+import com.example.omp.proto.payment.RefundStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -126,6 +139,195 @@ class RecoveryTransportIT {
                 .then()
                 .statusCode(200)
                 .body("submitted", equalTo(true));
+    }
+
+    @Test
+    void aProjectedWorkloadReleasesAndCancelsTestOwnedOrphanResourcesIdempotently()
+            throws Exception {
+        String token = project();
+        String order = UUID.randomUUID().toString();
+        Reservation reservation = null;
+        Payment payment = null;
+        try {
+            reservation = reserveOrphan(order);
+            payment = createOrphanPayment(order);
+            assertThat(reservation.getOrderId()).isEqualTo(order);
+            assertThat(reservation.getStatus())
+                    .isEqualTo(ReservationStatus.RESERVATION_STATUS_ACTIVE);
+            assertThat(payment.getOrderId()).isEqualTo(order);
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAYMENT_STATUS_PENDING);
+            assertThat(
+                            GrpcClientFactory.inventoryClient(token)
+                                    .findReservationsByOrder(reservationsFor(order))
+                                    .getReservationsList())
+                    .extracting(Reservation::getId)
+                    .containsExactly(reservation.getId());
+            assertThat(
+                            GrpcClientFactory.paymentClient(token)
+                                    .findPaymentsByOrder(paymentsFor(order))
+                                    .getPaymentsList())
+                    .extracting(Payment::getId)
+                    .containsExactly(payment.getId());
+            var release =
+                    ReleaseReservationRequest.newBuilder()
+                            .setReservationId(reservation.getId())
+                            .setReason("e2e recovery transport fixture")
+                            .build();
+            var cancel =
+                    CancelPaymentRequest.newBuilder()
+                            .setPaymentId(payment.getId())
+                            .setReason("e2e recovery transport fixture")
+                            .build();
+            for (int replay = 0; replay < 2; replay++) {
+                var released = GrpcClientFactory.inventoryClient(token).releaseReservation(release);
+                assertThat(released.getId()).isEqualTo(reservation.getId());
+                assertThat(released.getOrderId()).isEqualTo(order);
+                assertThat(released.getStatus())
+                        .isEqualTo(ReservationStatus.RESERVATION_STATUS_RELEASED);
+                var cancelled = GrpcClientFactory.paymentClient(token).cancelPayment(cancel);
+                assertThat(cancelled.getId()).isEqualTo(payment.getId());
+                assertThat(cancelled.getOrderId()).isEqualTo(order);
+                assertThat(cancelled.getStatus()).isEqualTo(PaymentStatus.PAYMENT_STATUS_CANCELLED);
+            }
+            assertThat(
+                            GrpcClientFactory.inventoryClient(token)
+                                    .getReservation(
+                                            GetReservationRequest.newBuilder()
+                                                    .setReservationId(reservation.getId())
+                                                    .build())
+                                    .getStatus())
+                    .isEqualTo(ReservationStatus.RESERVATION_STATUS_RELEASED);
+            assertThat(readPayment(token, payment.getId()).getStatus())
+                    .isEqualTo(PaymentStatus.PAYMENT_STATUS_CANCELLED);
+            OrderJourney.authenticated(AuthSupport.adminToken())
+                    .get(ORDER_URL + "/api/v1/orders/" + order)
+                    .then()
+                    .statusCode(404);
+        } finally {
+            try {
+                if (reservation != null)
+                    GrpcClientFactory.inventoryClient(AuthSupport.adminToken())
+                            .releaseReservation(
+                                    ReleaseReservationRequest.newBuilder()
+                                            .setReservationId(reservation.getId())
+                                            .setReason("e2e fixture cleanup")
+                                            .build());
+            } finally {
+                if (payment != null)
+                    GrpcClientFactory.paymentClient(AuthSupport.adminToken())
+                            .cancelPayment(
+                                    CancelPaymentRequest.newBuilder()
+                                            .setPaymentId(payment.getId())
+                                            .setReason("e2e fixture cleanup")
+                                            .build());
+            }
+        }
+    }
+
+    @Test
+    void aProjectedWorkloadCanRefundAConfirmedOrphanWithOneDurableRefundOnReplay()
+            throws Exception {
+        String token = project();
+        String order = UUID.randomUUID().toString();
+        Payment payment = createOrphanPayment(order);
+        var request =
+                RefundPaymentRequest.newBuilder()
+                        .setPaymentId(payment.getId())
+                        .setReason("e2e workload remaining-balance compensation")
+                        .setIdempotencyKey("e2e-recovery-refund-" + order)
+                        .build();
+        try {
+            var confirmed =
+                    GrpcClientFactory.paymentClient(AuthSupport.adminToken())
+                            .confirmPayment(
+                                    ConfirmPaymentRequest.newBuilder()
+                                            .setPaymentId(payment.getId())
+                                            .setProviderReference("e2e-recovery-" + order)
+                                            .build());
+            assertThat(confirmed.getStatus()).isEqualTo(PaymentStatus.PAYMENT_STATUS_CONFIRMED);
+            var refunded = GrpcClientFactory.paymentClient(token).refundPayment(request);
+            assertThat(refunded.getId()).isNotBlank();
+            assertThat(refunded.getPaymentId()).isEqualTo(payment.getId());
+            assertThat(refunded.getStatus()).isEqualTo(RefundStatus.REFUND_STATUS_COMPLETED);
+            assertThat(refunded.getAmount().getCurrency()).isEqualTo("USD");
+            assertThat(new BigDecimal(refunded.getAmount().getAmount()))
+                    .isEqualByComparingTo("12.34");
+            Payment terminal = readPayment(token, payment.getId());
+            assertThat(terminal.getOrderId()).isEqualTo(order);
+            assertThat(terminal.getStatus()).isEqualTo(PaymentStatus.PAYMENT_STATUS_REFUNDED);
+            assertThat(terminal.getEventsList())
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getReason()).contains(refunded.getId()));
+            var replay = GrpcClientFactory.paymentClient(token).refundPayment(request);
+            assertThat(replay.getId()).isEqualTo(refunded.getId());
+            assertThat(replay.getPaymentId()).isEqualTo(payment.getId());
+            assertThat(replay.getStatus()).isEqualTo(RefundStatus.REFUND_STATUS_COMPLETED);
+            assertThat(readPayment(token, payment.getId())).isEqualTo(terminal);
+            OrderJourney.authenticated(AuthSupport.adminToken())
+                    .get(ORDER_URL + "/api/v1/orders/" + order)
+                    .then()
+                    .statusCode(404);
+        } finally {
+            var admin = GrpcClientFactory.paymentClient(AuthSupport.adminToken());
+            var current = readPayment(AuthSupport.adminToken(), payment.getId());
+            if (current.getStatus() == PaymentStatus.PAYMENT_STATUS_PENDING)
+                admin.cancelPayment(
+                        CancelPaymentRequest.newBuilder()
+                                .setPaymentId(payment.getId())
+                                .setReason("e2e fixture cleanup")
+                                .build());
+            else if (current.getStatus() == PaymentStatus.PAYMENT_STATUS_CONFIRMED
+                    || current.getStatus() == PaymentStatus.PAYMENT_STATUS_PARTIALLY_REFUNDED)
+                admin.refundPayment(request);
+        }
+    }
+
+    private static Payment createOrphanPayment(String order) {
+        var payment =
+                GrpcClientFactory.paymentClient(AuthSupport.adminToken())
+                        .createPaymentIntent(
+                                CreatePaymentIntentRequest.newBuilder()
+                                        .setOrderId(order)
+                                        .setCustomerId(OrderJourney.CUSTOMER_ID)
+                                        .setAmount(
+                                                Money.newBuilder()
+                                                        .setAmount("12.34")
+                                                        .setCurrency("USD"))
+                                        .setIdempotencyKey("e2e-recovery-intent-" + order)
+                                        .build());
+        // Verify ownership before exposing an identity to any mutation or cleanup action.
+        assertThat(UUID.fromString(payment.getId()).toString()).isEqualTo(payment.getId());
+        assertThat(payment.getOrderId()).isEqualTo(order);
+        assertThat(payment.getCustomerId()).isEqualTo(OrderJourney.CUSTOMER_ID);
+        assertThat(payment.getAmount().getCurrency()).isEqualTo("USD");
+        assertThat(new BigDecimal(payment.getAmount().getAmount())).isEqualByComparingTo("12.34");
+        return payment;
+    }
+
+    private static Reservation reserveOrphan(String order) {
+        var reservation =
+                GrpcClientFactory.inventoryClient(AuthSupport.adminToken())
+                        .reserveStock(
+                                ReserveStockRequest.newBuilder()
+                                        .setOrderId(order)
+                                        .setSku("PHONE-BUDGET-3")
+                                        .setWarehouseId("WH-1")
+                                        .setQuantity(1)
+                                        .build());
+        assertThat(UUID.fromString(reservation.getId()).toString()).isEqualTo(reservation.getId());
+        assertThat(reservation.getOrderId()).isEqualTo(order);
+        assertThat(reservation.getSku()).isEqualTo("PHONE-BUDGET-3");
+        assertThat(reservation.getWarehouseId()).isEqualTo("WH-1");
+        assertThat(reservation.getQuantity()).isEqualTo(1);
+        return reservation;
+    }
+
+    private static Payment readPayment(String token, String id) {
+        var payment =
+                GrpcClientFactory.paymentClient(token)
+                        .getPayment(GetPaymentRequest.newBuilder().setPaymentId(id).build());
+        assertThat(payment.getId()).isEqualTo(id);
+        return payment;
     }
 
     private String project() throws Exception {

@@ -2284,3 +2284,58 @@ credentials. Scheduler restart, a full application container crash, downstream
 restart, payment/refund crash points, complete historical discovery and
 accepted-order/payment expiry coordination remain open. Recovery and expiry
 remain disabled; parent lifecycle tasks remain unchecked.
+
+## Worker process PR and default-branch acceptance
+
+[PR #12](https://github.com/vamegah/order-management-platform/pull/12) subsequently
+passes all 1,193 reactor cases (918 unit and 275 integration), 21 deployed
+service/client cases, two packaged payment-to-webhook cases, seventeen client
+transport cases and 32 contract-job cases. Required JUnit reports contain no
+failures, errors or skips. All fourteen exact-base unit coverage comparisons
+pass with unchanged production instruction counts; order remains 4,450
+covered/3,021 missed. All fifteen static reports, 211-dependency vulnerability
+policy, ten image builds and five isolated issuer checks pass.
+
+With explicit user approval, verified `388cbeb` is merged as `f2fdd02` under
+strict protected merge checks. [The complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42446674355)
+passes all twenty jobs on its first attempt with the same 1,193 reactor and
+21 deployed cases. The required process case executes for 125.307 seconds in
+PR CI and 124.870 seconds on main, above the explicit 120-second minimum.
+The ten worker and five deployed transport cases are also checked explicitly.
+Main's exact source tree equals the PR's tested tree. Source-bound reports,
+workflow logs and merge/protection records are retained separately:
+
+- `coverage/checkout-recovery-process-ci-evidence.zip` and JSON:
+  SHA-256 `e536dc6a54a30128f415fe2f8959986a0c3572749c6a4a644fba26cb9a94621d`.
+- `coverage/checkout-recovery-process-main-ci-evidence.zip` and JSON:
+  SHA-256 `cd98a95ff36455a56aec2eb5dfcc773b73d76ef4c8810e717b9b27f329012af7`.
+
+This accepts actual worker-JVM termination and elapsed cleanup lease recovery
+for the bounded loopback fixture. Scheduled application/container restart,
+downstream-service restart and additional payment/refund crash points remain open.
+
+## Recovery compensation transport specifications (2026-11-07)
+
+Two additional `RecoveryTransportIT` cases specify compensation with a real
+projected workload JWT over the existing mTLS channels. They create resources
+for fresh orphan UUIDs, validate returned ownership/identities and then repeat
+reservation release/pending cancellation or a confirmed payment's remaining
+refund. Refund assertions require USD 12.34, completed status, one refund identity
+and unchanged persisted payment/refund history under the same idempotency key.
+Cleanup uses only verified test-owned IDs. The dedicated development stack
+selects the deterministic `noop` refund provider.
+
+The focused four-module formatting/test-compilation build passes from the final
+source (`compensation-transport-compilation.log`, 24.109 seconds, exit 0). The
+seven-case e2e class compiles and remains required by e2e evidence discovery.
+The two new deployed cases have not executed locally; this is compile evidence,
+not deployed acceptance. Exact source, compiled class and successful log are
+retained in `coverage/recovery-compensation-transport-local-evidence.zip` and JSON.
+Publication and full CI must execute all seven transport cases within 23 deployed
+service/client cases. The default reactor remains at 1,193 cases.
+
+The specifications invoke RPCs directly. Scheduled worker deployment, checkout
+failure injection, downstream restart, production provider behavior, complete
+historical discovery and accepted-order/payment expiry coordination remain open.
+This follow-up changes tests and documentation. Recovery and expiry remain
+disabled and parent lifecycle tasks stay unchecked.

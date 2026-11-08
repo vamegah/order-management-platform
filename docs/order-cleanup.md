@@ -145,6 +145,13 @@ database fencing, rollback, SKIP LOCKED acceptance, simulated expired leases and
 repeat discovery. Run it with `./mvnw -pl order-service -am verify -Dit.test=CheckoutJournalIT -Dfailsafe.failIfNoSpecifiedTests=false`.
 See [order verification](order-verification.md) for execution scope.
 
+Two additional deployed specifications extend `RecoveryTransportIT` to workload
+release/cancellation and remaining-refund replay on test-owned orphan resources.
+They verify identities before mutation, use the real projector JWT and mTLS,
+and clean up only verified fixture IDs. Formatting and compilation pass; both
+new cases still require deployed execution before acceptance. They issue RPCs
+directly with the development refund provider. See [the command and scope](external-e2e.md#recovery-compensation-transport-specifications).
+
 Completed tasks and orphan journal rows are retained. Orphan attempts are intentionally rescanned indefinitely; define a retention/archive policy only with a bounded remote-write horizon and recovery evidence. Legacy orphan resources created before the journal migration have no discoverable attempt record and require an initial audit. Confirmed-payment cleanup now uses the provider-backed refund workflow; permanent failures, legacy intents and missing-webhook reconciliation still need operator handling. Inventory TTL expiry remains disabled until the accepted-order lifecycle handles expired holds. The broader gRPC authorization and mTLS review remains open.
 
 Shipment uses a separate durable fulfillment queue. Once an order is FULFILLING,

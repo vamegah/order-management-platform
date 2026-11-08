@@ -143,3 +143,35 @@ reconnect/recovery remain separate acceptance work.
 These are executable acceptance specifications. Their deployment/execution
 results must be recorded in the implementation report before marking full-stack
 acceptance complete; successful compilation alone does not satisfy that gate.
+
+## Recovery compensation transport specifications
+
+Two additional `RecoveryTransportIT` cases use a fresh order UUID with no order
+aggregate and the real projected workload JWT over mTLS. Fixture setup uses an
+administrator to reserve one seeded item and create a pending development payment.
+Returned order/resource identities, customer, stock coordinates and amount are
+validated before any mutation or cleanup action uses them.
+
+The first case discovers its exact references, releases the reservation and
+cancels the payment twice, then reads both terminal states. The second confirms
+its own payment, requests its remaining refund without an amount, and repeats
+the same idempotency key. It requires one refund identity, completed status, the
+full USD 12.34 amount and unchanged persisted payment/refund history on replay.
+Cleanup uses only verified fixture resource IDs. The development `noop` provider
+supplies deterministic refunds; these cases do not contact a live processor.
+
+Run the seven-case transport suite against the dedicated stack:
+
+```sh
+./mvnw -pl integration-tests -am -Pe2e verify \
+  -Dit.test=RecoveryTransportIT -Dfailsafe.failIfNoSpecifiedTests=false
+```
+
+Formatting and compilation pass locally. The two new deployed cases have not
+executed locally; publication and full CI execution remain required. The complete
+external job must execute 23 service/client cases, including all seven transport
+cases, while the default reactor remains at 1,193 cases. Exact-source compile
+evidence is retained in `coverage/recovery-compensation-transport-local-evidence.zip`
+and JSON. These specifications issue RPCs directly; scheduled worker deployment,
+checkout failure injection, downstream restart and production provider acceptance
+remain separate work.
