@@ -9,6 +9,7 @@ import com.example.omp.order.clients.grpc.PaymentClient;
 import com.example.omp.order.service.CheckoutJournal;
 import com.example.omp.order.service.CheckoutRecoveryJob;
 import com.example.omp.order.service.OrderCleanupQueue;
+import com.example.omp.proto.common.Money;
 import com.example.omp.proto.inventory.*;
 import com.example.omp.proto.payment.*;
 import io.grpc.*;
@@ -39,6 +40,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -66,10 +69,14 @@ class CheckoutRecoveryProcessIT {
     @TempDir Path directory;
     private final List<Process> children = new ArrayList<>();
     private final AtomicReference<Reservation> remote = new AtomicReference<>();
+    private final AtomicReference<Payment> remotePayment = new AtomicReference<>();
+    private final AtomicReference<Refund> remoteRefund = new AtomicReference<>();
     private final AtomicInteger calls = new AtomicInteger();
     private final AtomicInteger releases = new AtomicInteger();
+    private final AtomicInteger cancellations = new AtomicInteger();
+    private final AtomicInteger refunds = new AtomicInteger();
     private final AtomicBoolean forwardedIdentity = new AtomicBoolean(true);
-    private final CountDownLatch releaseCommitted = new CountDownLatch(1);
+    private final CountDownLatch mutationCommitted = new CountDownLatch(1);
     private Server server;
     private JdbcTemplate jdbc;
     private Path configuration;
@@ -78,12 +85,34 @@ class CheckoutRecoveryProcessIT {
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
     void killedWorkerLeavesALeaseAndANewJvmAcknowledgesTheLostReplyAfterRealExpiry()
             throws Exception {
+        recoverAfterCrash(CrashPoint.RELEASE);
+    }
+
+    @ParameterizedTest(name = "{0} commits before the worker dies without its reply")
+    @EnumSource(
+            value = CrashPoint.class,
+            names = {"CANCEL", "REFUND"})
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void killedPaymentWorkerRecoversAfterRealExpiryWithoutRepeatingTheMutation(CrashPoint point)
+            throws Exception {
+        recoverAfterCrash(point);
+    }
+
+    private enum CrashPoint {
+        RELEASE,
+        CANCEL,
+        REFUND
+    }
+
+    private void recoverAfterCrash(CrashPoint point) throws Exception {
         jdbc =
                 new JdbcTemplate(
                         new DriverManagerDataSource(
                                 POSTGRES.getJdbcUrl(),
                                 POSTGRES.getUsername(),
                                 POSTGRES.getPassword()));
+        // This database belongs exclusively to the static Testcontainers fixture.
+        jdbc.execute("DROP SCHEMA IF EXISTS orders CASCADE");
         jdbc.execute("CREATE SCHEMA orders");
         jdbc.execute(
                 "CREATE TABLE orders.purchase_order (id uuid PRIMARY KEY, status varchar(20) NOT NULL)");
@@ -93,15 +122,30 @@ class CheckoutRecoveryProcessIT {
                     new ClassPathResource("db/migration/" + migration)
                             .getContentAsString(StandardCharsets.UTF_8));
         UUID order = UUID.randomUUID();
-        remote.set(
-                Reservation.newBuilder()
-                        .setId(UUID.randomUUID().toString())
-                        .setOrderId(order.toString())
-                        .setSku("SKU-CRASH")
-                        .setWarehouseId("WH-1")
-                        .setQuantity(1)
-                        .setStatus(ReservationStatus.RESERVATION_STATUS_ACTIVE)
-                        .build());
+        if (point == CrashPoint.RELEASE)
+            remote.set(
+                    Reservation.newBuilder()
+                            .setId(UUID.randomUUID().toString())
+                            .setOrderId(order.toString())
+                            .setSku("SKU-CRASH")
+                            .setWarehouseId("WH-1")
+                            .setQuantity(1)
+                            .setStatus(ReservationStatus.RESERVATION_STATUS_ACTIVE)
+                            .build());
+        else
+            remotePayment.set(
+                    Payment.newBuilder()
+                            .setId(UUID.randomUUID().toString())
+                            .setOrderId(order.toString())
+                            .setCustomerId(UUID.randomUUID().toString())
+                            .setAmount(Money.newBuilder().setCurrency("USD").setAmount("12.34"))
+                            .setStatus(
+                                    point == CrashPoint.CANCEL
+                                            ? PaymentStatus.PAYMENT_STATUS_PENDING
+                                            : PaymentStatus.PAYMENT_STATUS_CONFIRMED)
+                            .setProviderReference(
+                                    point == CrashPoint.REFUND ? "fixture-provider-reference" : "")
+                            .build());
         jdbc.update(
                 "INSERT INTO orders.checkout_attempt (order_id, status, recover_after) VALUES (?, 'FAILED', now())",
                 order);
@@ -127,17 +171,7 @@ class CheckoutRecoveryProcessIT {
                                     }
                                 })
                         .addService(new InventoryEndpoint())
-                        .addService(
-                                new PaymentServiceGrpc.PaymentServiceImplBase() {
-                                    @Override
-                                    public void findPaymentsByOrder(
-                                            FindPaymentsByOrderRequest request,
-                                            StreamObserver<FindPaymentsByOrderResponse> observer) {
-                                        reply(
-                                                observer,
-                                                FindPaymentsByOrderResponse.getDefaultInstance());
-                                    }
-                                })
+                        .addService(new PaymentEndpoint())
                         .build()
                         .start();
         configuration = directory.resolve("worker.properties");
@@ -149,6 +183,7 @@ class CheckoutRecoveryProcessIT {
         settings.setProperty("password", POSTGRES.getPassword());
         settings.setProperty("port", Integer.toString(server.getPort()));
         settings.setProperty("token", token.toString());
+        settings.setProperty("type", point == CrashPoint.RELEASE ? "RESERVATION" : "PAYMENT");
         try (var output = Files.newOutputStream(configuration)) {
             settings.store(output, "Ephemeral integration fixture only");
         }
@@ -159,8 +194,8 @@ class CheckoutRecoveryProcessIT {
                         Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
 
         Process first = startWorker("killed");
-        assertThat(releaseCommitted.await(45, TimeUnit.SECONDS))
-                .as("remote release committed before the deliberately withheld reply")
+        assertThat(mutationCommitted.await(45, TimeUnit.SECONDS))
+                .as("remote compensation committed before the deliberately withheld reply")
                 .isTrue();
         assertThat(first.isAlive()).isTrue();
         first.destroyForcibly();
@@ -177,9 +212,10 @@ class CheckoutRecoveryProcessIT {
                                 "SELECT lease_until > now() FROM orders.cleanup_task",
                                 Boolean.class))
                 .isTrue();
-        assertThat(remote.get().getStatus())
-                .isEqualTo(ReservationStatus.RESERVATION_STATUS_RELEASED);
-        assertThat(releases).hasValue(1);
+        assertMutation(point);
+        Reservation reservationAfterCrash = remote.get();
+        Payment paymentAfterCrash = remotePayment.get();
+        Refund refundAfterCrash = remoteRefund.get();
         int callsAfterCrash = calls.get();
 
         Properties early = finishWorker("before-expiry");
@@ -217,15 +253,42 @@ class CheckoutRecoveryProcessIT {
         assertThat(recovered.getProperty("completed")).isEqualTo("1.0");
         assertThat(recovered.getProperty("pending")).isEqualTo("0.0");
         assertThat(calls).hasValue(callsAfterCrash + 1);
-        assertThat(releases).hasValue(1);
+        assertMutation(point);
         Properties repeated = finishWorker("repeat");
         assertThat(task()).isEqualTo(completed);
         assertThat(calls).hasValue(callsAfterCrash + 1);
-        assertThat(releases).hasValue(1);
+        assertMutation(point);
+        assertThat(remote.get()).isEqualTo(reservationAfterCrash);
+        assertThat(remotePayment.get()).isEqualTo(paymentAfterCrash);
+        assertThat(remoteRefund.get()).isEqualTo(refundAfterCrash);
         assertThat(repeated.getProperty("completed")).isEqualTo("0.0");
         assertThat(forwardedIdentity).isTrue();
         assertThat(jdbc.queryForObject("SELECT status FROM orders.checkout_attempt", String.class))
                 .isEqualTo("RECOVERED");
+    }
+
+    private void assertMutation(CrashPoint point) {
+        assertThat(releases).hasValue(point == CrashPoint.RELEASE ? 1 : 0);
+        assertThat(cancellations).hasValue(point == CrashPoint.CANCEL ? 1 : 0);
+        assertThat(refunds).hasValue(point == CrashPoint.REFUND ? 1 : 0);
+        if (point == CrashPoint.RELEASE)
+            assertThat(remote.get().getStatus())
+                    .isEqualTo(ReservationStatus.RESERVATION_STATUS_RELEASED);
+        else {
+            assertThat(remotePayment.get().getStatus())
+                    .isEqualTo(
+                            point == CrashPoint.CANCEL
+                                    ? PaymentStatus.PAYMENT_STATUS_CANCELLED
+                                    : PaymentStatus.PAYMENT_STATUS_REFUNDED);
+            if (point == CrashPoint.REFUND) {
+                assertThat(remoteRefund.get().getPaymentId())
+                        .isEqualTo(remotePayment.get().getId());
+                assertThat(remoteRefund.get().getStatus())
+                        .isEqualTo(RefundStatus.REFUND_STATUS_COMPLETED);
+                assertThat(remoteRefund.get().getAmount())
+                        .isEqualTo(remotePayment.get().getAmount());
+            }
+        }
     }
 
     @AfterEach
@@ -319,11 +382,9 @@ class CheckoutRecoveryProcessIT {
         public void findReservationsByOrder(
                 FindReservationsByOrderRequest request,
                 StreamObserver<FindReservationsByOrderResponse> observer) {
-            reply(
-                    observer,
-                    FindReservationsByOrderResponse.newBuilder()
-                            .addReservations(remote.get())
-                            .build());
+            var response = FindReservationsByOrderResponse.newBuilder();
+            if (remote.get() != null) response.addReservations(remote.get());
+            reply(observer, response.build());
         }
 
         @Override
@@ -341,8 +402,64 @@ class CheckoutRecoveryProcessIT {
                             value.toBuilder()
                                     .setStatus(ReservationStatus.RESERVATION_STATUS_RELEASED)
                                     .build());
-            releaseCommitted.countDown();
+            mutationCommitted.countDown();
             // Acknowledge nothing: the parent kills the requesting JVM after the mutation.
+        }
+    }
+
+    private class PaymentEndpoint extends PaymentServiceGrpc.PaymentServiceImplBase {
+        @Override
+        public void findPaymentsByOrder(
+                FindPaymentsByOrderRequest request,
+                StreamObserver<FindPaymentsByOrderResponse> observer) {
+            var response = FindPaymentsByOrderResponse.newBuilder();
+            if (remotePayment.get() != null) response.addPayments(remotePayment.get());
+            reply(observer, response.build());
+        }
+
+        @Override
+        public void getPayment(GetPaymentRequest request, StreamObserver<Payment> observer) {
+            assertThat(request.getPaymentId()).isEqualTo(remotePayment.get().getId());
+            reply(observer, remotePayment.get());
+        }
+
+        @Override
+        public void cancelPayment(CancelPaymentRequest request, StreamObserver<Payment> observer) {
+            assertThat(request.getPaymentId()).isEqualTo(remotePayment.get().getId());
+            cancellations.incrementAndGet();
+            remotePayment.updateAndGet(
+                    value ->
+                            value.toBuilder()
+                                    .setStatus(PaymentStatus.PAYMENT_STATUS_CANCELLED)
+                                    .build());
+            mutationCommitted.countDown();
+            // Deliberately lose the successful response across worker termination.
+        }
+
+        @Override
+        public void refundPayment(RefundPaymentRequest request, StreamObserver<Refund> observer) {
+            assertThat(request.getPaymentId()).isEqualTo(remotePayment.get().getId());
+            assertThat(request.hasAmount()).as("worker requests the remaining balance").isFalse();
+            assertThat(request.getIdempotencyKey())
+                    .isEqualTo(
+                            "order-cleanup-"
+                                    + jdbc.queryForObject(
+                                            "SELECT id FROM orders.cleanup_task", UUID.class));
+            refunds.incrementAndGet();
+            remoteRefund.set(
+                    Refund.newBuilder()
+                            .setId(UUID.randomUUID().toString())
+                            .setPaymentId(request.getPaymentId())
+                            .setAmount(remotePayment.get().getAmount())
+                            .setStatus(RefundStatus.REFUND_STATUS_COMPLETED)
+                            .build());
+            remotePayment.updateAndGet(
+                    value ->
+                            value.toBuilder()
+                                    .setStatus(PaymentStatus.PAYMENT_STATUS_REFUNDED)
+                                    .build());
+            mutationCommitted.countDown();
+            // The fixture refund survives; the requesting worker does not receive its reply.
         }
     }
 
@@ -442,7 +559,7 @@ class CheckoutRecoveryProcessIT {
                 Properties result = new Properties();
                 var completed =
                         metrics.find("order.cleanup.completed")
-                                .tag("type", "RESERVATION")
+                                .tag("type", settings.getProperty("type"))
                                 .counter();
                 var failures = metrics.find("order.recovery.worker.failures").counter();
                 result.setProperty(

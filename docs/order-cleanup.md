@@ -103,6 +103,15 @@ uses the production V7/V8 migrations; loopback TCP endpoints hold synthetic remo
 state. The release endpoint changes that state and withholds its reply. The test
 forcibly terminates the requesting JVM before it can acknowledge the durable task.
 
+Two payment variants now terminate the worker after pending cancellation or a
+remaining-balance refund commits in the fixture, before the RPC reply arrives.
+Each replacement must respect the live lease, then acknowledge the terminal
+payment after real expiry without another cancellation or refund. The refund
+fixture verifies the durable task-derived idempotency key and omitted amount;
+its refund identity, full amount and terminal payment remain unchanged on replay.
+All three variants use fresh test-owned resources and reset only their isolated
+Testcontainers schema between cases.
+
 A replacement JVM must leave the live lease, attempt count and remote state alone.
 The test observes PostgreSQL's clock until the original two-minute lease expires;
 it never updates lease or retry timestamps. A fresh JVM then reads the already
@@ -121,11 +130,15 @@ Run both worker fixtures with Docker available:
   -Dfailsafe.failIfNoSpecifiedTests=false
 ```
 
-This focused command runs three unit and eleven PostgreSQL integration cases.
+This focused command selects three unit and thirteen PostgreSQL integration cases.
+The payment crash follow-up passes all sixteen cases without failures, errors or
+skips. Cancellation and refund crash methods take 138.277 and 134.130 seconds;
+the release case takes 158.039 seconds. Exact-source reports are retained in
+`coverage/checkout-recovery-payment-crash-local-evidence.zip` and JSON.
 It does not run the complete reactor or its combined coverage gate; full CI is
 still required. The process fixture uses a directly invoked tick, plaintext
 loopback RPCs and synthetic credentials. Scheduler restart, a full application
-container crash, downstream-service restart, payment/refund crash points and
+container crash, downstream-service restart, other payment/refund crash points and
 production JWT/mTLS provisioning remain separate acceptance work. Recovery and
 expiry remain disabled by default.
 
@@ -148,9 +161,13 @@ See [order verification](order-verification.md) for execution scope.
 Two additional deployed specifications extend `RecoveryTransportIT` to workload
 release/cancellation and remaining-refund replay on test-owned orphan resources.
 They verify identities before mutation, use the real projector JWT and mTLS,
-and clean up only verified fixture IDs. Formatting and compilation pass; both
-new cases still require deployed execution before acceptance. They issue RPCs
-directly with the development refund provider. See [the command and scope](external-e2e.md#recovery-compensation-transport-specifications).
+and clean up only verified fixture IDs. [PR #13](https://github.com/vamegah/order-management-platform/pull/13)
+and its merged main workflow pass all 1,193 reactor and 23 deployed cases,
+including all seven transport cases. Exact-source reports and approved merge
+records are retained in the compensation transport CI evidence archives; see
+[the implementation report](task-implementation-report.md#compensation-transport-pr-and-main-acceptance-2026-11-08).
+These cases issue RPCs directly with the development refund provider. See
+[the command and scope](external-e2e.md#recovery-compensation-transport-specifications).
 
 Completed tasks and orphan journal rows are retained. Orphan attempts are intentionally rescanned indefinitely; define a retention/archive policy only with a bounded remote-write horizon and recovery evidence. Legacy orphan resources created before the journal migration have no discoverable attempt record and require an initial audit. Confirmed-payment cleanup now uses the provider-backed refund workflow; permanent failures, legacy intents and missing-webhook reconciliation still need operator handling. Inventory TTL expiry remains disabled until the accepted-order lifecycle handles expired holds. The broader gRPC authorization and mTLS review remains open.
 

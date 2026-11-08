@@ -741,7 +741,7 @@ Final verification after the repository and fixture fixes:
   payment/shared run passed unit tests, packaging, JaCoCo reporting, SpotBugs and
   all thirteen `PaymentCreationConcurrencyIT` PostgreSQL cases, with no test
   failures, errors or skips. This includes all three new reconciliation cases.
-  Flyway applied V1–V7 and Hibernate validated the real schema. Provider intent
+  Flyway applied V1â€“V7 and Hibernate validated the real schema. Provider intent
   visibility, leases, recovery, webhook deduplication, audit rollback, reference
   uniqueness and the cross-protocol creation race were exercised against the
   database. Other container suites and deployed delivery are not covered by this
@@ -791,7 +791,7 @@ See [scope and commands](catalog-customer-verification.md).
 Initial verification:
 
 - `catalog-customer-schema-verification.log`: both application smoke tests passed
-  against PostgreSQL 16.4 after Flyway V1–V2 and Hibernate validation.
+  against PostgreSQL 16.4 after Flyway V1â€“V2 and Hibernate validation.
 - `catalog-customer-cors-verification.log`: all five selected reactor modules
   passed; 43 product and 31 customer integration tests passed with zero failures,
   errors or skips. Product/customer unit counts were 22/19 at this stage. Final
@@ -910,7 +910,7 @@ Final complete focused lifecycle result:
   failure; no threshold or exclusion was relaxed.
 - `catalog-lifecycle-final-evidence.log` confirms every selected source suite has
   passing reports, including the SKU parameterized cases and aggregate ownership
-  tests. Packaged changed classes, application configuration and V1–V2 migrations
+  tests. Packaged changed classes, application configuration and V1â€“V2 migrations
   match the build/source. `catalog-lifecycle-policy-evidence.log` records the
   configured exclusions, instruction counters and successful Maven gate output.
 
@@ -2339,3 +2339,54 @@ failure injection, downstream restart, production provider behavior, complete
 historical discovery and accepted-order/payment expiry coordination remain open.
 This follow-up changes tests and documentation. Recovery and expiry remain
 disabled and parent lifecycle tasks stay unchecked.
+
+## Compensation transport PR and main acceptance (2026-11-08)
+
+[PR #13](https://github.com/vamegah/order-management-platform/pull/13) passes its
+[complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42482612433) at `bcdf4e9`: 1,193 reactor cases (918 unit and
+275 integration), 23 deployed service/client cases, two packaged payment journeys,
+seventeen client transport and 32 contract-job cases. All fourteen exact-base
+unit coverage comparisons pass with unchanged production counts. Fifteen static
+reports, the 211-dependency policy, all ten images and five issuer checks pass.
+
+With explicit approval it is merged as `7114cb1` under strict protected checks.
+[The complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42484444407) passes all twenty jobs on its first
+attempt with the same 1,193 reactor and 23 deployed cases. JUnit evidence checks
+all seven transport cases, including both new compensation methods, ten worker
+cases and the original process case (126.633 seconds in PR CI and 126.723
+seconds on main). Required reports have no failures, errors or skips. The merged
+source tree equals the reviewed tree, and its parents match the approved base
+and head. Reports, workflow logs and source/merge/protection records are retained:
+
+- `coverage/recovery-compensation-transport-ci-evidence.zip` and JSON:
+  SHA-256 `e327a3fecc013f96b96b7e8e5f964ef6288b175b1cb5e70054cfcb35316ba4e4`.
+- `coverage/recovery-compensation-transport-main-ci-evidence.zip` and JSON:
+  SHA-256 `a74161912e1271a840fbb7b68893b2d18d1ea9f8b6d94261eefe0b8afbea7fd0`.
+
+This accepts direct projected JWT/mTLS compensation against the development noop
+refund provider. Scheduled/container/downstream restart, production-provider
+behavior, further crash points and accepted-order expiry coordination remain open.
+
+## Payment compensation process crash specifications (2026-11-08)
+
+Two additional `CheckoutRecoveryProcessIT` invocations kill the real worker JVM
+after a fixture payment cancellation or remaining-balance refund succeeds but
+before its response is acknowledged. Replacement JVMs respect the original
+cleanup lease, wait on PostgreSQL's unmodified clock and acknowledge the terminal
+payment without repeating compensation. The refund request must omit the amount
+and retain the key derived from the durable task. Refund identity/amount, payment
+state, durable attempts/leases, metrics, forwarded identity and RPC transaction
+boundaries are checked through another fresh worker process.
+
+Formatting, compilation, three focused worker unit and all thirteen PostgreSQL
+cases pass without failures, errors or skips. The cancellation/refund process
+methods take 138.277/134.130 seconds, and the release method takes 158.039 seconds;
+each observes the unmodified lease deadline. Long-classpath JVM-launch preflight
+also passes. Exact-source local evidence is retained in
+`coverage/checkout-recovery-payment-crash-local-evidence.zip` and JSON. Complete
+CI must execute all 1,195 reactor and 23 deployed cases before acceptance. This
+changes tests and documentation only. The endpoints retain synthetic state in the parent
+fixture; they do not restart or exercise a production refund processor. Scheduled
+application/container recovery, downstream restart, additional crash points and
+accepted-order expiry coordination remain open. Recovery and expiry stay
+disabled by default, and no parent task is marked complete.
