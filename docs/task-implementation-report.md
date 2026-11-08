@@ -2106,13 +2106,67 @@ accepted-order/payment expiry coordination remain open. No worker is enabled by
 default, and the parent lifecycle task remains unchecked.
 
 With user approval, this feature is published in
-[draft PR #9](https://github.com/vamegah/order-management-platform/pull/9).
+[PR #9](https://github.com/vamegah/order-management-platform/pull/9).
 The verification follow-up adds four required deployed HTTP cases using the real
 issuer and ingress: administrator policy, invalid requests without admission,
 verified subject/first-audit retention without aggregate creation, and rejection
 of a test-owned existing order without changing its payment/reservation. That
-order is cancelled afterward. The focused integration-client build compiles and
-formats the new fixture; the existing evidence checker rejects its missing
-report, so CI must execute it. Complete follow-up CI remains required before
-separate ready/merge and main-verification approval. Runtime, migration and
-focused test sources are unchanged from the archived 480-case local build.
+order is cancelled afterward. Runtime, migration and focused test sources are
+unchanged from the archived 480-case local build.
+
+The complete [PR workflow at `8ffbf83`](https://github.com/vamegah/order-management-platform/actions/runs/42423657218)
+passes all 1,182 reactor cases (918 unit and 264 integration), sixteen deployed
+service/client cases (fourteen Java and two client), two packaged payment-to-webhook
+cases, seventeen client transport cases and 32 contract cases. All fourteen
+exact-base unit coverage comparisons, fifteen complete static reports, the
+211-dependency NVD policy, ten image builds and five isolated issuer checks pass.
+Exact-source reports and logs are retained in
+`coverage/orphan-recovery-adoption-ci-evidence.zip` and JSON, SHA-256
+`f43d8197bb8433c1adc934a99081a90a1f8301e5e7c50dc461e4b22882a99f92`.
+The superseded initial workflow was cancelled after the verification follow-up;
+its incomplete run is not acceptance evidence.
+
+With separate user approval, PR #9 is marked ready and merged as `a8afa7d` after
+verifying strict freshness, the GitHub Actions quality gate and administrator
+enforcement. The [complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42425432635)
+passes every gate on its first attempt with the same counts. Main reports, logs,
+exact source and merge/protection records are retained separately in
+`coverage/orphan-recovery-adoption-main-ci-evidence.zip` and JSON, SHA-256
+`2690e426d3f7bcf46da4cd1ca9b640c2d8eda25a997b5655add9790d58d128f3`.
+The parent reconciliation task remains unchecked: complete historical ledger
+discovery, downstream workload/crash compensation, production credentials and
+accepted-order expiry/payment coordination remain separate acceptance work.
+
+## Recovery workload transport acceptance specifications (2026-11-07)
+
+The next isolated follow-up adds five required `RecoveryTransportIT` cases to
+the existing external e2e profile. Each uses the committed development realm;
+the real token projector writes its client-credentials JWT to a private
+temporary file. The clients preserve the original CA, hostname verification,
+client certificate and per-RPC deadlines. The suite explicitly rejects a
+plaintext test configuration.
+
+The cases specify exact discovery of a test-owned order's persisted reservation
+and payment, renewed projection acceptance on existing TLS channels, rejection
+of a changed signature with otherwise valid workload claims, denial of ordinary
+administrator/customer tokens at both scoped discovery methods, and denial of
+workload access to administrator orphan admission. The owned order is cancelled
+in cleanup. Admission-only UUIDs have no remote resources and belong to the
+isolated test database. Neither tokens nor credentials appear in child-process
+diagnostics or equality assertions.
+
+The four-module `spotless:apply test-compile -DskipTests` build succeeds in
+`recovery-transport-acceptance-compile.log`. This is compilation evidence only:
+none of the five deployed cases has executed locally. The unchanged evidence
+checker discovers `RecoveryTransportIT` and rejects its absent Failsafe report.
+The fresh-stack CI job already provides Python 3.12, the updated realm and mTLS;
+custom caller images must also supply Python (`E2E_PYTHON` selects its executable).
+Full CI and deployed execution remain required after separate publication
+approval. The expected external count increases from sixteen to twenty-one;
+the default reactor still excludes the e2e tag.
+
+This follow-up changes tests and documentation only. It does not enable recovery
+or expiry workers or establish process-crash/lease recovery, invalid client
+certificate rejection, production issuer/secret rotation, complete historical
+ledger discovery or accepted-order expiry/payment coordination. The parent
+lifecycle tasks remain unchecked.

@@ -29,6 +29,12 @@ reactor command also runs default container tests. For just the externally
 deployed journeys, use `./mvnw -pl integration-tests -am -Pe2e verify`; this focused
 command does not replace complete reactor acceptance.
 
+The Java test runner also needs Python 3.12 or newer on its path. Set `E2E_PYTHON`
+to its executable path when it is not named `python`. `RecoveryTransportIT` runs
+the checked-in token projector as a child process from the repository root;
+custom Linux caller images must include Python as well as Java. The dedicated
+stack must import the current development realm, including `order-recovery`.
+
 The opt-in Compose override binds inventory/payment gRPC to loopback ports 9091
 and 9093, retains their mTLS configuration, and exposes notification management
 on loopback port 18085. It selects the development `noop` payment provider for
@@ -114,6 +120,19 @@ operator subject and preservation of the first audit on repeats. Its test-owned
 order proves admission cannot reclassify an accepted aggregate or change its
 inventory/payment resources; that order is cancelled afterward. Admission-only
 UUIDs have no remote resources and disappear with the isolated test database.
+
+Five recovery-identity cases project real client-credentials JWTs to private
+temporary files, then call both scoped discovery RPCs over the existing mTLS
+client. They require TLS even if another fixture supports plaintext. The cases
+check exact references on a test-owned order, renewed projection acceptance on
+existing channels, rejection after changing a valid token's signature,
+ordinary administrator/customer scope denial, and denial of administrator orphan
+admission to the workload identity. The owned order is cancelled afterward.
+Secret and token files stay in the runner's temporary directory; child-process
+output is discarded and diagnostics contain no bearer values. These cases do
+not enable a recovery worker or exercise process termination, lease recovery,
+invalid client certificates or accepted-order expiry coordination.
+
 The WebSocket case first waits for the public SockJS ingress route after container
 replacement, then waits for the authenticated subscription gauge, triggers a
 new order event, verifies its identity, and checks unsubscribe cleanup. It uses

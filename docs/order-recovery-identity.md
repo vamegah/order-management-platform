@@ -91,6 +91,17 @@ identity. It removes only its own labelled container and temporary credentials.
 Its JSON report contains public metadata and source hashes, never tokens or
 credentials. CI requires this job alongside the existing application gates.
 
+`RecoveryTransportIT` adds separate deployed acceptance specifications to the
+external e2e profile. It invokes this projector with the committed development
+client in private temporary files, then uses its issued JWT with the original
+mTLS client identity against inventory and payment. Its five cases cover owned
+resource discovery, projection renewal on existing channels, invalid signatures,
+ordinary-user scope denial and workload denial at the administrator admission
+endpoint. The runner requires Python 3.12 or newer (`E2E_PYTHON` can select its
+executable). See [external e2e](external-e2e.md) for the fresh-stack command and
+certificate setup. Compilation alone does not establish deployed acceptance;
+execution results must be recorded in the implementation report.
+
 Use a trusted HTTPS token endpoint and issuer, a dedicated client credential from
 the deployment secret manager and a supervised projector running as the
 application identity. Do not copy development secrets or saved user JWTs into
