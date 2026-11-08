@@ -90,9 +90,44 @@ Run the focused build with Docker available:
 
 The fixture invokes ticks directly and advances database retry/lease eligibility
 explicitly. It uses a synthetic token and controlled RPC endpoints. Process
-termination, scheduler timing, real elapsed lease recovery and full downstream
-service failures require a deployed worker fixture. Issued-JWT/mTLS acceptance
+termination and real elapsed lease recovery are covered separately by the process
+fixture below. Scheduler timing and full downstream service failures remain open.
+Issued-JWT/mTLS acceptance
 is recorded separately in [the implementation report](task-implementation-report.md).
+
+## Worker process and elapsed lease verification
+
+`CheckoutRecoveryProcessIT` forks the actual recovery worker into a separate JVM
+with production journal/cleanup transactions and generated clients. PostgreSQL
+uses the production V7/V8 migrations; loopback TCP endpoints hold synthetic remote
+state. The release endpoint changes that state and withholds its reply. The test
+forcibly terminates the requesting JVM before it can acknowledge the durable task.
+
+A replacement JVM must leave the live lease, attempt count and remote state alone.
+The test observes PostgreSQL's clock until the original two-minute lease expires;
+it never updates lease or retry timestamps. A fresh JVM then reads the already
+released resource and completes the task without repeating the release. Another
+tick preserves completion and its attempt count. Assertions check durable rows,
+pending/completion metrics, forwarded identity and RPCs outside transactions.
+Each child is bounded and cleaned up; Java argument files support long classpaths
+and paths containing spaces.
+
+Run both worker fixtures with Docker available:
+
+```sh
+./mvnw -pl order-service -am package failsafe:integration-test failsafe:verify \
+  -Dtest=CheckoutRecoveryJobTest -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dit.test=CheckoutRecoveryWorkerIT,CheckoutRecoveryProcessIT \
+  -Dfailsafe.failIfNoSpecifiedTests=false
+```
+
+This focused command runs three unit and eleven PostgreSQL integration cases.
+It does not run the complete reactor or its combined coverage gate; full CI is
+still required. The process fixture uses a directly invoked tick, plaintext
+loopback RPCs and synthetic credentials. Scheduler restart, a full application
+container crash, downstream-service restart, payment/refund crash points and
+production JWT/mTLS provisioning remain separate acceptance work. Recovery and
+expiry remain disabled by default.
 
 ## Remaining acceptance
 
@@ -104,7 +139,7 @@ Existing attempts and orders retain their ordinary lifecycle/retry paths.
 The five real projector/issuer/mTLS cases in `RecoveryTransportIT` pass in PR #10
 and its complete main workflow. They establish scoped discovery, renewed
 projection acceptance and the tested signature/permission boundaries. Full
-checkout failure injection, process-crash recovery and scheduled worker
+checkout failure injection, additional crash points and scheduled worker
 deployment acceptance remain open. `CheckoutJournalIT` separately verifies
 database fencing, rollback, SKIP LOCKED acceptance, simulated expired leases and
 repeat discovery. Run it with `./mvnw -pl order-service -am verify -Dit.test=CheckoutJournalIT -Dfailsafe.failIfNoSpecifiedTests=false`.

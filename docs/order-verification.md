@@ -206,4 +206,29 @@ three targeted `CheckoutRecoveryJobTest` unit cases without failures, errors or
 skips. The ten new PostgreSQL cases compile but have not executed locally because
 the Docker engine is unavailable. Source-bound evidence is retained in
 `coverage/recovered-worker-failure-acceptance-local-evidence.zip` and JSON.
-Full CI execution remains required before accepting these integration cases.
+Full PR CI subsequently executes all ten cases without failures, errors or skips;
+see [the PR/default-branch record](task-implementation-report.md#durable-worker-pr-and-default-branch-acceptance).
+
+## Worker process termination fixture
+
+`CheckoutRecoveryProcessIT` adds one default PostgreSQL case using separate worker
+JVMs and loopback generated RPC endpoints. It kills a worker after a synthetic
+remote release but before acknowledgment, verifies live-lease exclusion from a
+replacement process, waits for PostgreSQL's real lease deadline, and checks that
+new processes acknowledge and preserve completion without repeating the mutation.
+Durable attempts/leases, pending/completion metrics, identity forwarding and
+transaction boundaries are asserted. No lease/retry timestamp is advanced by SQL.
+
+The fixture uses manual ticks and synthetic credentials. It does not establish
+scheduler/container restart, downstream-service restart, payment/refund crash
+recovery or production identity acceptance. See [the focused command and scope](order-cleanup.md#worker-process-and-elapsed-lease-verification).
+
+The focused seven-module `package failsafe:integration-test failsafe:verify` run
+passes three worker unit and all eleven selected PostgreSQL cases without
+failures, errors or skips. The process case takes 166.207 seconds, including real
+lease expiry. Formatting/compilation and a separate JVM-launch preflight pass;
+the latter handles a 50,730-character classpath and paths containing spaces.
+Exact-source local reports and logs are retained in
+`coverage/checkout-recovery-process-local-evidence.zip` and JSON. This focused
+command does not run the complete reactor or its combined coverage gate. Full
+CI must execute all 1,193 reactor cases and the unchanged 21 deployed cases.
