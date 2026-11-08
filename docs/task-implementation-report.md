@@ -2223,3 +2223,64 @@ logs and exact source are retained in
 `coverage/recovered-worker-failure-acceptance-local-evidence.zip` and JSON.
 Full CI is expected to execute 1,192 reactor cases and the unchanged 21 external
 cases. No passing integration result is claimed for this reconstructed fixture.
+
+## Durable worker PR and default-branch acceptance
+
+[PR #11](https://github.com/vamegah/order-management-platform/pull/11) subsequently
+executes all ten reconstructed worker cases. Its complete workflow passes 1,192
+reactor cases (918 unit and 274 integration), 21 deployed service/client cases,
+two packaged payment-to-webhook cases, seventeen client transport cases and
+32 contract-job cases without required failures, errors or skips. All fourteen
+exact-base unit coverage comparisons pass with identical production instruction
+counts; order remains 4,450 covered/3,021 missed. All fifteen static reports,
+211-dependency vulnerability policy, ten image builds and five isolated issuer
+checks pass.
+
+After explicit user approval, verified `440488f` is merged as `a4a3324` with the
+strict protected quality gate enforced. [Main's complete workflow](https://github.com/vamegah/order-management-platform/actions/runs/42443556747)
+also passes all twenty jobs on its first attempt, with the same 1,192 reactor
+and 21 deployed cases. The required ten-case worker and five-case transport
+reports are checked explicitly. Main's exact source tree equals the PR's tested
+source tree. Source-bound reports, workflow logs and merge/protection records
+are retained separately:
+
+- `coverage/recovered-worker-failure-acceptance-ci-evidence.zip` and JSON:
+  SHA-256 `d87ddf2f363d362744f6f14113cd121c03ef0e522d851d157b20973aa346ba1f`.
+- `coverage/recovered-worker-failure-acceptance-main-ci-evidence.zip` and JSON:
+  SHA-256 `420635445c4752c043663fec8136eab80debd7b417da5714e59561cebf2e1fd4`.
+
+This accepts the bounded transaction/retry fixture. Actual process termination,
+elapsed leases and scheduler/full-downstream recovery were outside that change.
+
+## Worker process termination and elapsed lease continuation (2026-11-07)
+
+A separate test-only follow-up adds `CheckoutRecoveryProcessIT`. PostgreSQL uses
+the production V7/V8 schema, and loopback generated RPC endpoints keep synthetic
+remote state. The actual worker runs in separate JVMs with proxied journal and
+cleanup transactions. The fixture release changes remote state but withholds
+the reply; the requesting JVM is forcibly terminated. A replacement JVM leaves
+the live durable lease and attempt count unchanged. The test observes
+PostgreSQL's real clock until the original two-minute lease expires, without
+editing lease or retry timestamps. Fresh JVMs acknowledge the released resource
+and preserve completion without repeating the mutation. Durable completion,
+attempt/lease fields, metrics, forwarded identity and RPC transaction boundaries
+are asserted. Child processes/channels are bounded and cleaned up.
+
+Docker becomes available during this continuation. The seven-module focused
+`package failsafe:integration-test failsafe:verify` run passes all fourteen cases
+(three targeted worker unit and eleven PostgreSQL integration), with no failures,
+errors or skips. The new process method takes 166.207 seconds; the ten previous
+worker integration cases also pass. Log: `recovery-process-postgres-verification.log`
+(06:55, exit 0). Formatting/compilation and separate JVM-launch preflight pass;
+the launcher supports the actual 50,730-character classpath and paths with
+spaces using a Java argument file. Exact-source reports and logs are retained
+in `coverage/checkout-recovery-process-local-evidence.zip` and JSON.
+
+This command does not run full-reactor or combined coverage acceptance. Publication
+and full CI execution remain required: 1,193 reactor cases (including the new
+process case and ten worker cases) and 21 deployed service/client cases. The
+fixture invokes ticks directly and uses plaintext loopback RPCs and synthetic
+credentials. Scheduler restart, a full application container crash, downstream
+restart, payment/refund crash points, complete historical discovery and
+accepted-order/payment expiry coordination remain open. Recovery and expiry
+remain disabled; parent lifecycle tasks remain unchecked.
