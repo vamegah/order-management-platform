@@ -71,6 +71,29 @@ ORDER BY recover_after, order_id
 LIMIT 100;
 ```
 
+## Worker transaction and retry verification
+
+`CheckoutRecoveryWorkerIT` combines the actual worker, proxied journal and cleanup
+queue with PostgreSQL 16.4 and generated gRPC test endpoints. It loads the
+production V7/V8 migrations beside a minimal aggregate guard table. Endpoints
+inject a failed payment lookup and a release that changes state but loses its
+reply. The ten cases cover durable retry, safe repeat discovery, acknowledgment
+by a fresh worker object, stale lease completion, token-file replacement and
+exclusion of all six accepted active order states. Assertions inspect durable
+rows, recovery/cleanup metrics, identity forwarding and RPCs outside transactions.
+
+Run the focused build with Docker available:
+
+```sh
+./mvnw -pl order-service -am -Pstatic-analysis verify
+```
+
+The fixture invokes ticks directly and advances database retry/lease eligibility
+explicitly. It uses a synthetic token and controlled RPC endpoints. Process
+termination, scheduler timing, real elapsed lease recovery and full downstream
+service failures require a deployed worker fixture. Issued-JWT/mTLS acceptance
+is recorded separately in [the implementation report](task-implementation-report.md).
+
 ## Remaining acceptance
 
 For a reviewed historical orphan UUID with no aggregate or normal checkout
@@ -78,7 +101,14 @@ attempt, use the audited [orphan admission procedure](order-orphan-adoption.md).
 It creates a recovery intent and preserves normal discovery/cleanup checks.
 Existing attempts and orders retain their ordinary lifecycle/retry paths.
 
-Deploy and verify the rotating issuer identity and full checkout failure-injection journeys. The five `CheckoutJournalIT` PostgreSQL cases now pass, covering fencing, rollback, SKIP LOCKED acceptance, expired leases and repeat discovery. Run them from the reactor with `./mvnw -pl order-service -am verify -Dit.test=CheckoutJournalIT -Dfailsafe.failIfNoSpecifiedTests=false`. See [order verification](order-verification.md) for the executed local scope; deployed recovery identity and full-stack acceptance remain open.
+The five real projector/issuer/mTLS cases in `RecoveryTransportIT` pass in PR #10
+and its complete main workflow. They establish scoped discovery, renewed
+projection acceptance and the tested signature/permission boundaries. Full
+checkout failure injection, process-crash recovery and scheduled worker
+deployment acceptance remain open. `CheckoutJournalIT` separately verifies
+database fencing, rollback, SKIP LOCKED acceptance, simulated expired leases and
+repeat discovery. Run it with `./mvnw -pl order-service -am verify -Dit.test=CheckoutJournalIT -Dfailsafe.failIfNoSpecifiedTests=false`.
+See [order verification](order-verification.md) for execution scope.
 
 Completed tasks and orphan journal rows are retained. Orphan attempts are intentionally rescanned indefinitely; define a retention/archive policy only with a bounded remote-write horizon and recovery evidence. Legacy orphan resources created before the journal migration have no discoverable attempt record and require an initial audit. Confirmed-payment cleanup now uses the provider-backed refund workflow; permanent failures, legacy intents and missing-webhook reconciliation still need operator handling. Inventory TTL expiry remains disabled until the accepted-order lifecycle handles expired holds. The broader gRPC authorization and mTLS review remains open.
 
