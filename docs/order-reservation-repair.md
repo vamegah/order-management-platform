@@ -8,6 +8,34 @@ mutates inventory and does not advance the order state.
 
 ## Inspect and prepare
 
+### Census missing and shared references
+
+An administrator can scan local reference metadata with
+`GET /api/v1/order-reservation-repairs/census?limit=50`. Responses contain
+`scanned`, `nextAfterLineId` and `findings`. Supply the returned cursor as
+`afterLineId` on the next request until `nextAfterLineId` is null. An empty
+`findings` list does not end the traversal: a page can contain healthy lines.
+The limit must be between 1 and 100. Each query limits its result to `limit + 1`
+line rows in UUID order, with a five-second database transaction timeout.
+
+Findings identify the order, its version and status, line, SKU, quantity and
+reference, with `MISSING_REFERENCE` or `SHARED_REFERENCE`. A shared reference
+appears on every affected line, including lines on different orders. The scan
+does not call inventory, allocate holds, change order state, append repair audit
+rows or publish events. Inspect and verify each finding through the repair
+procedure below before proposing a binding.
+
+This is a live metadata census, not a consistent database snapshot or proof of
+remote ownership. Concurrent inserts behind the cursor or repairs can change
+results; repeat the scan or use an operationally consistent snapshot for a final
+historical completeness decision. Empty orders and wrong remote ownership on an
+otherwise distinct reference require separate validation. Terminal missing rows,
+warehouse provenance, active holds that cannot be recovered and conflicting
+existing references still require an audited historical disposition. They are
+not silently treated as repaired.
+
+### Inspect an individual order
+
 Use an administrator identity accepted by order-service and inventory-service.
 GET the repair resource to obtain its current `version`, status, line IDs and
 `missing` count. Ordinary order owners cannot inspect or execute repairs.
@@ -79,3 +107,14 @@ checks current reservation/payment state. Recovery and expiry workers remain
 disabled by default. Deployed workload identity, historical inventory discovery,
 process-crash recovery and accepted-order/payment expiry coordination retain
 their separate acceptance requirements in [TASKS.md](../TASKS.md).
+
+## Census verification
+
+Clean order/shared verification passes 505 cases (417 unit and 88 integration),
+including complete cursor traversal, missing/shared references, read-only state,
+administrator authorization and invalid request boundaries. The unchanged order
+coverage gate passes at 86.30%; all five focused unit comparisons and six complete
+static reports pass. Source-bound local evidence is retained in
+`coverage/reservation-reference-census-local-evidence.zip` and JSON. Complete CI
+must execute 1,207 reactor and 25 deployed cases before acceptance. The census
+does not close historical repair/disposition or remote ownership requirements.

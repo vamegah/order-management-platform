@@ -11,15 +11,15 @@ acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `16734d4`, the approved merge of
-[PR #15](https://github.com/vamegah/order-management-platform/pull/15).
-[Its main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42534234966)
-passes all twenty jobs, 1,196 reactor cases and 23 deployed service/client cases.
-The exact source, reports and approval/protection records are archived in
-`coverage/checkout-recovery-scheduler-main-ci-evidence.zip` and JSON. The first
-local implementation batch adds the supervised projector and deployed scheduled
-recovery acceptance described in 1.3. Subsequent publication and merge actions
-follow the existing scoped approval agreement.
+The accepted main baseline is `a3e4b85`, the repository owner's merge of
+[PR #16](https://github.com/vamegah/order-management-platform/pull/16).
+[Its main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42544792059)
+passes all twenty jobs, 1,196 reactor cases and 25 deployed service/client cases.
+The exact source, reports and merge/protection records are archived in
+`coverage/scheduled-recovery-deployment-main-ci-evidence.zip` and JSON. The first
+batch delivers the supervised projector and deployed scheduled recovery prerequisite
+in 1.3. The next batch addresses the historical reference census in 1.1.
+Subsequent publication and merge actions follow the existing scoped approval agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
 [implementation report](task-implementation-report.md). Its early summaries and

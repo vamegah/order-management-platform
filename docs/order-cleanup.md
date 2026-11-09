@@ -197,9 +197,12 @@ eligibility updates accelerate recovery.
 See [the isolated deployment command and scope](external-e2e.md#scheduled-recovery-acceptance)
 and [the implementation report](task-implementation-report.md#supervised-deployed-checkout-recovery-2026-11-08).
 Exact-source local evidence is retained in
-`coverage/scheduled-recovery-deployment-local-evidence.zip` and JSON. Complete CI
-must execute all 1,196 reactor and 25 deployed cases before acceptance. Production
-identity/provider behavior and expiry/compensation for accepted orders remain open.
+`coverage/scheduled-recovery-deployment-local-evidence.zip` and JSON.
+[PR #16](https://github.com/vamegah/order-management-platform/pull/16) and
+[its merged main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42544792059)
+pass all twenty jobs, 1,196 reactor and 25 deployed cases. Exact-source PR/main
+archives are recorded in [the acceptance report](task-implementation-report.md#supervised-recovery-pr-and-main-acceptance-2026-11-08).
+Production identity/provider behavior and expiry/compensation for accepted orders remain open.
 
 ## Remaining acceptance
 

@@ -2,16 +2,16 @@
 
 Updated: 2026-11-08. Feature and release acceptance remain incomplete.
 
-The accepted main baseline is `16734d4` (approved PR #15). Its complete protected
-workflow passes all twenty jobs, 1,196 reactor cases and 23 deployed service/client
-cases. Exact source, reports and approved merge/protection records are retained
-in the scheduler CI evidence archives documented in the latest acceptance section.
+The accepted main baseline is `a3e4b85` (PR #16, merged by the repository owner).
+Its complete protected workflow passes all twenty jobs, 1,196 reactor cases and
+25 deployed service/client cases. Exact source, reports and merge/protection
+records are retained in the supervised recovery CI evidence archives documented
+in the latest acceptance section.
 
-The current local follow-up implements supervised deployed recovery. Its final
-focused run passes 70 unit and two real deployed cases, with 59 tooling cases and
-configuration/guard/private-mount checks. Complete hosted CI for this revision
-remains required, including all 1,196 reactor and 25 deployed cases. Local focused
-evidence does not substitute for that gate.
+The current local follow-up implements a bounded administrator census of missing
+and shared reservation references. It remains separate from accepted PR #16;
+local verification prepares it for publication review. Complete hosted CI and
+main verification remain required before acceptance.
 
 Sections 1-7 retain 33 open items. The [implementation plan](task-implementation-plan.md)
 defines their delivery order and completion criteria; [TASKS.md](../TASKS.md)
@@ -2513,3 +2513,74 @@ identity and controlled container failures. Full checkout failure injection,
 accepted-order expiry/partial-fulfillment compensation, historical ledger
 completeness and production identity/provider acceptance remain open. Parent
 lifecycle items remain unchecked.
+
+## Supervised recovery PR and main acceptance (2026-11-08)
+
+[PR #16](https://github.com/vamegah/order-management-platform/pull/16) passes all
+twenty jobs at `a3508d4`, including 1,196 reactor cases and 25 deployed
+service/client cases. The initial workflow validator rejected runner context in
+job environment values; the workflow-only correction defines private paths in
+a runner step and passes actionlint. No Java or deployment behavior changed in
+that correction.
+
+The repository owner merged the PR as `a3e4b85`.
+[The complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42544792059)
+passes all twenty jobs and the same case counts. Both runs execute all required
+worker, process, scheduler and transport suites, plus the two new deployed
+scheduled recovery methods. The PR discovery-outage method runs for 303.724
+seconds; PR/main outage cases exceed 300 seconds and every process-crash case
+exceeds 120 seconds. Merge parents, exact source tree, successful required check,
+strict freshness and administrator enforcement are verified.
+
+- PR source-bound CI archive: `coverage/scheduled-recovery-deployment-ci-evidence.zip`
+  and JSON; SHA-256 `e850daf199187deed8fdc3b1cc9364821c76b9ddb20a872907c2ec12ef7ac421`.
+- Main source-bound CI archive: `coverage/scheduled-recovery-deployment-main-ci-evidence.zip`
+  and JSON; SHA-256 `7eab730b10072511c0d6fe2bc4d6650c22be251d1d728191f13d33841fbe2143`.
+
+This accepts supervised development-provider recovery across projection renewal
+and container/downstream restarts. It does not close historical completeness,
+full checkout failure injection, accepted-order expiry/partial fulfillment or
+production identity/provider acceptance. Parent lifecycle items stay open.
+
+## Historical reservation reference census (2026-11-08)
+
+Administrators can now traverse local order-line reference metadata through
+`GET /api/v1/order-reservation-repairs/census`. The endpoint accepts an opaque
+line UUID cursor and a limit of 1-100 (default 50). It scans healthy lines too,
+returns the last scanned cursor when more rows exist, and reports missing or
+shared references with their order/version/status and line coordinates.
+
+The query uses prepared parameters, the line primary-key order and the existing
+reservation index. A five-second read-only transaction and a `limit + 1` result
+bound keep requests bounded. It does not call remote inventory, mutate orders,
+allocate holds, append repair audits or publish events. Only the existing
+administrator authority can use it. See [the operator procedure](order-reservation-repair.md#census-missing-and-shared-references).
+
+Clean unit verification passes all 417 focused cases. Five unit instruction
+comparisons against the source-equivalent accepted main revision pass; order
+coverage increases from 59.563646% to 60.730534%. New cases exercise lookahead
+isolation, healthy/empty pages, shared references, invalid limits and malformed
+cursors. PostgreSQL/HTTP cases check complete cursor traversal, metadata/event/
+audit preservation and administrator-only access.
+
+The final clean seven-module `verify` passes **505 cases: 417 unit and 88
+integration**, without failures, errors, skips or missing suites (15:57 total).
+The unchanged combined order instruction gate passes at **86.30%**. All three
+process-crash cases still execute for at least 120 seconds. A separate clean
+Linux compile/SpotBugs run produces six complete reports with zero findings,
+errors or missing classes, using the unchanged generated-code-only filter.
+Source hashes match the unit, full integration and static-analysis evidence.
+
+Restored OneDrive cache metadata blocked Windows plugin resolution before test
+execution in an earlier attempt. A checksum-verified parent POM replacement
+restored clean unit verification; static analysis uses the separate Linux cache.
+No test or coverage policy is weakened. Exact reviewed source, reports, compiled
+fixtures, logs and metadata are retained in
+`coverage/reservation-reference-census-local-evidence.zip` and JSON.
+
+Full hosted CI must execute all 1,207 reactor cases, 25 deployed service/client
+cases and every existing quality gate. This census is an inspection prerequisite
+for task 1.1. A live scan is not a consistent historical snapshot or remote
+ownership proof. Unresolved active/terminal rows, warehouse provenance, audited
+historical disposition, repair/upgrade acceptance and final integrity constraints
+remain open; no parent checkbox is changed.

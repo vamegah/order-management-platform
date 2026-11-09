@@ -137,6 +137,28 @@ class OrderControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void reservationCensusRequiresAdministratorAndValidatesBounds() {
+        String path = "/api/v1/order-reservation-repairs/census";
+        given().get(path).then().statusCode(401);
+        given().auth().oauth2(TestSecurityConfig.aliceToken()).get(path).then().statusCode(403);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .queryParam("limit", 1)
+                .get(path)
+                .then()
+                .statusCode(200)
+                .body("scanned", equalTo(1))
+                .body("nextAfterLineId", notNullValue());
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .queryParam("limit", 101)
+                .get(path)
+                .then()
+                .statusCode(400)
+                .body("status", equalTo(400));
+    }
+
+    @Test
     void reservationRepairInspectionRequiresAdministrator() {
         String path = "/api/v1/order-reservation-repairs/00000000-0000-0000-0000-000000000301";
         given().get(path).then().statusCode(401);
