@@ -91,9 +91,12 @@ jobs:
     timeout-minutes: 60
     env:
       COMPOSE_PROJECT_NAME: omp-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-      ORDER_RECOVERY_TOKEN_DIRECTORY: ${{ runner.temp }}/scheduled-recovery/projection
-      ORDER_RECOVERY_CLIENT_SECRET_FILE: ${{ runner.temp }}/scheduled-recovery/client-secret
     steps:
+      - name: Define private development recovery identity paths
+        shell: bash
+        run: |
+          printf 'ORDER_RECOVERY_TOKEN_DIRECTORY=%s/scheduled-recovery/projection\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'ORDER_RECOVERY_CLIENT_SECRET_FILE=%s/scheduled-recovery/client-secret\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
