@@ -1,7 +1,7 @@
 # Implementation plan for TASKS.md sections 1-7
 
 > **Status:** In progress; implementation and acceptance remain tracked in TASKS.md
-> **Last reviewed:** 2026-11-08
+> **Last reviewed:** 2026-11-09
 
 Deliver the **33 unchecked items** in [TASKS.md](../TASKS.md), following its section
 order. Five other items in these sections are already checked; preserve their
@@ -11,14 +11,14 @@ acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `a3e4b85`, the repository owner's merge of
-[PR #16](https://github.com/vamegah/order-management-platform/pull/16).
-[Its main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42544792059)
-passes all twenty jobs, 1,196 reactor cases and 25 deployed service/client cases.
+The accepted main baseline is `7fc599d`, the approved merge of
+[PR #17](https://github.com/vamegah/order-management-platform/pull/17).
+[Its main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42652620669)
+passes all twenty jobs, 1,207 reactor cases and 25 deployed service/client cases.
 The exact source, reports and merge/protection records are archived in
-`coverage/scheduled-recovery-deployment-main-ci-evidence.zip` and JSON. The first
-batch delivers the supervised projector and deployed scheduled recovery prerequisite
-in 1.3. The next batch addresses the historical reference census in 1.1.
+`coverage/reservation-reference-census-main-ci-evidence.zip` and JSON. Supervised
+deployed recovery and the historical census are accepted prerequisites. The next
+batch implements the maintainer-approved historical terminal exception in 1.1.
 Subsequent publication and merge actions follow the existing scoped approval agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
@@ -74,10 +74,12 @@ Reuse the existing journal, cleanup/fulfillment queues, leases and scoped identi
   constraints only after repair and upgrade validation.
 - **Close when:** Fresh deployed checkout exposes durable, distinct line
   references after restart. A pre-migration database upgrades safely; every
-  accepted order line has its verified durable reference. Historical terminal
-  rows have an audited disposition, with no fabricated holds or silently
-  discarded rows. Unresolvable accepted lines keep this item open unless the
-  maintainer explicitly accepts a revised historical migration policy.
+  active and future accepted order line has its verified durable reference.
+  On 2026-11-09 the maintainer explicitly approved audited exceptions for
+  historical DELIVERED/CANCELLED lines with no recoverable reservation. Such
+  exceptions require an administrator attestation and retained evidence; they
+  do not fabricate holds, discard rows or waive active/future reference integrity.
+  All other unresolvable accepted lines keep this item open.
   Stale/concurrent repair requests preserve unrelated state.
 
 ### 1.2 Release reservations during cancellation and compensation

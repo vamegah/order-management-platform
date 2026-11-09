@@ -159,9 +159,9 @@ Public order lines are immutable after creation, including while the order is DR
 
 ## Event durability and cleanup
 
-Order lifecycle events use the transactional outbox. Cancellation records durable cleanup tasks before attempting inventory/payment cleanup. Admins can retry due tasks using `POST /api/v1/order-cleanup/{orderId}/retry`; an opt-in background worker discovers IDs lost to timeouts using a checkout journal and a rotating service JWT. Deployment of that identity and database recovery acceptance remain open. See [cleanup operations and limits](../docs/order-cleanup.md).
+Order lifecycle events use the transactional outbox. Cancellation records durable cleanup tasks before attempting inventory/payment cleanup. Admins can retry due tasks using `POST /api/v1/order-cleanup/{orderId}/retry`; an opt-in background worker discovers IDs lost to timeouts using a checkout journal and a rotating service JWT. Supervised development identity and scheduled deployed recovery pass PR #16/main acceptance. Complete failure injection, accepted-order expiry and production identity acceptance remain open. See [cleanup operations and limits](../docs/order-cleanup.md).
 
-Create requests support 1?100 lines with distinct SKUs. Combine repeated SKU quantities into a single line so each line has its own inventory reservation.
+Create requests support 1-100 lines with distinct SKUs. Combine repeated SKU quantities into a single line so each line has its own inventory reservation.
 
 
 See the [state and concurrency contract](../docs/order-state-contract.md) for implemented validation, replay/error behavior, and remaining lifecycle acceptance.
@@ -170,3 +170,13 @@ See the [state and concurrency contract](../docs/order-state-contract.md) for im
 Confirmation and shipment verify the linked payment through a bounded gRPC read before changing local state. The response must match the order/customer/total/currency and be fully confirmed with a provider reference. The local transaction checks the order version again; unpaid/refunded or stale initial transitions return 409. Missing/malformed dependency responses fail closed, and upstream failures before intent acceptance return redacted 502 problems.
 
 Shipment now persists a FULFILLING intent and reservation commit tasks before RPCs. It returns HTTP 202 while work remains and HTTP 200 once SHIPPED. Cancellation is rejected after FULFILLING begins. A disabled-by-default worker can resume pending work with a rotating workload JWT. Payment is checked before retries and finalization. Cross-service refund races, permanent-failure recovery and deployed acceptance remain open. See [fulfillment operations and compatibility](../docs/order-fulfillment.md).
+
+## Historical reference operations
+
+Administrators can inspect missing/shared references through the bounded census,
+restore verified existing holds through the repair endpoint, and record an
+audited exception for an eligible historical DELIVERED/CANCELLED order with no
+recoverable hold. The exception requires upgrade-captured eligibility, a complete
+version-checked plan, verified subject, reason and evidence. It changes metadata
+audit/version only; active and future orders retain their reference requirements.
+See [the repair and terminal disposition procedure](../docs/order-reservation-repair.md).

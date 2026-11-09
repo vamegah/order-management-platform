@@ -15,6 +15,70 @@ import org.springframework.context.annotation.Import;
 class OrderControllerIT extends AbstractIntegrationTest {
 
     @Test
+    void terminalDispositionsRequireAdministratorAndPreserveTheVerifiedActor() {
+        String path =
+                "/api/v1/order-reservation-repairs/00000000-0000-0000-0000-000000000301/terminal-dispositions";
+        given().get(path).then().statusCode(401);
+        given().auth().oauth2(TestSecurityConfig.aliceToken()).get(path).then().statusCode(403);
+        long version =
+                ((Number)
+                                given().auth()
+                                        .oauth2(TestSecurityConfig.adminToken())
+                                        .get(path)
+                                        .then()
+                                        .statusCode(200)
+                                        .body("status", equalTo("DELIVERED"))
+                                        .body("lines[0].eligible", equalTo(true))
+                                        .extract()
+                                        .path("version"))
+                        .longValue();
+        var body =
+                java.util.Map.of(
+                        "expectedVersion",
+                        version,
+                        "reason",
+                        "Historical review",
+                        "evidence",
+                        "Incident INC-321: original hold irrecoverable",
+                        "lineIds",
+                        java.util.List.of("00000000-0000-0000-0000-000000000401"));
+        given().contentType(ContentType.JSON).body(body).post(path).then().statusCode(401);
+        given().auth()
+                .oauth2(TestSecurityConfig.aliceToken())
+                .contentType(ContentType.JSON)
+                .body(body)
+                .post(path)
+                .then()
+                .statusCode(403);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(java.util.Map.of())
+                .post(path)
+                .then()
+                .statusCode(400);
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(body)
+                .post(path)
+                .then()
+                .statusCode(200)
+                .body("recorded", equalTo(1))
+                .body("version", equalTo((int) version + 1))
+                .body("lines[0].audit.actor", equalTo("test-admin"))
+                .body("lines[0].reservationId", nullValue());
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(body)
+                .post(path)
+                .then()
+                .statusCode(200)
+                .body("recorded", equalTo(0));
+    }
+
+    @Test
     void orphanAdmissionRequiresAdministratorAndAValidatedReason() {
         String path = "/api/v1/order-recovery/" + java.util.UUID.randomUUID() + "/adopt";
         given().contentType(ContentType.JSON)

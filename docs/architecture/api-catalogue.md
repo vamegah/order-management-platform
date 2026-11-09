@@ -1,6 +1,6 @@
 # API catalogue
 
-Reviewed 2026-11-06. This maps implemented entry points to their behavior documents;
+Updated 2026-11-09. This maps implemented entry points to their behavior documents;
 versioned OpenAPI 3.1 contracts and comprehensive consumer-drift enforcement remain
 open. Runtime Swagger URLs do not replace published compatibility promises.
 Development hostnames below are Traefik routes unless marked internal.
@@ -10,6 +10,7 @@ Development hostnames below are Traefik routes unless marked internal.
 | Product/catalog REST | `product-service.localhost/api/v1/products`, `/api/v1/categories` | Authenticated reads/search/SKU/batch; administrator product writes and image operations | [Batch semantics](../batch-read-contract.md), [catalog verification](../catalog-customer-verification.md) |
 | Customer REST | `customer-service.localhost/api/v1/customers` | `/me`, owner/admin profile/address reads; administrator list/email lookup, writes and identity linking; batch is admin or one verified self ID | [Ownership and persistence](../catalog-customer-verification.md) |
 | Order REST | `order-service.localhost/api/v1/orders` | Owner/admin create/read/place/cancel; payment-backed lifecycle and administrator fulfillment actions | [State](../order-state-contract.md), [fulfillment](../order-fulfillment.md) |
+| Order reference administration | `order-service.localhost/api/v1/order-reservation-repairs` | Administrator census and verified repair; version-checked historical terminal attestations at `/{orderId}/terminal-dispositions` | [Repair and disposition procedure](../order-reservation-repair.md) |
 | GraphQL | `graphql.localhost/graphql` | JWT relay, bounded aggregation/batching, depth/complexity/body/rate/time policies | [Production policy](../graphql-production-policy.md), checked-in GraphQL schema |
 | Inventory gRPC | Internal `inventory-service:9091` | Stock/reservation queries, reserve/release/commit, client streaming, stock streams and recovery lookup; mTLS and bearer identity | [Reservation semantics](../inventory-reservations.md), [proto evolution](../contract-evolution.md) |
 | Payment gRPC | Internal `payment-service:9093` | Intent create/confirm/cancel/read, refunds, event stream and scoped recovery lookup; mTLS and bearer identity | [Idempotency](../payment-idempotency-contract.md), [refunds](../payment-refunds.md) |

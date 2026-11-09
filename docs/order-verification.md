@@ -36,6 +36,7 @@ the real inventory/payment services' behavior.
 | Place or cancel an order | Administrator or verified owner |
 | Confirm, ship or deliver | Administrator |
 | Inspect or restore historical reservation references | Administrator |
+| Inspect or record historical terminal exceptions | Administrator |
 | Admit a reviewed historical orphan to recovery | Administrator |
 
 Ownership uses a canonical UUID string in the verified JWT's `customer_id` claim.
@@ -290,3 +291,28 @@ Exact-source local evidence is retained in
 pass all twenty jobs, 1,196 reactor and 25 deployed cases. Exact-source PR/main
 archives are recorded in [the acceptance report](task-implementation-report.md#supervised-recovery-pr-and-main-acceptance-2026-11-08).
 Production identity/provider behavior and expiry/compensation for accepted orders remain open.
+
+## Historical reference census and terminal policy
+
+[PR #17](https://github.com/vamegah/order-management-platform/pull/17) is merged
+with user approval as `7fc599d`. Its PR and
+[main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42652620669)
+pass twenty jobs, 1,207 reactor cases and 25 deployed service/client cases.
+Exact-source reports, approved merge records and protection checks are retained
+in the census PR/main CI evidence archives. This accepts the bounded read-only
+administrator census, with historical ownership/disposition still separate.
+
+The maintainer approved audited exceptions for irrecoverable historical
+DELIVERED/CANCELLED references on 2026-11-09. Clean focused verification passes
+548 cases (452 unit and 96 integration) without failures, errors, skips or missing
+suites. It exercises real V3 upgrade preservation, upgrade-captured eligibility,
+future/active rejection, complete plans, original actor/evidence, stale/conflicting
+requests, concurrent lost-response retries and second-line rollback. Real HTTP
+rejects anonymous/ordinary owners; a generated-schema case preserves the existing
+repair line model through distinct disposition component names. The unchanged
+combined order coverage gate passes at 87.13%; all five focused unit comparisons
+and six complete static reports pass. Source-bound reports are retained in
+`coverage/terminal-reservation-disposition-local-evidence.zip` and JSON.
+See [the operator procedure](order-reservation-repair.md#audited-terminal-exceptions).
+Hosted acceptance still requires 1,250 reactor and 25 deployed cases. Active
+historical ownership and final integrity constraints remain separate.

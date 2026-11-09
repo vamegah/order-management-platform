@@ -118,3 +118,68 @@ static reports pass. Source-bound local evidence is retained in
 `coverage/reservation-reference-census-local-evidence.zip` and JSON. Complete CI
 must execute 1,207 reactor and 25 deployed cases before acceptance. The census
 does not close historical repair/disposition or remote ownership requirements.
+
+## Audited terminal exceptions
+
+On 2026-11-09 the maintainer approved explicit audited exceptions for historical
+DELIVERED/CANCELLED orders whose missing reservation cannot be recovered. Active
+and future accepted orders retain their verified-reference requirement. This
+operation records an administrator's investigation and attestation; it does not
+prove remote absence, reconstruct a hold or settle inventory/payment cleanup.
+
+Flyway V13 captures the missing lines present at upgrade, including their order,
+product, SKU, quantity, original order version and status. Capture does not approve
+an exception. A line must still match that captured identity, remain without a
+reference, have no existing reference-repair audit, and now belong to a DELIVERED
+or CANCELLED order. Newly created lines cannot claim the historical exception.
+Existing conflicting references and unresolved active rows require repair or
+separate investigation; they cannot be waived by this endpoint.
+
+After checking trusted inventory records and incident evidence, an administrator
+can inspect `GET /api/v1/order-reservation-repairs/{orderId}/terminal-dispositions`.
+It returns the order version/status and each line's reference, eligibility and
+existing audit. Orders with more than 100 lines require separate investigation.
+GET is read-only and bounded to 101 joined rows with a five-second transaction.
+
+POST that resource with every missing line exactly once, the inspected version,
+a reason (1-500 characters) and an evidence description (1-2000 characters):
+
+```json
+{
+  "expectedVersion": 0,
+  "reason": "Original hold cannot be recovered after historical investigation",
+  "evidence": "Incident INC-123: reviewed original inventory ledger and archive",
+  "lineIds": ["00000000-0000-0000-0000-000000000401"]
+}
+```
+
+Evidence is retained as text and never fetched as a URL. The verified subject is
+recorded as actor; callers cannot submit a replacement actor or policy code.
+The transaction locks the aggregate, checks complete eligibility and version,
+inserts one audit per missing line and increments the order version once. Any
+failure rolls back all audit/version writes. References, order status, payment,
+status history and public outbox events are unchanged.
+
+A response reports `recorded` and the resulting version and audits. Retrying the
+same complete line plan with the same subject and stripped reason/evidence returns
+`recorded: 0` and the original audits, even with a stale version after a lost
+reply. Changed attestations conflict rather than overwrite evidence. Stale new
+plans or ineligible/nonterminal rows return 409; malformed/partial plans return
+400. Anonymous and ordinary owners cannot inspect or record dispositions.
+
+The census continues reporting the physical missing reference after a disposition.
+Consult the disposition resource to distinguish an approved historical exception
+from an unresolved finding. Neither the eligibility ledger nor an unrecorded
+exception is acceptance of an active order. Retain both eligibility and audit
+tables with the historical order records.
+
+Clean order/shared verification passes 548 cases: 452 unit and 96 integration,
+including a real V3-to-current PostgreSQL upgrade that preserves historical rows,
+status history and applied migration checksums. It verifies future/active rejection,
+changed line identity, conflicting/stale attestations, concurrent lost-response
+retries, second-line rollback and real HTTP administrator enforcement. The order
+coverage gate passes at 87.13%; all five unit comparisons and six complete static
+reports pass. Distinct OpenAPI model names preserve the existing repair contract.
+Exact-source reports are retained in
+`coverage/terminal-reservation-disposition-local-evidence.zip` and JSON.
+Hosted verification must still execute 1,250 reactor and 25 deployed cases.
