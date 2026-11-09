@@ -180,3 +180,10 @@ recoverable hold. The exception requires upgrade-captured eligibility, a complet
 version-checked plan, verified subject, reason and evidence. It changes metadata
 audit/version only; active and future orders retain their reference requirements.
 See [the repair and terminal disposition procedure](../docs/order-reservation-repair.md).
+
+Every forward state change requires 1-100 order lines with distinct non-NULL
+reservation IDs. Missing/shared legacy pointers return 409 before changing local
+state/history/events. Checkout and audited repair provide separate remote
+verification; these shape checks do not prove hold ownership or current remote
+state. Normal cancellation stays available for unresolved historical orders in
+its allowed states. See the [reference integrity contract](../docs/order-state-contract.md#reference-integrity-on-forward-transitions).

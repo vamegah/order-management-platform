@@ -316,3 +316,27 @@ and six complete static reports pass. Source-bound reports are retained in
 See [the operator procedure](order-reservation-repair.md#audited-terminal-exceptions).
 Hosted acceptance still requires 1,250 reactor and 25 deployed cases. Active
 historical ownership and final integrity constraints remain separate.
+
+## Forward reference guard verification (2026-11-09)
+
+The separate local follow-up adds common domain guards to all five forward
+transitions. Twenty negative state/shape combinations preserve the aggregate;
+one/100-line journeys succeed, and historical cancellation remains possible.
+Ten real HTTP/PostgreSQL cases retry missing/shared commands without changing
+durable rows or fixture RPC resources, recover through a complete verified
+repair, and retain unaudited NULLs after normal historical cancellation.
+
+Focused preflight passes 114 cases (70 unit and 44 integration), including the
+existing optimistic-lock/repair/cancellation races. Clean complete order/shared
+verification passes 583 cases (477 unit and 106 integration), without failures,
+errors, skips or missing suites. All three process-crash cases exceed 120 seconds;
+the unchanged combined order instruction gate passes at 87.33%. Clean unit-only
+coverage increases from 62.130751% to 62.353368% and all five focused comparisons
+pass. Six complete exact-source Linux static reports contain zero findings,
+errors or missing classes. Source-bound reports are retained in
+`coverage/active-reference-guards-local-evidence.zip` and JSON; logs are
+`active-reference-guard-preflight-1.log`, `active-reference-guard-unit-1.log`,
+`active-reference-guard-verify-1.log` and `active-reference-guard-linux-static.log`.
+Hosted CI remains required for all 1,285 reactor and 25 deployed cases. These are
+fixture RPC boundaries; deployed historical ownership/repair and final integrity
+constraints remain open.

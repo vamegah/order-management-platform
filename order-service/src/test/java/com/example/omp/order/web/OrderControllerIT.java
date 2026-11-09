@@ -512,11 +512,11 @@ class OrderControllerIT extends AbstractIntegrationTest {
 
     @Test
     void placeTransitionsOrderToPlaced() {
-        // Order 303 is DRAFT (Alice's cart)
+        String id = createDraft();
         given().auth()
                 .oauth2(TestSecurityConfig.aliceToken())
                 .when()
-                .post("/api/v1/orders/{id}/place", "00000000-0000-0000-0000-000000000303")
+                .post("/api/v1/orders/{id}/place", id)
                 .then()
                 .statusCode(200)
                 .body("status", equalTo("PLACED"));

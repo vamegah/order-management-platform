@@ -457,8 +457,12 @@ class OrderPersistenceIT {
                             orders.findAndApply(
                                     id,
                                     order -> {
-                                        order.place("customer");
-                                        events.publishPlaced(order, "customer");
+                                        order.cancel(
+                                                "customer", "Cancelled during repair verification");
+                                        events.publishCancelled(
+                                                order,
+                                                "customer",
+                                                "Cancelled during repair verification");
                                     });
                             return new ReservationDto(
                                     reservation,
@@ -475,7 +479,7 @@ class OrderPersistenceIT {
                 .isInstanceOf(InvalidOrderStateException.class);
 
         assertThat(repairs.inspect(id).missing()).isEqualTo(1);
-        assertThat(repairs.inspect(id).status()).isEqualTo("PLACED");
+        assertThat(repairs.inspect(id).status()).isEqualTo("CANCELLED");
         assertThat(repairAuditCount(id)).isZero();
         assertThat(eventCount(id)).isEqualTo(1);
     }
@@ -506,8 +510,13 @@ class OrderPersistenceIT {
                                                     Thread.currentThread().interrupt();
                                                     throw new IllegalStateException(failure);
                                                 }
-                                                order.place("stale-customer");
-                                                events.publishPlaced(order, "stale-customer");
+                                                order.cancel(
+                                                        "stale-customer",
+                                                        "Concurrent cancellation");
+                                                events.publishCancelled(
+                                                        order,
+                                                        "stale-customer",
+                                                        "Concurrent cancellation");
                                                 return null;
                                             }));
             try {

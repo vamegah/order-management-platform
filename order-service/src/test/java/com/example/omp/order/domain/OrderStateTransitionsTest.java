@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class OrderStateTransitionsTest {
     private Order orderAt(OrderStatus target) {
@@ -95,10 +96,9 @@ class OrderStateTransitionsTest {
 
     @Test
     void legacyOrderWithoutReservationCannotBeginShipment() {
-        var order = orderAt(OrderStatus.DRAFT);
-        order.addLine(new OrderLine(UUID.randomUUID(), "LEGACY", "Legacy", Money.usd("1"), 1));
-        order.place("customer");
-        order.confirm("operator", "Paid");
+        var order = orderAt(OrderStatus.CONFIRMED);
+        // Rehydrate a historical missing pointer without passing it through new acceptance guards.
+        ReflectionTestUtils.setField(order.getLines().getFirst(), "reservationId", null);
         assertThatThrownBy(() -> order.requestShipment("operator", "Requested"))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
@@ -108,10 +108,12 @@ class OrderStateTransitionsTest {
     void duplicatedReservationCannotSatisfyTwoShipmentLines() {
         var order = orderAt(OrderStatus.DRAFT);
         var second = new OrderLine(UUID.randomUUID(), "SKU-2", "Product", Money.usd("1"), 1);
-        second.setReservationId(order.getLines().getFirst().getReservationId());
+        second.setReservationId(UUID.randomUUID());
         order.addLine(second);
         order.place("customer");
         order.confirm("operator", "Paid");
+        // Simulate a shared pointer loaded from legacy storage after confirmation.
+        second.setReservationId(order.getLines().getFirst().getReservationId());
         assertThatThrownBy(() -> order.requestShipment("operator", "Requested"))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);

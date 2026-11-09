@@ -10,7 +10,7 @@
 | DELIVERED | None |
 | CANCELLED | None |
 
-The aggregate appends history only for a valid transition. Placement requires a nonempty order and records its placement time. Invalid transitions preserve state and history and are exposed as HTTP 409. Service-level repeated cancellation is idempotent and can retry pending cleanup without adding another cancellation event.
+The aggregate appends history only for a valid transition. Each forward transition (placement, confirmation, shipment intent, shipment completion and delivery) requires 1-100 lines with distinct non-NULL reservation IDs. Placement records its time only after these checks pass. Invalid transitions preserve state and history and are exposed as HTTP 409. Cancellation remains available from its existing allowed states even when historical reference metadata is missing. Service-level repeated cancellation is idempotent and can retry pending cleanup without adding another cancellation event.
 
 Orders now use a database version column. Concurrent modifications cannot both commit their aggregate/history/outbox changes; a losing optimistic update rolls back and returns a redacted HTTP 409 problem instructing the caller to reload and retry. The migration initializes existing orders to version zero. The order UUID is assigned by checkout before remote calls and is preserved during JPA persistence. Full-detail reads fetch lines and initialize history separately to avoid fetching two list bags together.
 
@@ -27,3 +27,21 @@ The payment read happens outside the order mutation transaction. The local trans
 Shipment now commits a durable FULFILLING intent before consuming inventory. Cancellation is fenced from that point. Only acknowledged, matching committed holds and a fresh matching confirmed payment can complete shipment. Pending work returns HTTP 202 and can resume through an administrator retry or an opt-in worker. The final SHIPPED history/outbox event and request completion share one transaction. See [fulfillment behavior and recovery limits](order-fulfillment.md), including the new status/202 client compatibility requirements.
 
 The payment read and local commit are not an atomic cross-service transaction. Payment can still change after the read; refund/shipment coordination remains required. The existing payment-service confirmation API remains the authority for its own state, and provider integration acceptance is separate. Cancelled-order cleanup now requests provider-backed remaining refunds for confirmed payments and waits for a terminal payment state; see [refund coordination](payment-refunds.md). Inventory TTL expiry must remain disabled until the accepted-order lifecycle handles expired holds. The full lifecycle acceptance task remains open.
+
+## Reference integrity on forward transitions
+
+These local guards reject missing or shared pointers before state/history changes.
+Checkout and audited repair separately verify remote resource ownership; a non-NULL
+UUID alone is not proof of an existing hold, its warehouse, current state or
+ownership. No transition allocates replacement holds or rewrites legacy pointers.
+Existing unresolved historical rows remain visible for investigation.
+
+`OrderReservationIntegrityTest` exercises twenty invalid state/shape combinations,
+valid one/100-line journeys and cancellation of unresolved historical orders.
+`OrderReferenceIntegrityIT` executes real HTTP/PostgreSQL calls over fixture
+inventory/payment RPCs. It retries missing/shared-pointer commands, compares full
+aggregate/line/history/outbox/journal/queue/audit rows and downstream resources,
+then proves a complete verified repair permits placement and confirmation.
+Historical cancellation does not fabricate references or record an exception
+automatically. Deployed historical repair, active ownership, final constraints
+and the full lifecycle acceptance remain open.

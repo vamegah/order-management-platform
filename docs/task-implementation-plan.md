@@ -11,15 +11,21 @@ acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `7fc599d`, the approved merge of
-[PR #17](https://github.com/vamegah/order-management-platform/pull/17).
-[Its main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42652620669)
-passes all twenty jobs, 1,207 reactor cases and 25 deployed service/client cases.
-The exact source, reports and merge/protection records are archived in
-`coverage/reservation-reference-census-main-ci-evidence.zip` and JSON. Supervised
-deployed recovery and the historical census are accepted prerequisites. The next
-batch implements the maintainer-approved historical terminal exception in 1.1.
-Subsequent publication and merge actions follow the existing scoped approval agreement.
+The accepted main baseline is `93df5e3`, the approved terminal-policy merge of
+[PR #18](https://github.com/vamegah/order-management-platform/pull/18).
+Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42667095347)
+and [recovered main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42673767265)
+pass all twenty jobs, 1,250 reactor cases and 25 deployed service/client cases.
+The initial main push attempts and a fresh workflow's abandoned jobs encountered
+GitHub internal server errors. Retrying the abandoned prerequisites recovered the
+complete required gate on the unchanged merge source. Those failures, logs and
+retry records are retained alongside the exact source and successful reports in
+`coverage/terminal-reservation-disposition-ci-evidence.zip` and
+`coverage/terminal-reservation-disposition-main-ci-evidence.zip`, with JSON hashes.
+The next local batch adds reference-shape guards to forward transitions; active
+historical ownership, deployed repair and final constraints remain open.
+Subsequent publication and merge actions follow the existing scoped approval
+agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
 [implementation report](task-implementation-report.md). Its early summaries and
