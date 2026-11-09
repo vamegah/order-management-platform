@@ -128,6 +128,11 @@ class OrderPersistenceIT {
         }
 
         @Bean
+        ReservationReferenceCensus census(JdbcTemplate jdbc) {
+            return new ReservationReferenceCensus(jdbc);
+        }
+
+        @Bean
         InventoryClient repairInventory() {
             return mock(InventoryClient.class);
         }
@@ -246,6 +251,73 @@ class OrderPersistenceIT {
                 "SELECT count(*) FROM orders.reservation_reference_repair WHERE order_id = ?",
                 Long.class,
                 id);
+    }
+
+    @Test
+    void censusPagesAllLinesFindsMissingAndSharedReferencesWithoutWritingOrCallingInventory() {
+        UUID missing = legacyOrder(), shared = UUID.randomUUID();
+        UUID first = create(shared), second = create(shared), healthy = create(UUID.randomUUID());
+        var ids = List.of(missing, first, second, healthy);
+        var before = ids.stream().map(repairs::inspect).toList();
+        long auditsBefore =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM orders.reservation_reference_repair", Long.class);
+        long eventsBefore =
+                jdbc.queryForObject("SELECT count(*) FROM orders.outbox_event", Long.class);
+        var findings =
+                new ArrayList<com.example.omp.order.dto.ReservationReferenceCensusPage.Finding>();
+        var cursors = new HashSet<UUID>();
+        UUID cursor = null;
+        int scanned = 0;
+        do {
+            var page = context.getBean(ReservationReferenceCensus.class).scan(cursor, 2);
+            assertThat(page.scanned()).isBetween(0, 2);
+            assertThat(page.findings()).hasSizeLessThanOrEqualTo(page.scanned());
+            scanned += page.scanned();
+            findings.addAll(page.findings());
+            cursor = page.nextAfterLineId();
+            if (cursor != null) assertThat(cursors.add(cursor)).isTrue();
+        } while (cursor != null);
+        assertThat(scanned)
+                .isEqualTo(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.order_line", Integer.class));
+        assertThat(findings.stream().filter(f -> f.orderId().equals(missing)).toList())
+                .singleElement()
+                .satisfies(
+                        f -> {
+                            assertThat(f.reservationId()).isNull();
+                            assertThat(f.issue())
+                                    .isEqualTo(
+                                            com.example.omp.order.dto.ReservationReferenceCensusPage
+                                                    .Issue.MISSING_REFERENCE);
+                        });
+        assertThat(
+                        findings.stream()
+                                .filter(
+                                        f ->
+                                                f.orderId().equals(first)
+                                                        || f.orderId().equals(second))
+                                .toList())
+                .hasSize(2)
+                .allSatisfy(
+                        f -> {
+                            assertThat(f.reservationId()).isEqualTo(shared);
+                            assertThat(f.issue())
+                                    .isEqualTo(
+                                            com.example.omp.order.dto.ReservationReferenceCensusPage
+                                                    .Issue.SHARED_REFERENCE);
+                        });
+        assertThat(findings).noneMatch(f -> f.orderId().equals(healthy));
+        assertThat(ids.stream().map(repairs::inspect).toList()).isEqualTo(before);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.reservation_reference_repair",
+                                Long.class))
+                .isEqualTo(auditsBefore);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM orders.outbox_event", Long.class))
+                .isEqualTo(eventsBefore);
+        verifyNoInteractions(repairInventory);
     }
 
     @Test

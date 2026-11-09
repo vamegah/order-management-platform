@@ -5,10 +5,12 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.example.omp.order.dto.ReservationReferenceCensusPage;
 import com.example.omp.order.dto.ReservationReferenceRepairRequest;
 import com.example.omp.order.dto.ReservationReferenceRepairView;
 import com.example.omp.order.dto.ReservationReferenceRepairView.Line;
 import com.example.omp.order.service.OrderReservationRepairService;
+import com.example.omp.order.service.ReservationReferenceCensus;
 import com.example.omp.shared.web.error.ProblemDetailsFactory;
 import io.micrometer.tracing.Tracer;
 import java.util.List;
@@ -26,16 +28,44 @@ class OrderReservationRepairContractTest {
             lineId = UUID.randomUUID(),
             reservationId = UUID.randomUUID();
     private final OrderReservationRepairService service = mock(OrderReservationRepairService.class);
+    private final ReservationReferenceCensus census = mock(ReservationReferenceCensus.class);
     private MockMvc mvc;
 
     @BeforeEach
     void setup() {
         mvc =
-                MockMvcBuilders.standaloneSetup(new OrderReservationRepairController(service))
+                MockMvcBuilders.standaloneSetup(
+                                new OrderReservationRepairController(service, census))
                         .setControllerAdvice(
                                 new GlobalExceptionHandler(
                                         new ProblemDetailsFactory(mock(Tracer.class))))
                         .build();
+    }
+
+    @Test
+    void censusReturnsAnAdvancingCursorEvenWhenThePageHasNoFindings() throws Exception {
+        when(census.scan(lineId, 2))
+                .thenReturn(new ReservationReferenceCensusPage(2, reservationId, List.of()));
+        mvc.perform(
+                        get("/api/v1/order-reservation-repairs/census")
+                                .param("afterLineId", lineId.toString())
+                                .param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scanned").value(2))
+                .andExpect(jsonPath("$.nextAfterLineId").value(reservationId.toString()))
+                .andExpect(jsonPath("$.findings").isEmpty());
+        verify(census).scan(lineId, 2);
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void malformedCensusCursorFailsBeforeServiceCalls() throws Exception {
+        mvc.perform(
+                        get("/api/v1/order-reservation-repairs/census")
+                                .param("afterLineId", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Invalid request parameter"));
+        verifyNoInteractions(census, service);
     }
 
     @Test
