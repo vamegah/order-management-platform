@@ -182,4 +182,24 @@ coverage gate passes at 87.13%; all five unit comparisons and six complete stati
 reports pass. Distinct OpenAPI model names preserve the existing repair contract.
 Exact-source reports are retained in
 `coverage/terminal-reservation-disposition-local-evidence.zip` and JSON.
-Hosted verification must still execute 1,250 reactor and 25 deployed cases.
+The approved PR #18 merge `93df5e3` passes all twenty PR/main jobs, 1,250 reactor
+and 25 deployed cases; the recovered main reports and preserved GitHub failures
+are retained in `coverage/terminal-reservation-disposition-main-ci-evidence.zip`
+and JSON. See [the acceptance record](task-implementation-report.md#terminal-policy-approved-merge-and-main-acceptance-2026-11-09).
+
+## Forward transitions after investigation
+
+Orders with empty, oversized, missing or internally shared reservation references
+cannot move forward through placement, confirmation, shipment intent/completion
+or delivery. The normal 409 problem preserves the failed command's durable rows
+and events. Use the existing complete, verified repair plan for eligible missing
+active pointers, reload the resulting version and retry the intended transition.
+A successful repair does not itself place or confirm the order.
+
+Cancellation remains available in DRAFT/PLACED/CONFIRMED through its normal
+authorized action. It retains unresolved metadata rather than inventing a hold or
+recording a terminal exception automatically. Complete remote investigation and
+cleanup before an irrecoverability attestation; an accepted cancellation is not
+proof that unknown remote resources do not exist. Existing non-NULL foreign or
+conflicting pointers, warehouse provenance and final database integrity require
+the remaining historical ownership work.

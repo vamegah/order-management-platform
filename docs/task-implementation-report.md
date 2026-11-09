@@ -2641,3 +2641,56 @@ is retained in `coverage/terminal-reservation-disposition-local-evidence.zip` an
 JSON. Hosted CI still must execute 1,250 reactor and 25 deployed cases. Active
 repair/ownership, complete deployed historical acceptance and final integrity
 constraints remain open.
+
+## Terminal-policy approved merge and main acceptance (2026-11-09)
+
+The user approved ready/merge/main verification for `03a6e70`. PR #18 is merged
+as `93df5e3`, with the reviewed source tree `53ae3ef`. The initial push attempts
+failed to create required jobs; the public summaries report GitHub internal
+server errors. A fresh main workflow executed the reactor/deployed journeys but
+marked several prerequisites abandoned. The required quality gate rejected them.
+Retrying those jobs recovered all twenty checks on the unchanged source.
+
+The recovered main workflow 42673767265 passes all 1,250 reactor cases and 25
+deployed service/client cases, fifteen complete static reports, the dependency
+policy, issuer checks and ten image builds. Source-bound main reports and the
+preserved failures/retries are retained in
+`coverage/terminal-reservation-disposition-main-ci-evidence.zip` and JSON
+(SHA-256 `7be08bdca877bfa38a04be2a0e28580e2189dc6524295f1c38c2436a92ba8482`).
+PR evidence is retained separately. Strict freshness, administrator enforcement
+and the required GitHub Actions quality check were reverified after merging.
+This accepts the terminal-policy prerequisite; active historical ownership,
+deployed repair/restart acceptance and final integrity remain open.
+
+## Forward reservation-reference guards (2026-11-09)
+
+A separate implementation on top of approved PR #18 prevents orders with empty,
+oversized, missing or internally shared references from moving through placement,
+confirmation, shipment intent, shipment completion or delivery. The common
+aggregate check precedes state/history mutation. Existing allowed cancellation
+paths remain available for unresolved historical orders. No hold allocation,
+legacy rewrite, remote ownership inference, contract field or migration changes
+are introduced.
+
+Twenty negative domain combinations, both valid size boundaries and three
+historical cancellation states are covered. Ten real HTTP/PostgreSQL cases
+compare full durable snapshots and fixture resource identities/states across
+rejected retries, verify complete audited repair followed by placement and
+confirmation, and retain missing metadata without an automatic terminal audit
+after normal cancellation. Existing repair/version races now use legal
+cancellation transitions while references remain unresolved. Focused preflight
+passes all 114 cases. Clean complete verification passes 583 cases (477 unit and
+106 integration) with no failures, errors, skips or missing suites. The three
+real process-crash cases exceed 120 seconds each. Order combined instruction
+coverage passes the unchanged gate at 87.33%; unit coverage increases from
+62.130751% to 62.353368% and all five focused comparisons pass. Six complete
+exact-source Linux static reports have zero findings, errors or missing classes.
+Reports and hashes are retained in
+`coverage/active-reference-guards-local-evidence.zip` and JSON. Full hosted CI
+must still run all 1,285 reactor and 25 deployed cases. This follow-up remains
+local until separate publication approval; its merge acceptance is separate.
+
+Task 1.1 remains open for active historical ownership/warehouse provenance,
+deployed repair/restart acceptance and final database integrity. This guard
+prerequisite also supports 1.5; the complete transition/payment/refund race matrix
+remains open.

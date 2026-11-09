@@ -277,36 +277,32 @@ public class Order {
      * @param by who triggered the transition (usually the customer)
      */
     public void place(String by) {
-        requireAtLeastOneLine();
+        requireReservationReferences();
         transitionTo(OrderStatus.PLACED, "Checkout", by);
         this.placedAt = Instant.now();
     }
 
     /** Confirms the order (PLACED → CONFIRMED). Usually payment success. */
     public void confirm(String by, String reason) {
+        requireReservationReferences();
         transitionTo(OrderStatus.CONFIRMED, reason, by);
     }
 
     /** Fences cancellation before any inventory commit is attempted. */
     public void requestShipment(String by, String reason) {
-        requireAtLeastOneLine();
-        if (lines.size() > 100
-                || lines.stream().anyMatch(line -> line.getReservationId() == null)
-                || lines.stream().map(OrderLine::getReservationId).distinct().count()
-                        != lines.size()) {
-            throw new IllegalStateException(
-                    "Every shipment line requires a unique inventory reservation");
-        }
+        requireReservationReferences();
         transitionTo(OrderStatus.FULFILLING, reason, by);
     }
 
     /** Marks the order shipped (FULFILLING → SHIPPED) after durable inventory acknowledgement. */
     public void ship(String by, String reason) {
+        requireReservationReferences();
         transitionTo(OrderStatus.SHIPPED, reason, by);
     }
 
     /** Marks the order delivered (SHIPPED → DELIVERED). */
     public void deliver(String by, String reason) {
+        requireReservationReferences();
         transitionTo(OrderStatus.DELIVERED, reason, by);
     }
 
@@ -346,6 +342,18 @@ public class Order {
     private void requireAtLeastOneLine() {
         if (lines.isEmpty()) {
             throw new IllegalStateException("Cannot place an order with no lines");
+        }
+    }
+
+    /** Local reference integrity; remote ownership is verified by checkout or audited repair. */
+    private void requireReservationReferences() {
+        requireAtLeastOneLine();
+        if (lines.size() > 100
+                || lines.stream().anyMatch(line -> line.getReservationId() == null)
+                || lines.stream().map(OrderLine::getReservationId).distinct().count()
+                        != lines.size()) {
+            throw new IllegalStateException(
+                    "Every order line requires a unique inventory reservation");
         }
     }
 
