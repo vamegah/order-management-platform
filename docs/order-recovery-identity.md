@@ -83,6 +83,53 @@ durable journal and cleanup tasks remain available for a later authorized retry.
 
 ## Production and remaining acceptance
 
+### Supervised development projection
+
+`docker-compose.recovery-projector.yml` adds a supervised, non-root projector
+beside the existing recovery overlay. It uses UID/GID 1000, a read-only root
+filesystem, dropped capabilities, a bounded container and a projection health
+check. Order-service waits for the initial healthy projection. Its directory is
+writable by the projector and mounted read-only by order-service, preserving
+atomic replacement. Traefik's isolated edge-network alias resolves the public
+development issuer from the projector container; mTLS settings stay intact.
+
+On a Linux development host, provision a private credential from the development
+realm under the application identity. `DEVELOPMENT_RECOVERY_CREDENTIAL` below is
+the path to an existing private credential file, not its secret value:
+
+```sh
+sudo install -d -m 0700 -o 1000 -g 1000 .scratch/supervised-recovery
+sudo install -d -m 0700 -o 1000 -g 1000 .scratch/supervised-recovery/projection
+sudo install -m 0400 -o 1000 -g 1000 "$DEVELOPMENT_RECOVERY_CREDENTIAL" \
+  .scratch/supervised-recovery/client-secret
+export ORDER_RECOVERY_TOKEN_DIRECTORY="$(pwd)/.scratch/supervised-recovery/projection"
+export ORDER_RECOVERY_CLIENT_SECRET_FILE="$(pwd)/.scratch/supervised-recovery/client-secret"
+docker compose -p omp-recovery-dev --env-file .env.example \
+  -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.recovery.yml \
+  -f docker-compose.recovery-projector.yml up -d --wait order-service
+```
+
+The credential is a file mount, so changing its host inode requires recreating
+the projector. Token rotation uses the directory mount and needs no application
+recreation. A refresh failure preserves the last token; expiry still causes
+downstream rejection. Supervision restarts an exited projector; an unhealthy
+running projector remains visible for intervention rather than granting access.
+This overlay deliberately uses the development issuer over HTTP. Production
+requires its own HTTPS issuer, external credential provisioning and rotation
+acceptance described below.
+
+The separate `docker-compose.recovery-acceptance.yml` shortens only the test
+scheduler interval and publishes authenticated order metrics on IPv4 loopback.
+`ScheduledRecoveryIT`, selected with `-Precovery-e2e`, controls only explicitly
+opted-in isolated containers and exercises private projection renewal, worker and
+downstream restarts, confirmed-payment refund, pending-payment cancellation and
+the persisted five-minute discovery retry. It makes no direct worker call and
+edits no database clock/eligibility fields. See [scheduled acceptance](external-e2e.md#scheduled-recovery-acceptance).
+Executed results belong in the implementation report; these definitions alone
+do not close lifecycle or production acceptance.
+
+### Issuer and transport verification
+
 Run `python scripts/verify_recovery_identity.py` to repeat the isolated issuer
 acceptance with Docker available. It creates a fresh Keycloak 25 development
 container, imports this realm and checks scoped issuance, token rotation,

@@ -1,34 +1,24 @@
 # TASKS.md implementation report
 
-Updated: 2026-11-06. This is a partial implementation, not release acceptance.
+Updated: 2026-11-08. Feature and release acceptance remain incomplete.
 
+The accepted main baseline is `16734d4` (approved PR #15). Its complete protected
+workflow passes all twenty jobs, 1,196 reactor cases and 23 deployed service/client
+cases. Exact source, reports and approved merge/protection records are retained
+in the scheduler CI evidence archives documented in the latest acceptance section.
 
-Current accepted local evidence: **999 Java cases** (770 unit/in-process and
-229 integration), **10 external core journeys**, **17 client transport plus two
-deployed client cases**, **47 tooling cases**, **14 complete clean SpotBugs reports**
-and **10 executable package/layer checks**. Required cases have no failures,
-errors or skips. The clean reactor's annotation-classpath follow-up is recorded
-below; coverage thresholds are unchanged. These accepted baseline/client/documentation
-tasks are checked in `TASKS.md`. Other feature, CI/governance, security, performance
-and production acceptance items remain open. Earlier sections are historical
-checkpoints, superseded by the latest dated evidence.
+The current local follow-up implements supervised deployed recovery. Its final
+focused run passes 70 unit and two real deployed cases, with 59 tooling cases and
+configuration/guard/private-mount checks. Complete hosted CI for this revision
+remains required, including all 1,196 reactor and 25 deployed cases. Local focused
+evidence does not substitute for that gate.
 
-The source is now published on GitHub. The first default-branch run passes the
-client, static analysis, packaged payment journey and ten image builds, but the
-complete CI gate is still failing. The latest publication continuation below
-records the failures and locally verified corrections.
-
-Docker availability was reassessed during the refund reconciliation continuation:
-the CLI is absent, but the Windows engine pipe is reachable. Earlier statements
-that Docker was unavailable came from incomplete probes. See the latest
-continuation for client compatibility fixes and actual database execution results.
-
-The focused product/customer/order/inventory/gateway/payment continuations below
-repair real PostgreSQL, Kafka, HTTP and gRPC contracts. Their passing focused
-results do not establish a green full-reactor `verify` or e2e acceptance;
-notification/platform focused acceptance has since passed, as recorded below.
-Complete default-reactor and external core acceptance now pass; remaining feature,
-CI enforcement and release work below remains open.
+Sections 1-7 retain 33 open items. The [implementation plan](task-implementation-plan.md)
+defines their delivery order and completion criteria; [TASKS.md](../TASKS.md)
+records acceptance. Earlier sections below are historical checkpoints, including
+superseded failure/environment reports. Use the latest dated evidence for each
+scope. Production security, performance, recovery and release requirements remain
+open.
 
 ## Implemented changes
 
@@ -2447,3 +2437,79 @@ Spring contexts bound the scope. Full Boot/container/JVM or downstream restart,
 deployed scheduler identity, production-provider behavior and accepted-order
 expiry coordination remain open. Default workers and expiry stay disabled; parent
 lifecycle tasks remain unchecked.
+
+## Spring scheduler PR and main acceptance (2026-11-08)
+
+[PR #15](https://github.com/vamegah/order-management-platform/pull/15) passes all
+1,196 reactor cases, 23 deployed service/client cases, fourteen exact-base
+coverage comparisons and every required CI gate. With explicit approval it is
+merged as `16734d4`. [The complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42534234966)
+passes all twenty jobs on its first attempt with the same case counts. Required
+JUnit suites include one scheduler, ten worker, three process and seven recovery
+transport cases, with zero failures, errors or skips. Each process case exceeds
+120 seconds. The merged tree equals the reviewed tree and its parents match the
+approved base and head. Strict quality checks and administrator enforcement are
+verified again. Evidence includes exact source, full logs, artifacts and approved
+merge/ready/protection records:
+
+- `coverage/checkout-recovery-scheduler-ci-evidence.zip` and JSON: SHA-256
+  `45df1f01f68e5d87516cbd8537859d8659cbba31fc0514376cf12af3d39c046b`.
+- `coverage/checkout-recovery-scheduler-main-ci-evidence.zip` and JSON: SHA-256
+  `5fcd446a9d9e69427482986223431eee097861d18a4c6777c883d8a256294c0e`.
+
+This accepts the bounded Spring-context scheduler fixture. Deployed Boot worker,
+container/downstream restart, production identity/provider behavior and accepted-
+order expiry/compensation remain separate acceptance. The new supervised deployment
+implementation is local follow-up work; parent lifecycle checkboxes stay open.
+
+## Supervised deployed checkout recovery (2026-11-08)
+
+The first batch from the implementation plan adds an explicit development
+projector container, running as UID/GID 1000 with a read-only root filesystem,
+dropped capabilities, bounded resources and a projection health check. Its
+private credential is read-only; its token directory is writable by the projector
+and read-only in order-service. Initial health and Kafka dependencies support
+fresh deployment. Default workers and inventory expiry remain disabled.
+
+A separate `recovery-e2e` profile and opt-in acceptance overlay execute the real
+scheduled Boot application against independently packaged inventory/payment
+services, PostgreSQL and the development issuer over original JWT/mTLS. The
+ordinary suites run first. Required CI then executes both recovery cases and
+rejects missing/skipped or incomplete evidence.
+
+The final four-module Linux verification passes **70 unit and two deployed
+cases**, with no failures, errors or skips (11:13 total). The first method takes
+298.571 seconds: malformed projection exclusion, order/inventory/payment restart,
+automatic reservation release and confirmed-payment refund, active-order
+exclusion, supervised token renewal and pending-payment cancellation on existing
+application/channels. The second takes 307.516 seconds: inventory outage, durable
+failed discovery, application restart, unchanged resources during persisted
+backoff and automatic cancellation/release after the real five-minute deadline.
+No worker tick or database eligibility timestamp is changed by the tests.
+
+All 59 Python tooling tests pass, including both new profile-discovery checks.
+Nine resolved Compose checks, four restart guard preflights and an actual
+UID-1001 Compose client mounting a UID-1000 credential through a mode-0700 parent
+also pass. Runtime checks retain five matching deployed JAR hashes, image
+identities and public TLS hashes without credentials. Reports, compiled fixtures,
+logs, exact reviewed source and metadata are retained in
+`coverage/scheduled-recovery-deployment-local-evidence.zip` and JSON.
+
+The first Windows client attempt received a different certificate through the
+host forwarding path. The Linux client verifies the original CA/client identity
+inside the isolated networks; verification is never disabled. An initial Linux
+attempt exposed the confirmation response's pre-flush updated-at timestamp in
+the fixture. Final comparisons use committed snapshots and wait for metric
+acknowledgment. A later restart run exposed an ingress readiness race and cleanup
+that could mask the original failure. The final fixture waits for the public
+order health route after restarts and preserves primary failures during cleanup.
+Its token-renewal checkpoint starts after the first recovery on established
+application channels. Earlier attempt evidence remains separate from final results.
+
+Full hosted CI for this follow-up remains required: 1,196 default reactor cases,
+25 deployed service/client cases including both new methods, and every unchanged
+quality gate. The local run covers the development refund provider, supervised
+identity and controlled container failures. Full checkout failure injection,
+accepted-order expiry/partial-fulfillment compensation, historical ledger
+completeness and production identity/provider acceptance remain open. Parent
+lifecycle items remain unchecked.

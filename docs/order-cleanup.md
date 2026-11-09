@@ -172,13 +172,34 @@ transactions. All resources belong to the fixture.
 Formatting/compilation and all fourteen focused cases pass (three unit and eleven
 PostgreSQL), without failures, errors or skips. The scheduler method runs for
 12.795 seconds. Exact-source reports, compiled classes and logs are retained
-in `coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON. Full CI must
-execute 1,196 reactor and 23 deployed service/client cases before acceptance.
+in `coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON.
+[PR #15](https://github.com/vamegah/order-management-platform/pull/15) and its
+merged main workflow pass all 1,196 reactor and 23 deployed service/client cases.
+Exact-source CI and approved merge records are retained in the scheduler PR/main
+evidence archives; see [the implementation report](task-implementation-report.md#spring-scheduler-pr-and-main-acceptance-2026-11-08).
 
 The fixture uses synthetic credentials and generated in-process endpoints.
 Context restart occurs within one JVM. Full Boot/container/JVM or downstream
 restart, deployed scheduler identity and accepted-order expiry coordination remain
 separate work; default workers and inventory expiry remain disabled.
+
+
+## Deployed scheduled-worker fixture
+
+`ScheduledRecoveryIT` runs the actual scheduled Boot application, supervised
+private projector and original JWT/mTLS service containers. The final focused
+Linux build passes 70 unit and two deployed cases without failures/errors/skips.
+The methods run for 298.571 and 307.516 seconds, including container restarts,
+projection renewal, automatic refund/cancellation and real five-minute backoff.
+Only verified test-owned resources are mutated. No direct worker ticks or SQL
+eligibility updates accelerate recovery.
+
+See [the isolated deployment command and scope](external-e2e.md#scheduled-recovery-acceptance)
+and [the implementation report](task-implementation-report.md#supervised-deployed-checkout-recovery-2026-11-08).
+Exact-source local evidence is retained in
+`coverage/scheduled-recovery-deployment-local-evidence.zip` and JSON. Complete CI
+must execute all 1,196 reactor and 25 deployed cases before acceptance. Production
+identity/provider behavior and expiry/compensation for accepted orders remain open.
 
 ## Remaining acceptance
 

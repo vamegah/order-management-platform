@@ -78,6 +78,24 @@ class VerificationEvidenceTest(unittest.TestCase):
         report.write_text('<report><counter type="INSTRUCTION" covered="0" missed="4"/></report>')
         self.assertTrue(any("no covered" in error for error in check(self.root)[1]))
 
+    def test_recovery_acceptance_is_separate_and_required_when_selected(self):
+        self.valid_evidence()
+        self.source("ScheduledRecoveryIT", '@Tag("recovery-e2e")')
+        self.report("failsafe", "JourneyIT")
+        self.assertEqual(check(self.root, True), (3, []))
+        self.assertTrue(any("ScheduledRecoveryIT" in error for error in
+                            check(self.root, True, include_recovery_e2e=True)[1]))
+        self.report("failsafe", "ScheduledRecoveryIT")
+        self.assertEqual(check(self.root, True, include_recovery_e2e=True), (4, []))
+        self.report("failsafe", "ScheduledRecoveryIT", skipped=1)
+        self.assertTrue(any("skipped" in error for error in
+                            check(self.root, True, include_recovery_e2e=True)[1]))
+
+    def test_default_verification_does_not_require_recovery_deployment(self):
+        self.valid_evidence()
+        self.source("ScheduledRecoveryIT", '@Tag("recovery-e2e")')
+        self.assertEqual(check(self.root), (2, []))
+
     def test_nested_test_reports_are_valid(self):
         self.valid_evidence()
         (self.root / "service/target/surefire-reports/TEST-example.BehaviorTest.xml").unlink()

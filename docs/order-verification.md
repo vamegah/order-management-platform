@@ -263,7 +263,27 @@ timestamp is advanced manually. See [the focused command and scope](order-cleanu
 Formatting/compilation, three worker unit and eleven PostgreSQL cases pass without
 failures, errors or skips. The scheduler method takes 12.795 seconds. Exact
 source, reports, classes and logs are retained in
-`coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON. Full CI must
-execute 1,196 reactor and 23 deployed cases before acceptance. Synthetic in-process
+`coverage/checkout-recovery-scheduler-local-evidence.zip` and JSON.
+[PR #15](https://github.com/vamegah/order-management-platform/pull/15) and its
+merged main workflow pass all 1,196 reactor and 23 deployed cases; source-bound
+reports and approved merge/protection records are retained in the scheduler
+PR/main CI archives. Synthetic in-process
 endpoints and same-JVM context restart do not establish full Boot/container/JVM or
 downstream restart or deployed scheduler identity acceptance.
+
+## Deployed scheduled-worker fixture
+
+`ScheduledRecoveryIT` runs the actual scheduled Boot application, supervised
+private projector and original JWT/mTLS service containers. The final focused
+Linux build passes 70 unit and two deployed cases without failures/errors/skips.
+The methods run for 298.571 and 307.516 seconds, including container restarts,
+projection renewal, automatic refund/cancellation and real five-minute backoff.
+Only verified test-owned resources are mutated. No direct worker ticks or SQL
+eligibility updates accelerate recovery.
+
+See [the isolated deployment command and scope](external-e2e.md#scheduled-recovery-acceptance)
+and [the implementation report](task-implementation-report.md#supervised-deployed-checkout-recovery-2026-11-08).
+Exact-source local evidence is retained in
+`coverage/scheduled-recovery-deployment-local-evidence.zip` and JSON. Complete CI
+must execute all 1,196 reactor and 25 deployed cases before acceptance. Production
+identity/provider behavior and expiry/compensation for accepted orders remain open.
