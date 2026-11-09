@@ -238,3 +238,10 @@ cancellation is rejected and cleanup continues to exclude it as an active order.
 Use the administrator ship action to retry fulfillment, rather than cleanup.
 See [fulfillment recovery](order-fulfillment.md) for pending holds, worker identity
 and permanent-failure limits.
+
+Historical terminal reference exceptions have a separate
+[administrator audit procedure](order-reservation-repair.md#audited-terminal-exceptions).
+That metadata disposition does not enqueue cleanup, release inventory, settle
+payment or prove remote absence. It cannot waive an active order's reference
+requirements. The census continues to show the physical missing reference;
+consult its terminal disposition resource when assessing historical findings.

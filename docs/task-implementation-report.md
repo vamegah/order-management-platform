@@ -2584,3 +2584,60 @@ for task 1.1. A live scan is not a consistent historical snapshot or remote
 ownership proof. Unresolved active/terminal rows, warehouse provenance, audited
 historical disposition, repair/upgrade acceptance and final integrity constraints
 remain open; no parent checkbox is changed.
+
+## Historical census PR and main acceptance (2026-11-09)
+
+[PR #17](https://github.com/vamegah/order-management-platform/pull/17) is merged
+with explicit user approval as `7fc599d`. Its
+[complete PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42566809401)
+and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42652620669)
+pass all twenty jobs, 1,207 reactor cases and 25 deployed service/client cases.
+The PR also preserves all fourteen exact-base unit coverage comparisons. Both
+runs pass fifteen complete static reports, the 211-dependency policy, contracts,
+packaged journeys, issuer checks and ten image builds. Crash cases exceed their
+real 120-second leases and deployed outage recovery exceeds its 300-second retry
+deadline. Main's merge tree equals the reviewed source. Required GitHub Actions
+quality checks, strict freshness and administrator enforcement were read back.
+
+Exact-source PR/main reports and approved merge/protection records are retained
+in `coverage/reservation-reference-census-ci-evidence.zip` and
+`coverage/reservation-reference-census-main-ci-evidence.zip`, with JSON hashes.
+This accepts the census prerequisite; active historical ownership and disposition
+remain separate from that merged inspection endpoint.
+
+## Historical terminal exception policy (2026-11-09)
+
+The maintainer explicitly approved audited exceptions for historical DELIVERED
+and CANCELLED orders whose original reservation cannot be recovered. Active and
+future accepted orders still require verified references; unresolved active lines
+keep task 1.1 open. The implementation plan and backlog acceptance reflect this
+specific policy decision.
+
+The follow-up captures missing line identities at upgrade and exposes bounded
+administrator inspection and recording under the existing repair namespace.
+It requires a complete plan, expected aggregate version, reason and retained
+evidence. A short transaction locks the order, rechecks terminal status and
+eligibility, appends immutable application audit entries and increments the
+version once. Exact retries return the original audit; conflicts, stale new
+plans, changed identities and future lines are rejected. No stock, reference,
+order status, payment, history or public outbox event is changed. The operator's
+evidence is an attestation, not automated proof that a remote hold is absent.
+
+Clean order/shared `verify` passes **548 cases: 452 unit and 96 integration**,
+without failures, errors, skips or missing suites. It includes the V3-to-current
+upgrade preserving all three seeded orders, four lines, status history and applied
+checksums; active/future rejection; lost-reply concurrency; second-line rollback;
+and real HTTP authorization/actor capture. Distinct OpenAPI component names and a
+generated-schema regression preserve the existing repair line contract. All three
+process-crash cases exceed their real 120-second leases.
+
+The unchanged combined order instruction gate passes at **87.13%**. All five
+focused unit comparisons pass, with order unit coverage increasing from
+60.730534% to 62.130751%. Six complete exact-source Linux static reports contain
+zero findings, errors or missing classes. Source hashes bind the unit, full and
+static reports to the reviewed code; owned analysis clients/volumes and download
+bridges are removed while the existing dependency cache is preserved. Evidence
+is retained in `coverage/terminal-reservation-disposition-local-evidence.zip` and
+JSON. Hosted CI still must execute 1,250 reactor and 25 deployed cases. Active
+repair/ownership, complete deployed historical acceptance and final integrity
+constraints remain open.
