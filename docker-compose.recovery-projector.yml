@@ -1,0 +1,83 @@
+# Optional supervised development projector. Combine with docker-compose.recovery.yml.
+# Provision both private host paths for UID/GID 1000 before starting the services.
+services:
+  traefik:
+    networks:
+      edge:
+        aliases: [keycloak.localhost]
+  order-recovery-token:
+    image: python:3.12-alpine
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: 0.25
+    restart: unless-stopped
+    command: [python, -B, -u, /opt/project_service_token.py]
+    environment:
+      SERVICE_TOKEN_URL: http://keycloak.localhost/realms/omp/protocol/openid-connect/token
+      SERVICE_TOKEN_ISSUER: http://keycloak.localhost/realms/omp
+      SERVICE_TOKEN_CLIENT_ID: order-recovery
+      SERVICE_TOKEN_CLIENT_SECRET_FILE: /run/credentials/client-secret
+      SERVICE_TOKEN_OUTPUT: /run/order-recovery/access.jwt
+      SERVICE_TOKEN_ALLOW_HTTP: development
+    networks: [edge]
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      traefik:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ./scripts/project_service_token.py
+        target: /opt/project_service_token.py
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${ORDER_RECOVERY_CLIENT_SECRET_FILE:?Provision a private development client credential}
+        target: /run/credentials/client-secret
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${ORDER_RECOVERY_TOKEN_DIRECTORY:?Provision the private projection directory}
+        target: /run/order-recovery
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: [CMD, python, -B, /opt/project_service_token.py, --check]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "2"
+  order-service:
+    depends_on:
+      order-recovery-token:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+  inventory-service:
+    depends_on:
+      kafka:
+        condition: service_healthy
+  payment-service:
+    depends_on:
+      kafka:
+        condition: service_healthy
+  product-service:
+    depends_on:
+      kafka:
+        condition: service_healthy
+  customer-service:
+    depends_on:
+      kafka:
+        condition: service_healthy

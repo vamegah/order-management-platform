@@ -175,3 +175,65 @@ evidence is retained in `coverage/recovery-compensation-transport-local-evidence
 and JSON. These specifications issue RPCs directly; scheduled worker deployment,
 checkout failure injection, downstream restart and production provider acceptance
 remain separate work.
+
+## Scheduled recovery acceptance
+
+`ScheduledRecoveryIT` exercises the actual scheduled worker inside the packaged
+Boot application with a supervised development token projector and real JWT/mTLS
+inventory/payment containers. It runs after ordinary e2e and client cases so
+background reconciliation and container stops cannot affect their assumptions.
+The normal `e2e` profile excludes its `recovery-e2e` tag; the `recovery-e2e`
+profile runs only that tag. The final CI evidence check requires both groups.
+
+Provision the private projection/credential paths using the
+[supervised identity procedure](order-recovery-identity.md#supervised-development-projection).
+Use a dedicated project whose name matches `omp-recovery-acceptance-` followed by
+twelve lowercase hexadecimal digits. CI instead uses its unique
+`omp-e2e-RUN_ID-ATTEMPT` project. After the ordinary suites pass, enable the
+projector and acceptance overlays for that same isolated stack:
+
+```sh
+docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml \
+  -f docker-compose.recovery.yml -f docker-compose.recovery-projector.yml \
+  -f docker-compose.recovery-acceptance.yml \
+  up -d --no-build --wait --wait-timeout 300 order-service
+E2E_RECOVERY_RESTARTS=true ./mvnw -pl integration-tests -am -Precovery-e2e verify
+python scripts/check_verification.py --root integration-tests \
+  --include-e2e --include-recovery-e2e
+```
+
+Set `COMPOSE_PROJECT_NAME` for both Compose and Maven. Container controls require
+the explicit restart opt-in, verify project/service labels before each operation,
+and accept only order, inventory, payment and the projector. They do not remove
+containers, databases or volumes. `E2E_DOCKER` selects a local Docker executable;
+an optional `E2E_RECOVERY_COMPOSE_OVERRIDE` must be an existing file under
+`.scratch` and applies to the fixture's one-off projection replacement too.
+
+The first case waits for malformed-projection failures, admits only its verified
+orphan resources, restarts the application and both downstream services, and
+requires automatic release and full refund. A simultaneous accepted order keeps
+its resources. After that recovery, the projector's own refresh must replace its
+private token; a second orphan then recovers on the existing application/channels. Terminal
+history remains stable. The second case observes its own failed discovery during
+an inventory outage, restarts order-service, proves the resources remain unchanged
+during persisted backoff and waits for the real five-minute retry to cancel and
+release them. No SQL timestamps or direct worker ticks shorten this interval.
+
+The fixture waits for the public order health route before creating resources
+and after application restarts. It restores every controlled service on failure
+and retains any primary assertion failure if cleanup also fails.
+
+The private projection/credential checks execute inside the Linux projector:
+UID 1000, directory mode 0700, token mode 0600, credential mode 0400 and matching
+ownership. Only a token digest leaves that process. The application uses its
+normal read-only directory mount. Windows local acceptance may supply private
+Linux Docker volumes through the scoped override instead of relying on POSIX
+permissions on a Windows bind mount.
+
+Compilation/configuration evidence and executed deployment results are recorded
+separately in the implementation report. Complete CI must execute both new
+cases, all seven recovery transport cases and the other ordinary/deployed client
+cases (25 deployed cases in total). The default reactor retains 1,196 cases.
+This is development-provider recovery acceptance; full checkout failure injection,
+accepted-order expiry/fulfillment compensation and production identity/provider
+acceptance remain open.

@@ -33,6 +33,7 @@ Current implementation contracts, verification guidance and operational notes:
 | [`runbooks/development-acceptance.md`](runbooks/development-acceptance.md) | Dedicated setup, external/default verification ordering and evidence preservation |
 | [`runbooks/incident-response.md`](runbooks/incident-response.md) | Bounded triage and links to implemented recovery actions |
 | [`task-implementation-report.md`](task-implementation-report.md) | Executed verification evidence and remaining blockers |
+| [`task-implementation-plan.md`](task-implementation-plan.md) | Ordered delivery plan and completion gates for the 33 open items in TASKS.md sections 1-7 |
 | [`test-phases.md`](test-phases.md) | Unit, container integration and e2e commands |
 | [`quality-gates.md`](quality-gates.md) | CI, coverage evidence, SpotBugs, dependency policy, SBOM and image packaging |
 | [`contract-evolution.md`](contract-evolution.md) | Protobuf/SOAP ownership, published fixtures and exact PR-base compatibility checks |

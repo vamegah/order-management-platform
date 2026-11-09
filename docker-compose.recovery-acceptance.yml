@@ -1,0 +1,7 @@
+# Isolated destructive acceptance only; default worker/expiry settings stay unchanged.
+services:
+  order-service:
+    environment:
+      OMP_ORDER_RECOVERY_INTERVAL_MS: "1000"
+    ports:
+      - "127.0.0.1:18083:8083"
