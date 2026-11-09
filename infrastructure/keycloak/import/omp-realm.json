@@ -98,6 +98,33 @@
       "attributes": {
         "orders_limit": ["100000"]
       }
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@omp.local",
+      "firstName": "Bob",
+      "lastName": "Customer",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob-dev-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ],
+      "requiredActions": [],
+      "attributes": {
+        "customer_id": [
+          "00000000-0000-0000-0000-000000000102"
+        ],
+        "orders_limit": [
+          "1000"
+        ]
+      }
     }
   ],
 

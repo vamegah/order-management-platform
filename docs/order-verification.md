@@ -340,3 +340,20 @@ errors or missing classes. Source-bound reports are retained in
 Hosted CI remains required for all 1,285 reactor and 25 deployed cases. These are
 fixture RPC boundaries; deployed historical ownership/repair and final integrity
 constraints remain open.
+
+## Guard acceptance and deployed repair continuation (2026-11-09)
+
+Approved PR #19 is merged as `b2cc691`. Both protected PR and main verification
+pass all twenty jobs, 1,285 reactor cases and 25 deployed cases. Source-bound
+archives `coverage/active-reference-guards-ci-evidence.zip` and
+`coverage/active-reference-guards-main-ci-evidence.zip`, with JSON hashes, pass
+integrity checks. All 33 parent items remain tracked against their full gates.
+
+The subsequent test-only repair follow-up passes three new deployed cases and
+four isolation/TLS/override preflight checks locally. It validates real JWT/mTLS
+repair, original hold verification, stock/payment preservation, concurrent audit
+idempotency and durability after real service restarts. It requires full hosted
+1,285-reactor/28-deployed verification before acceptance; local reports are in
+`coverage/reference-repair-deployment-local-evidence.zip` and JSON.
+Historical ownership, warehouse provenance, non-NULL conflicts and final
+constraints remain open. See [repair acceptance](order-reservation-repair.md#deployed-repair-and-restart-acceptance).
