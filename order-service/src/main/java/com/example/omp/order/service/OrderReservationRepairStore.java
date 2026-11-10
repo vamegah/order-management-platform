@@ -24,7 +24,7 @@ public class OrderReservationRepairStore {
     public ReservationReferenceRepairView inspect(UUID orderId) {
         return jdbc.query(
                 """
-                SELECT o.version, o.status, l.id AS line_id, l.product_sku, l.quantity, l.reservation_id
+                SELECT o.version, o.status, l.id AS line_id, l.product_sku, l.quantity, l.reservation_id, l.reservation_warehouse_id
                 FROM orders.purchase_order o
                 LEFT JOIN orders.order_line l ON l.order_id = o.id
                 WHERE o.id = ? ORDER BY l.created_at, l.id
@@ -42,7 +42,8 @@ public class OrderReservationRepairStore {
                                             lineId,
                                             result.getString("product_sku"),
                                             result.getInt("quantity"),
-                                            result.getObject("reservation_id", UUID.class)));
+                                            result.getObject("reservation_id", UUID.class),
+                                            result.getString("reservation_warehouse_id")));
                     } while (result.next());
                     return view(orderId, version, status, 0, lines);
                 },

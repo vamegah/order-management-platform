@@ -78,12 +78,13 @@ class OrderReservationRepairContractTest {
                                 "DRAFT",
                                 1,
                                 0,
-                                List.of(new Line(lineId, "SKU", 2, null))));
+                                List.of(new Line(lineId, "SKU", 2, null, "WH-9"))));
         mvc.perform(get("/api/v1/order-reservation-repairs/{id}", orderId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(4))
                 .andExpect(jsonPath("$.missing").value(1))
-                .andExpect(jsonPath("$.lines[0].lineId").value(lineId.toString()));
+                .andExpect(jsonPath("$.lines[0].lineId").value(lineId.toString()))
+                .andExpect(jsonPath("$.lines[0].reservationWarehouseId").value("WH-9"));
     }
 
     @Test
@@ -96,7 +97,7 @@ class OrderReservationRepairContractTest {
                                 "DRAFT",
                                 0,
                                 1,
-                                List.of(new Line(lineId, "SKU", 2, reservationId))));
+                                List.of(new Line(lineId, "SKU", 2, reservationId, null))));
         mvc.perform(
                         post("/api/v1/order-reservation-repairs/{id}", orderId)
                                 .principal(

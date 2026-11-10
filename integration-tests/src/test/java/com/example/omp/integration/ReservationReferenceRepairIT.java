@@ -67,6 +67,8 @@ class ReservationReferenceRepairIT {
             var inspected = inspect(checkout);
             long version = inspected.jsonPath().getLong("version");
             inspected.then().body("missing", equalTo(2)).body("status", equalTo("DRAFT"));
+            assertThat(inspected.jsonPath().getList("lines.reservationWarehouseId", String.class))
+                    .containsExactly("WH-1", "WH-1");
             String token = AuthSupport.adminToken();
             var plan = checkout.plan(version);
             var first = CompletableFuture.supplyAsync(() -> repair(checkout, token, plan));
@@ -114,6 +116,11 @@ class ReservationReferenceRepairIT {
 
             restart(deployment);
             checkout.assertPublicReferences();
+            assertThat(
+                            inspect(checkout)
+                                    .jsonPath()
+                                    .getList("lines.reservationWarehouseId", String.class))
+                    .containsExactly("WH-1", "WH-1");
             assertThat(deployment.referenceSnapshot(checkout.order())).isEqualTo(repaired);
             repair(checkout, AuthSupport.adminToken(), plan)
                     .then()

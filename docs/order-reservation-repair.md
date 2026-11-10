@@ -66,8 +66,13 @@ the complete binding list, for example:
 
 For an actual restoration, the order must be DRAFT, PLACED or CONFIRMED. Each
 inventory lookup must return the requested reservation ID, this order ID, the
-line's SKU and quantity, and ACTIVE state. Historical lines do not retain their
-original warehouse, so this endpoint cannot establish warehouse provenance.
+line's SKU and quantity, and ACTIVE state. New checkouts also retain the verified
+original warehouse as `reservationWarehouseId` on the inspected line. When that
+snapshot is present, the remote hold must match it exactly. Callers cannot supply
+or replace that snapshot through a repair plan. V14 leaves all pre-existing lines
+NULL: their original warehouse is unknown, even when their reservation ID exists.
+Do not infer historical intent from the current WH-1 checkout policy or current
+stock. This endpoint cannot establish unknown historical warehouse provenance.
 Missing, inactive or unverifiable resources require separate investigation;
 this endpoint cannot reconstruct lost holds or repair fulfilled/cancelled orders.
 
@@ -222,3 +227,24 @@ Source-bound reports are retained in
 The fixtures use independent fresh resources with known provenance; unresolved
 historical active rows, original warehouse intent, conflicting existing pointers
 and final database integrity remain separate acceptance requirements.
+
+## Original warehouse snapshot verification
+
+V14 adds nullable `reservation_warehouse_id` with bounded, nonblank canonical
+values. New checkout stores the warehouse from its verified reservation response
+with the original ID in the acceptance transaction. The aggregate prevents
+replacement of either component once bound, and JPA treats the warehouse as an
+insert-only snapshot. Ordinary public order-line schemas and repair POST bodies
+are unchanged; the administrator inspection adds the nullable snapshot.
+
+All 601 focused cases pass, including preservation of a pre-V14 database with an
+existing synthetic reference, rejection of invalid database values, durable
+reload and a wrong-warehouse repair that leaves references, version, audit and
+outbox unchanged. A correct matching hold then repairs normally. The pre-V3
+upgrade still leaves every historical warehouse unknown and business rows intact.
+Exact-source local reports are retained in `coverage/reservation-warehouse-local-evidence.zip`
+and JSON. Hosted 1,303-reactor/28-deployed verification remains required.
+
+This preserves future checkout intent and protects known snapshots during repair.
+Historical active ownership/provenance, existing conflicting references, shipment
+validation/compensation, expiry coordination and final constraints remain open.

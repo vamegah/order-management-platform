@@ -39,12 +39,37 @@ public class OrderLine {
     @Column(name = "reservation_id")
     private UUID reservationId;
 
+    /** Original checkout intent, absent when historical provenance is unknown. */
+    @Column(name = "reservation_warehouse_id", length = 64, updatable = false)
+    private String reservationWarehouseId;
+
+    public String getReservationWarehouseId() {
+        return reservationWarehouseId;
+    }
+
+    public void bindReservation(UUID reservationId, String warehouseId) {
+        Objects.requireNonNull(reservationId);
+        if (warehouseId == null
+                || warehouseId.isBlank()
+                || warehouseId.length() > 64
+                || !warehouseId.equals(warehouseId.strip()))
+            throw new IllegalArgumentException("A bounded original warehouse is required");
+        if ((this.reservationId != null && !this.reservationId.equals(reservationId))
+                || (reservationWarehouseId != null && !reservationWarehouseId.equals(warehouseId)))
+            throw new IllegalStateException("Original reservation provenance cannot be replaced");
+        this.reservationId = reservationId;
+        this.reservationWarehouseId = warehouseId;
+    }
+
     public UUID getReservationId() {
         return reservationId;
     }
 
     public void setReservationId(UUID reservationId) {
-        this.reservationId = Objects.requireNonNull(reservationId);
+        Objects.requireNonNull(reservationId);
+        if (reservationWarehouseId != null && !reservationId.equals(this.reservationId))
+            throw new IllegalStateException("Original reservation provenance cannot be replaced");
+        this.reservationId = reservationId;
     }
 
     @NotBlank

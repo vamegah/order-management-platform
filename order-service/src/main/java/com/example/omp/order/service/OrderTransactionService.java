@@ -79,8 +79,8 @@ public class OrderTransactionService {
             ShippingAddress shippingAddress,
             List<OrderLineDraft> drafts,
             UUID paymentId,
-            List<UUID> reservationIds) {
-        if (reservationIds.size() != drafts.size()) {
+            List<ReservedLine> reservations) {
+        if (reservations.size() != drafts.size()) {
             throw new IllegalArgumentException("Every order line requires a reservation");
         }
 
@@ -134,7 +134,8 @@ public class OrderTransactionService {
                             draft.name(),
                             draft.unitPrice(),
                             draft.quantity());
-            line.setReservationId(reservationIds.get(index));
+            ReservedLine reservation = reservations.get(index);
+            line.bindReservation(reservation.reservationId(), reservation.warehouseId());
             order.addLine(line);
         }
 
@@ -175,6 +176,9 @@ public class OrderTransactionService {
         order.getStatusHistory().size();
         return order;
     }
+
+    /** Verified inventory identity and the warehouse used for this checkout. */
+    public record ReservedLine(UUID reservationId, String warehouseId) {}
 
     /** Internal carrier for a line before the entity is created. */
     public record OrderLineDraft(

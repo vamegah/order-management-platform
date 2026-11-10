@@ -35,6 +35,13 @@ class TerminalReservationDispositionSchemaTest {
                 .isEqualTo("#/components/schemas/TerminalReservationDispositionAudit");
         var repair = ModelConverters.getInstance().readAll(ReservationReferenceRepairView.class);
         assertThat(repair.get("Line").getProperties())
-                .containsOnlyKeys("lineId", "sku", "quantity", "reservationId");
+                .containsOnlyKeys(
+                        "lineId", "sku", "quantity", "reservationId", "reservationWarehouseId");
+        Schema<?> warehouse =
+                (Schema<?>) repair.get("Line").getProperties().get("reservationWarehouseId");
+        assertThat(warehouse.getType()).isEqualTo("string");
+        assertThat(warehouse.getMaxLength()).isEqualTo(64);
+        assertThat(warehouse.getNullable()).isTrue();
+        assertThat(warehouse.getReadOnly()).isTrue();
     }
 }

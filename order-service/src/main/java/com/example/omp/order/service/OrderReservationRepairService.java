@@ -53,7 +53,9 @@ public class OrderReservationRepairService {
                         "inventory-service", 502, "Invalid reservation verification response");
             if (!orderId.equals(reservation.orderId())
                     || !line.sku().equals(reservation.sku())
-                    || line.quantity() != reservation.quantity())
+                    || line.quantity() != reservation.quantity()
+                    || (line.reservationWarehouseId() != null
+                            && !line.reservationWarehouseId().equals(reservation.warehouseId())))
                 throw new InvalidOrderDataException(
                         "The reservation does not match the order line");
             if (!"RESERVATION_STATUS_ACTIVE".equals(reservation.status()))

@@ -11,18 +11,18 @@ acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `b2cc691`, the approved forward-reference guard
-merge of [PR #19](https://github.com/vamegah/order-management-platform/pull/19).
-Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42704184608)
-and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42709496849)
-pass all twenty jobs, 1,285 reactor cases and 25 deployed service/client cases.
-Exact-source reports and merge/protection records are retained in
-`coverage/active-reference-guards-ci-evidence.zip` and
-`coverage/active-reference-guards-main-ci-evidence.zip`, with JSON hashes.
-The next local batch adds three deployed reference repair/restart cases and
-passes four deployment guards. It still requires full hosted verification of
-1,285 reactor and 28 deployed cases. Historical active ownership, original
-warehouse provenance, conflicting references and final constraints remain open.
+The accepted main baseline is `94435e5`, the approved deployed reference repair
+merge of [PR #20](https://github.com/vamegah/order-management-platform/pull/20).
+Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42722597222)
+and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42726141724)
+pass all twenty jobs, 1,285 reactor and 28 deployed service/client cases.
+Exact-source evidence is retained in `coverage/reference-repair-deployment-ci-evidence.zip`
+and `coverage/reference-repair-deployment-main-ci-evidence.zip`, with JSON hashes.
+The next local batch preserves original warehouse intent for new checkouts and
+checks known warehouse snapshots during missing-reference repair. All 601 focused
+cases, six static reports and five unit comparisons pass; complete hosted
+verification of 1,303 reactor and 28 deployed cases remains required. Historical
+active ownership/provenance, conflicting pointers and final constraints stay open.
 Publication and merge actions follow the existing scoped approval agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
