@@ -202,7 +202,9 @@ class InventoryReservationContractTest {
                         cleanup,
                         journal,
                         mock(OrderFulfillmentStore.class),
-                        mock(OrderFulfillmentQueue.class));
+                        mock(OrderFulfillmentQueue.class),
+                        org.mockito.Mockito.mock(
+                                com.example.omp.order.service.OrderLifecycleCoordinator.class));
         var request =
                 new CreateOrderRequest(
                         customer,

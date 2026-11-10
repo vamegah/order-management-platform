@@ -231,13 +231,14 @@ records are retained in the compensation transport CI evidence archives; see
 These cases issue RPCs directly with the development refund provider. See
 [the command and scope](external-e2e.md#recovery-compensation-transport-specifications).
 
-Completed tasks and orphan journal rows are retained. Orphan attempts are intentionally rescanned indefinitely; define a retention/archive policy only with a bounded remote-write horizon and recovery evidence. Legacy orphan resources created before the journal migration have no discoverable attempt record and require an initial audit. Confirmed-payment cleanup now uses the provider-backed refund workflow; permanent failures, legacy intents and missing-webhook reconciliation still need operator handling. Inventory TTL expiry remains disabled until the accepted-order lifecycle handles expired holds. The broader gRPC authorization and mTLS review remains open.
+Completed tasks and orphan journal rows are retained. Orphan attempts are intentionally rescanned indefinitely; define a retention/archive policy only with a bounded remote-write horizon and recovery evidence. Legacy orphan resources created before the journal migration have no discoverable attempt record and require an initial audit. Confirmed-payment cleanup now uses the provider-backed refund workflow; permanent failures, legacy intents and missing-webhook reconciliation still need operator handling. The supported lifecycle overlay enables coordinated inventory TTL expiry and accepted-order compensation; see [core lifecycle](core-order-lifecycle.md). The broader gRPC authorization and mTLS review remains open.
 
-Shipment uses a separate durable fulfillment queue. Once an order is FULFILLING,
-cancellation is rejected and cleanup continues to exclude it as an active order.
-Use the administrator ship action to retry fulfillment, rather than cleanup.
-See [fulfillment recovery](order-fulfillment.md) for pending holds, worker identity
-and permanent-failure limits.
+Shipment uses a durable fulfillment queue and a durable payment decision.
+Cancelling FULFILLING returns CANCELLING/202; the payment authority chooses
+shipment or cancellation. Accepted-order cleanup is gated until inventory
+compensation succeeds, including exactly-once restock of committed quantities.
+Use the supervised lifecycle worker and administrator lifecycle inspection/retry
+for pending or attention outcomes. See [the transition matrix and operations](core-order-lifecycle.md).
 
 Historical terminal reference exceptions have a separate
 [administrator audit procedure](order-reservation-repair.md#audited-terminal-exceptions).
@@ -245,3 +246,8 @@ That metadata disposition does not enqueue cleanup, release inventory, settle
 payment or prove remote absence. It cannot waive an active order's reference
 requirements. The census continues to show the physical missing reference;
 consult its terminal disposition resource when assessing historical findings.
+
+The approved active-legacy policy also permits the upgrade worker to cancel
+irrecoverable pre-shipment orders, retain original identities and record terminal
+exceptions. That coordinated path durably admits payment/inventory compensation;
+the standalone terminal metadata attestation endpoint still makes no remote mutation.

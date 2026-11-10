@@ -43,6 +43,15 @@ public class OrderFulfillmentQueue {
             var order = orders.findByIdFull(orderId);
             if (order.getStatus() != com.example.omp.order.domain.OrderStatus.FULFILLING) return 0;
             OrderPaymentPolicy.requireMatchingPayment(order, payments.get(order.getPaymentId()));
+            var decision =
+                    payments.decide(
+                            order.getPaymentId(),
+                            orderId,
+                            com.example.omp.proto.payment.FulfillmentAction
+                                    .FULFILLMENT_ACTION_BEGIN);
+            OrderPaymentPolicy.requireMatchingPayment(order, decision);
+            if (!java.util.Set.of("FULFILLING", "SHIPPED").contains(decision.fulfillmentState()))
+                throw new IllegalStateException("Payment did not authorize fulfillment");
         } catch (RuntimeException failure) {
             store.recordFailure(orderId, failure);
             metrics.counter("order.fulfillment.failures").increment();
@@ -55,6 +64,7 @@ public class OrderFulfillmentQueue {
             var claimed = store.claimTask(orderId);
             if (claimed.isEmpty()) break;
             var task = claimed.get();
+            boolean abort = false;
             try {
                 var reservation = inventory.get(task.reservationId());
                 validate(task, reservation);
@@ -62,8 +72,17 @@ public class OrderFulfillmentQueue {
                     reservation = inventory.commit(task.reservationId().toString());
                     validate(task, reservation);
                 }
-                if (!"RESERVATION_STATUS_COMMITTED".equals(reservation.status()))
+                if (!"RESERVATION_STATUS_COMMITTED".equals(reservation.status())) {
+                    if (java.util.Set.of(
+                                    "RESERVATION_STATUS_EXPIRED",
+                                    "RESERVATION_STATUS_RELEASED",
+                                    "RESERVATION_STATUS_RESTOCKED")
+                            .contains(reservation.status())) {
+                        abort = true;
+                        store.requestAbort(orderId, "Required shipment inventory is unavailable");
+                    }
                     throw new IllegalStateException("Shipment reservation is not committed");
+                }
                 if (store.completeTask(task)) {
                     completed++;
                     metrics.counter("order.fulfillment.reservations.completed").increment();
@@ -76,12 +95,18 @@ public class OrderFulfillmentQueue {
                                 "Shipment reservation remains pending: order={} task={}",
                                 orderId,
                                 task.id());
+                if (abort) return completed;
             }
         }
         try {
             if (!Thread.currentThread().isInterrupted() && store.readyForCompletion(orderId)) {
                 var order = orders.findByIdFull(orderId);
-                var payment = payments.get(order.getPaymentId());
+                var payment =
+                        payments.decide(
+                                order.getPaymentId(),
+                                orderId,
+                                com.example.omp.proto.payment.FulfillmentAction
+                                        .FULFILLMENT_ACTION_SHIP);
                 OrderPaymentPolicy.requireMatchingPayment(order, payment);
                 if (store.finish(orderId, payment))
                     metrics.counter("order.fulfillment.completed").increment();
@@ -111,6 +136,8 @@ public class OrderFulfillmentQueue {
                 || !task.reservationId().equals(reservation.id())
                 || !task.orderId().equals(reservation.orderId())
                 || !task.sku().equals(reservation.sku())
+                || (task.warehouseId() != null
+                        && !task.warehouseId().equals(reservation.warehouseId()))
                 || task.quantity() != reservation.quantity())
             throw new IllegalStateException("Shipment reservation does not match the order line");
     }

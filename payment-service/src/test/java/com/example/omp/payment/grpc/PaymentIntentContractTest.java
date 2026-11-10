@@ -66,6 +66,80 @@ class PaymentIntentContractTest {
         server.shutdownNow();
     }
 
+    private FulfillmentDecision decide(FulfillmentAction action) {
+        return client.decideFulfillment(
+                FulfillmentDecisionRequest.newBuilder()
+                        .setPaymentId(existing.getId().toString())
+                        .setOrderId(orderId.toString())
+                        .setAction(action)
+                        .build());
+    }
+
+    @Test
+    void durableShipmentDecisionAndCancellationReplayShareTheWireContract() {
+        when(repository.lockForRefund(existing.getId())).thenReturn(Optional.of(existing));
+        existing.confirm("pi-confirmed");
+        assertThat(decide(FulfillmentAction.FULFILLMENT_ACTION_BEGIN).getState())
+                .isEqualTo("FULFILLING");
+        assertThat(
+                        decide(FulfillmentAction.FULFILLMENT_ACTION_SHIP)
+                                .getPayment()
+                                .getFulfillmentState())
+                .isEqualTo("SHIPPED");
+        assertThat(decide(FulfillmentAction.FULFILLMENT_ACTION_CANCEL).getState())
+                .isEqualTo("SHIPPED");
+        assertThatThrownBy(() -> decide(FulfillmentAction.FULFILLMENT_ACTION_ALLOW_REFUND))
+                .isInstanceOfSatisfying(
+                        StatusRuntimeException.class,
+                        e ->
+                                assertThat(e.getStatus().getCode())
+                                        .isEqualTo(Status.Code.FAILED_PRECONDITION));
+    }
+
+    @Test
+    void cancellationDecisionPreventsShipmentAndAllowsRefundOnlyAfterCompensation() {
+        when(repository.lockForRefund(existing.getId())).thenReturn(Optional.of(existing));
+        existing.confirm("pi-confirmed");
+        assertThat(decide(FulfillmentAction.FULFILLMENT_ACTION_CANCEL).getState())
+                .isEqualTo("CANCELLING");
+        assertThatThrownBy(() -> decide(FulfillmentAction.FULFILLMENT_ACTION_BEGIN))
+                .isInstanceOfSatisfying(
+                        StatusRuntimeException.class,
+                        e ->
+                                assertThat(e.getStatus().getCode())
+                                        .isEqualTo(Status.Code.FAILED_PRECONDITION));
+        assertThat(decide(FulfillmentAction.FULFILLMENT_ACTION_ALLOW_REFUND).getState())
+                .isEqualTo("REFUNDABLE");
+        assertThat(decide(FulfillmentAction.FULFILLMENT_ACTION_CANCEL).getState())
+                .isEqualTo("REFUNDABLE");
+    }
+
+    @Test
+    void invalidDecisionActionsAndForeignOrdersCannotChangePayment() {
+        when(repository.lockForRefund(existing.getId())).thenReturn(Optional.of(existing));
+        assertThatThrownBy(() -> decide(FulfillmentAction.FULFILLMENT_ACTION_UNSPECIFIED))
+                .isInstanceOfSatisfying(
+                        StatusRuntimeException.class,
+                        e ->
+                                assertThat(e.getStatus().getCode())
+                                        .isEqualTo(Status.Code.INVALID_ARGUMENT));
+        assertThatThrownBy(
+                        () ->
+                                client.decideFulfillment(
+                                        FulfillmentDecisionRequest.newBuilder()
+                                                .setPaymentId(existing.getId().toString())
+                                                .setOrderId(UUID.randomUUID().toString())
+                                                .setAction(
+                                                        FulfillmentAction.FULFILLMENT_ACTION_CANCEL)
+                                                .build()))
+                .isInstanceOfSatisfying(
+                        StatusRuntimeException.class,
+                        e ->
+                                assertThat(e.getStatus().getCode())
+                                        .isEqualTo(Status.Code.INVALID_ARGUMENT));
+        assertThat(existing.getFulfillmentState()).isEqualTo("OPEN");
+    }
+
     private CreatePaymentIntentRequest.Builder request() {
         return CreatePaymentIntentRequest.newBuilder()
                 .setOrderId(orderId.toString())

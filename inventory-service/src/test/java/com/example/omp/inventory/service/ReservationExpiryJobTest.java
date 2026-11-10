@@ -19,6 +19,7 @@ class ReservationExpiryJobTest {
     @Test
     void expiresHoldAndRecordsEventInTransaction() {
         var reservations = mock(ReservationRepository.class);
+        when(reservations.tryLockOrder(any())).thenReturn(true);
         var stocks = mock(StockLevelRepository.class);
         var events = mock(InventoryEventPublisher.class);
         var manager = mock(PlatformTransactionManager.class);
@@ -26,7 +27,7 @@ class ReservationExpiryJobTest {
         var reservation = new Reservation("SKU", "WH-1", 3, UUID.randomUUID());
         var stock = new StockLevel("SKU", "WH-1", 10);
         stock.reserve(3);
-        when(reservations.lockExpiredBatch(any(), eq(10))).thenReturn(List.of(reservation));
+        when(reservations.lockExpiredByTtl(anyLong(), eq(10))).thenReturn(List.of(reservation));
         when(stocks.findBySkuAndWarehouseId("SKU", "WH-1")).thenReturn(Optional.of(stock));
         var metrics = new SimpleMeterRegistry();
         new ReservationExpiryJob(
@@ -50,11 +51,12 @@ class ReservationExpiryJobTest {
     @Test
     void missingStockRollsBackAndIsRetriedOnNextTick() {
         var reservations = mock(ReservationRepository.class);
+        when(reservations.tryLockOrder(any())).thenReturn(true);
         var stocks = mock(StockLevelRepository.class);
         var events = mock(InventoryEventPublisher.class);
         var manager = mock(PlatformTransactionManager.class);
         when(manager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-        when(reservations.lockExpiredBatch(any(), anyInt()))
+        when(reservations.lockExpiredByTtl(anyLong(), anyInt()))
                 .thenReturn(List.of(new Reservation("SKU", "WH-1", 1, UUID.randomUUID())));
         var metrics = new SimpleMeterRegistry();
         var job =

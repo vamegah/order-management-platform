@@ -125,6 +125,8 @@ class CheckoutRecoveryWorkerIT {
         jdbc.execute("CREATE SCHEMA orders");
         jdbc.execute(
                 "CREATE TABLE orders.purchase_order (id uuid PRIMARY KEY, status varchar(20) NOT NULL)");
+        jdbc.execute(
+                "CREATE TABLE orders.lifecycle_watch (order_id uuid PRIMARY KEY, compensation_ready boolean NOT NULL DEFAULT false)");
         for (String migration :
                 new String[] {"V7__durable_cleanup.sql", "V8__checkout_journal.sql"}) {
             jdbc.execute(

@@ -57,6 +57,10 @@ service PaymentService {
   // Refunds a completed payment. Supports full and partial refunds.
   rpc RefundPayment(RefundPaymentRequest) returns (Refund);
 
+  // Durable order coordinator decision. Restricted to administrators/order.reconcile.
+  // Serializes shipment against refund admission at the payment authority.
+  rpc DecideFulfillment(FulfillmentDecisionRequest) returns (FulfillmentDecision);
+
   // Streams payment events for a customer or order. Server-side push.
   //
   // Use case: order-service subscribes to payment state changes to
@@ -104,6 +108,7 @@ message Payment {
   int64 updated_at_epoch_millis = 8;
   // Full state-transition history, most recent first.
   repeated PaymentEvent events = 9;
+  string fulfillment_state = 10;
 }
 
 enum PaymentStatus {
@@ -168,3 +173,21 @@ message PaymentEvent {
 }
 message FindPaymentsByOrderRequest { string order_id = 1; }
 message FindPaymentsByOrderResponse { repeated Payment payments = 1; }
+
+message FulfillmentDecisionRequest {
+  string payment_id = 1;
+  string order_id = 2;
+  FulfillmentAction action = 3;
+}
+enum FulfillmentAction {
+  FULFILLMENT_ACTION_UNSPECIFIED = 0;
+  FULFILLMENT_ACTION_BEGIN = 1;
+  FULFILLMENT_ACTION_SHIP = 2;
+  FULFILLMENT_ACTION_CANCEL = 3;
+  FULFILLMENT_ACTION_ALLOW_REFUND = 4;
+}
+message FulfillmentDecision {
+  Payment payment = 1;
+  // OPEN, FULFILLING, SHIPPED, CANCELLING or REFUNDABLE. Decisions never expire.
+  string state = 2;
+}

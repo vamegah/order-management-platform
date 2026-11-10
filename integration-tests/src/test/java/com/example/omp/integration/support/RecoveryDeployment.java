@@ -78,9 +78,9 @@ public final class RecoveryDeployment {
                 BEGIN;
                 SET LOCAL statement_timeout = '5s';
                 DO $fixture$
-                DECLARE touched integer;
+                DECLARE touched integer; fixture_order uuid;
                 BEGIN
-                  PERFORM id FROM orders.purchase_order
+                  SELECT id INTO fixture_order FROM orders.purchase_order
                   WHERE id = '%s' AND shipping_line1 = '%s' AND status = 'DRAFT' AND version = 0
                     AND EXISTS (SELECT 1 FROM orders.checkout_attempt
                                 WHERE order_id = '%s' AND status = 'ACCEPTED')
@@ -88,6 +88,17 @@ public final class RecoveryDeployment {
                   IF NOT FOUND OR (SELECT count(*) FROM orders.order_line WHERE order_id = '%s') <> 2 THEN
                     RAISE EXCEPTION 'Fixture is not an independent fresh two-line checkout';
                   END IF;
+                  -- Explicitly model captured pre-upgrade metadata in this privileged fixture.
+                  -- Future checkouts are separately required to reject missing/unverified pointers.
+                  INSERT INTO orders.legacy_lifecycle_resolution(order_id, original_status, original_version)
+                    SELECT id, status, version FROM orders.purchase_order WHERE id = fixture_order;
+                  INSERT INTO orders.legacy_lifecycle_line
+                    (line_id, order_id, product_id, sku, quantity, original_reservation_id, original_warehouse)
+                    SELECT id, order_id, product_id, product_sku, quantity, reservation_id, reservation_warehouse_id
+                    FROM orders.order_line WHERE order_id = fixture_order;
+                  UPDATE orders.lifecycle_watch SET next_scan_at = clock_timestamp() + interval '1 day'
+                    WHERE order_id = fixture_order;
+                  UPDATE orders.order_line SET reservation_verified = false WHERE order_id = fixture_order;
                   UPDATE orders.order_line SET reservation_id = NULL
                   WHERE order_id = '%s' AND
                     ((id = '%s' AND reservation_id = '%s') OR (id = '%s' AND reservation_id = '%s'));
@@ -157,6 +168,19 @@ public final class RecoveryDeployment {
                 .readTree(sql("SELECT jsonb_build_object(" + String.join(",", values) + ");"));
     }
 
+    public JsonNode lifecycleBacklog() throws Exception {
+        return new ObjectMapper()
+                .readTree(
+                        sql(
+                                """
+            SELECT jsonb_build_object(
+                'active_orders', (SELECT count(*) FROM orders.purchase_order WHERE status IN ('DRAFT','PLACED','CONFIRMED','FULFILLING','CANCELLING')),
+                'pending_cleanup', (SELECT count(*) FROM orders.cleanup_task WHERE NOT completed),
+                'uncompensated_cancellations', (SELECT count(*) FROM orders.lifecycle_watch w
+                    JOIN orders.purchase_order o ON o.id = w.order_id WHERE o.status = 'CANCELLED' AND NOT w.compensation_ready));
+            """));
+    }
+
     private String sql(String statement) throws Exception {
         var process =
                 new ProcessBuilder(
@@ -181,6 +205,27 @@ public final class RecoveryDeployment {
         } finally {
             if (process.isAlive()) process.destroyForcibly().waitFor(5, TimeUnit.SECONDS);
         }
+    }
+
+    /** Read-only census of immutable upgrade eligibility and final reference integrity. */
+    public JsonNode legacyLifecycleIntegrity() throws Exception {
+        return new ObjectMapper()
+                .readTree(
+                        sql(
+                                """
+            SELECT jsonb_build_object(
+                'unresolved', (SELECT count(*) FROM orders.legacy_lifecycle_resolution WHERE resolved_at IS NULL),
+                'uncompensated_cancellations', (SELECT count(*) FROM orders.legacy_lifecycle_resolution legacy
+                    JOIN orders.purchase_order o ON o.id = legacy.order_id JOIN orders.lifecycle_watch w ON w.order_id = o.id
+                    WHERE o.status = 'CANCELLED' AND NOT w.compensation_ready),
+                'pending_cleanup', (SELECT count(*) FROM orders.cleanup_task t
+                    JOIN orders.legacy_lifecycle_resolution legacy ON legacy.order_id = t.order_id WHERE NOT t.completed),
+                'active_unverified', (SELECT count(*) FROM orders.order_line l JOIN orders.purchase_order o ON o.id = l.order_id
+                    WHERE o.status NOT IN ('DELIVERED','CANCELLED') AND (l.reservation_id IS NULL OR NOT l.reservation_verified)),
+                'invented_warehouses', (SELECT count(*) FROM orders.legacy_lifecycle_line original JOIN orders.order_line l ON l.id = original.line_id
+                    WHERE original.original_warehouse IS NULL AND l.reservation_warehouse_id IS NOT NULL),
+                'audited_exceptions', (SELECT count(*) FROM orders.terminal_reservation_reference_disposition));
+            """));
     }
 
     /** Emits a digest only; credentials and JWTs never leave their private container mounts. */

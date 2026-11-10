@@ -134,7 +134,7 @@ public class OrderController {
             @AuthenticationPrincipal Jwt jwt) {
         OrderDto order =
                 orderService.ship(id, username(jwt), body != null ? body.get("reason") : null);
-        if ("FULFILLING".equals(order.status())) {
+        if ("FULFILLING".equals(order.status()) || "CANCELLING".equals(order.status())) {
             return ResponseEntity.accepted()
                     .location(URI.create("/api/v1/orders/" + id))
                     .header("Retry-After", "60")
@@ -155,12 +155,28 @@ public class OrderController {
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasRole('admin') or @orderAuthorization.ownsOrder(#id, authentication.token)")
-    @Operation(summary = "Cancel the order")
-    public OrderDto cancel(
+    @Operation(summary = "Cancel the order; returns 202 while fulfillment compensation is pending")
+    @ApiResponses({
+        @ApiResponse(
+                responseCode = "200",
+                description = "Cancellation recorded; durable cleanup retained"),
+        @ApiResponse(
+                responseCode = "202",
+                description = "Cancellation competes with pending shipment; poll Location")
+    })
+    public ResponseEntity<OrderDto> cancel(
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal Jwt jwt) {
-        return orderService.cancel(id, username(jwt), body != null ? body.get("reason") : null);
+        var order =
+                orderService.cancel(id, username(jwt), body != null ? body.get("reason") : null);
+        if ("CANCELLING".equals(order.status())) {
+            return ResponseEntity.accepted()
+                    .location(URI.create("/api/v1/orders/" + id))
+                    .header("Retry-After", "60")
+                    .body(order);
+        }
+        return ResponseEntity.ok(order);
     }
 
     private String username(Jwt jwt) {

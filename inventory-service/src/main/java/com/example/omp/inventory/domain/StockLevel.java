@@ -171,7 +171,7 @@ public class StockLevel {
         if (quantity <= 0) {
             throw new IllegalArgumentException("Restock quantity must be positive");
         }
-        this.quantityOnHand += quantity;
+        this.quantityOnHand = Math.addExact(this.quantityOnHand, quantity);
     }
 
     // -------------------------------------------------------------------------

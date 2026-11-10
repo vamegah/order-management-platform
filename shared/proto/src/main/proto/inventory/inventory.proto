@@ -75,6 +75,10 @@ service InventoryService {
   // Privileged recovery lookup; requires order.reconcile scope.
   rpc FindReservationsByOrder(FindReservationsByOrderRequest) returns (FindReservationsByOrderResponse);
 
+  // Privileged durable cancellation fence. Releases active holds and restores
+  // committed stock exactly once; rejects future reserve/commit for this order.
+  rpc CompensateOrder(CompensateOrderRequest) returns (FindReservationsByOrderResponse);
+
   // ---------------------------------------------------------------------------
   // Bulk operations (client streaming)
   // ---------------------------------------------------------------------------
@@ -174,6 +178,7 @@ enum ReservationStatus {
   RESERVATION_STATUS_RELEASED = 3;
   // Expired without commit or release (system-cleaned). Terminal.
   RESERVATION_STATUS_EXPIRED = 4;
+  RESERVATION_STATUS_RESTOCKED = 5;
 }
 
 message ReleaseReservationRequest {
@@ -249,3 +254,4 @@ enum StockUpdateReason {
 
 message FindReservationsByOrderRequest { string order_id = 1; }
 message FindReservationsByOrderResponse { repeated Reservation reservations = 1; }
+message CompensateOrderRequest { string order_id = 1; string reason = 2; }

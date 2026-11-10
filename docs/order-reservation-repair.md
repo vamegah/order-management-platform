@@ -248,3 +248,16 @@ and JSON. Hosted 1,303-reactor/28-deployed verification remains required.
 This preserves future checkout intent and protects known snapshots during repair.
 Historical active ownership/provenance, existing conflicting references, shipment
 validation/compensation, expiry coordination and final constraints remain open.
+
+## Final lifecycle reconciliation
+
+V15/V16 freeze historical identities and reconcile missing or conflicting pointers
+against complete owned inventory discovery. Unique valid original holds may be
+recovered with an audit; known original warehouse intent cannot be invented or
+replaced. The maintainer-approved active-legacy policy cancels irrecoverable
+pre-shipment orders, durably compensates resources and records terminal exceptions.
+Future and resolved active orders require verified references and unique database
+claims at commit. Existing physical shipments with inconsistent ledger evidence
+remain operator attention until reconciled. The administrator binding endpoint
+continues to reject stale, incomplete or unverifiable plans. See the
+[complete lifecycle policy, deployment and acceptance](core-order-lifecycle.md).

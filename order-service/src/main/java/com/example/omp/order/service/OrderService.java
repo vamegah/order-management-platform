@@ -57,6 +57,7 @@ public class OrderService {
     private final CheckoutJournal journal;
     private final OrderFulfillmentStore fulfillmentStore;
     private final OrderFulfillmentQueue fulfillment;
+    private final OrderLifecycleCoordinator lifecycle;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -69,7 +70,8 @@ public class OrderService {
             OrderCleanupQueue cleanup,
             CheckoutJournal journal,
             OrderFulfillmentStore fulfillmentStore,
-            OrderFulfillmentQueue fulfillment) {
+            OrderFulfillmentQueue fulfillment,
+            OrderLifecycleCoordinator lifecycle) {
         this.orderRepository = orderRepository;
         this.tx = tx;
         this.productClient = productClient;
@@ -81,6 +83,7 @@ public class OrderService {
         this.journal = journal;
         this.fulfillmentStore = fulfillmentStore;
         this.fulfillment = fulfillment;
+        this.lifecycle = lifecycle;
     }
 
     // -------------------------------------------------------------------------
@@ -285,6 +288,7 @@ public class OrderService {
     // -------------------------------------------------------------------------
 
     public OrderDto place(UUID id, String by) {
+        requireAudit(by, null);
         return transition(
                 id,
                 order -> {
@@ -294,6 +298,7 @@ public class OrderService {
     }
 
     public OrderDto confirm(UUID id, String by, String reason) {
+        requireAudit(by, reason);
         return paidTransition(
                 id,
                 OrderStatus.PLACED,
@@ -304,10 +309,12 @@ public class OrderService {
     }
 
     public OrderDto ship(UUID id, String by, String reason) {
+        requireAudit(by, reason);
         Order snapshot = tx.findByIdFull(id);
         if (snapshot.getStatus() == OrderStatus.SHIPPED
                 || snapshot.getStatus() == OrderStatus.DELIVERED)
             return OrderMapper.toDto(snapshot);
+        if (snapshot.getStatus() == OrderStatus.CANCELLING) return OrderMapper.toDto(snapshot);
         if (snapshot.getStatus() != OrderStatus.FULFILLING) {
             paidTransition(
                     snapshot,
@@ -328,6 +335,7 @@ public class OrderService {
     }
 
     public OrderDto deliver(UUID id, String by, String reason) {
+        requireAudit(by, reason);
         return transition(
                 id,
                 order -> {
@@ -337,33 +345,13 @@ public class OrderService {
     }
 
     /**
-     * Cancels an order.
-     *
-     * <p><b>Two-phase operation:</b>
-     *
-     * <ol>
-     *   <li>State transition: DRAFT/PLACED/CONFIRMED → CANCELLED. This is a local DB write and
-     *       happens in a short transaction.
-     *   <li>Downstream cleanup: release any inventory reservations, cancel the payment intent.
-     *       These are gRPC calls, made AFTER the local transaction commits.
-     * </ol>
-     *
-     * <p><b>Why cleanup after commit?</b> If we cleaned up downstream state before the local
-     * commit, and the commit then failed, we'd have released resources for an order that's still
-     * active. Cleanup-after-commit means: the order is definitively cancelled locally, and then we
-     * undo the downstream effects.
-     *
-     * <p><b>Idempotency:</b> a second cancel call is a no-op at the local level (the order is
-     * already CANCELLED). Downstream cleanup calls are also idempotent — inventory.release on an
-     * already-released reservation is a no-op, payment.cancel on an already-cancelled payment is a
-     * no-op.
-     *
-     * <p><b>Cleanup failures:</b> if a downstream cleanup call fails, we log it but don't fail the
-     * whole cancel operation. The local state says "cancelled" — that's what the user sees.
-     * Retrying cancellation retries downstream cleanup without duplicating the state history.
-     * Cleanup tasks are retained durably; authenticated operator retries are available.
+     * Records cancellation intent and known cleanup identities atomically. Pre-fulfillment orders
+     * become CANCELLED; an in-flight shipment becomes CANCELLING until the durable payment decision
+     * selects shipment or stock compensation. The configured workload identity can complete the
+     * leased fast path after commit. Failures retain work for the supervised lifecycle scheduler.
      */
     public OrderDto cancel(UUID id, String by, String reason) {
+        requireAudit(by, reason);
         // -------------------------------------------------------------------------
         // Step 1: state transition (local transaction).
         // -------------------------------------------------------------------------
@@ -373,10 +361,13 @@ public class OrderService {
                     tx.findAndApply(
                             id,
                             o -> {
-                                if (o.getStatus() != OrderStatus.CANCELLED) {
+                                if (o.getStatus() != OrderStatus.CANCELLED
+                                        && o.getStatus() != OrderStatus.CANCELLING) {
                                     o.cancel(by, reason != null ? reason : "Cancelled");
-                                    orderEventPublisher.publishCancelled(o, by, reason);
+                                    if (o.getStatus() == OrderStatus.CANCELLED)
+                                        orderEventPublisher.publishCancelled(o, by, reason);
                                 }
+                                cleanup.trackCancellation(o.getId(), by, reason);
                                 for (OrderLine line : o.getLines()) {
                                     if (line.getReservationId() != null) {
                                         cleanup.enqueue(
@@ -401,6 +392,7 @@ public class OrderService {
         // Step 2: downstream cleanup (gRPC, outside transaction).
         // -------------------------------------------------------------------------
         try {
+            lifecycle.retryOrder(cancelled.getId());
             cleanup.retryOrder(cancelled.getId(), 100);
         } catch (RuntimeException failure) {
             log.error(
@@ -409,11 +401,20 @@ public class OrderService {
                     failure);
         }
 
-        return OrderMapper.toDto(cancelled);
+        return OrderMapper.toDto(tx.findByIdFull(cancelled.getId()));
     }
 
     public OrderDto updateNotes(UUID id, String notes) {
         return transition(id, o -> o.setNotes(notes));
+    }
+
+    private static void requireAudit(String actor, String reason) {
+        if (actor == null
+                || actor.isBlank()
+                || actor.length() > 100
+                || (reason != null && reason.length() > 500))
+            throw new InvalidOrderDataException(
+                    "A bounded transition actor and reason are required");
     }
 
     // -------------------------------------------------------------------------

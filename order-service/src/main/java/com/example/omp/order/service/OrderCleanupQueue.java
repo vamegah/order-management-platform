@@ -53,12 +53,35 @@ public class OrderCleanupQueue {
     public void enqueue(UUID orderId, String type, UUID resourceId) {
         if (!List.of("RESERVATION", "PAYMENT").contains(type))
             throw new IllegalArgumentException("Invalid cleanup type");
+        int inserted =
+                jdbc.update(
+                        "INSERT INTO orders.cleanup_task (id, order_id, resource_type, resource_id) VALUES (?, ?, ?, ?) ON CONFLICT (resource_type, resource_id) DO NOTHING",
+                        UUID.randomUUID(),
+                        orderId,
+                        type,
+                        resourceId);
+        if (inserted != 0) return;
+        var owner =
+                jdbc.queryForObject(
+                        "SELECT order_id FROM orders.cleanup_task WHERE resource_type = ? AND resource_id = ?",
+                        UUID.class,
+                        type,
+                        resourceId);
+        if (!orderId.equals(owner))
+            throw new IllegalStateException("Cleanup resource belongs to another order");
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void trackCancellation(UUID orderId, String actor, String reason) {
         jdbc.update(
-                "INSERT INTO orders.cleanup_task (id, order_id, resource_type, resource_id) VALUES (?, ?, ?, ?) ON CONFLICT (resource_type, resource_id) DO NOTHING",
-                UUID.randomUUID(),
+                """
+            INSERT INTO orders.lifecycle_watch(order_id, requested_by, reason) VALUES (?, ?, ?)
+            ON CONFLICT (order_id) DO UPDATE SET next_scan_at = clock_timestamp(),
+                requested_by = EXCLUDED.requested_by, reason = EXCLUDED.reason
+            """,
                 orderId,
-                type,
-                resourceId);
+                actor,
+                reason == null ? "Order cancellation" : reason);
     }
 
     public int retryDue() {
@@ -69,7 +92,9 @@ public class OrderCleanupQueue {
                 WHERE NOT completed AND next_attempt_at <= now()
                 AND (lease_until IS NULL OR lease_until < now())
                 AND NOT EXISTS (SELECT 1 FROM orders.purchase_order existing_order
-                    WHERE existing_order.id = task.order_id AND existing_order.status <> 'CANCELLED')
+                    WHERE existing_order.id = task.order_id AND (existing_order.status <> 'CANCELLED'
+                        OR NOT EXISTS (SELECT 1 FROM orders.lifecycle_watch w
+                            WHERE w.order_id = task.order_id AND w.compensation_ready)))
                 GROUP BY task.order_id ORDER BY min(next_attempt_at), task.order_id LIMIT 10
                 """,
                         (rs, row) -> rs.getObject("order_id", UUID.class));
@@ -99,7 +124,9 @@ public class OrderCleanupQueue {
                     AND order_id = ?
                     AND NOT EXISTS (
                         SELECT 1 FROM orders.purchase_order existing_order
-                        WHERE existing_order.id = task.order_id AND existing_order.status <> 'CANCELLED'
+                        WHERE existing_order.id = task.order_id AND (existing_order.status <> 'CANCELLED'
+                            OR NOT EXISTS (SELECT 1 FROM orders.lifecycle_watch w
+                                WHERE w.order_id = task.order_id AND w.compensation_ready))
                     )
                     ORDER BY created_at, id LIMIT ? FOR UPDATE SKIP LOCKED
                 ) RETURNING id, order_id, resource_type, resource_id, attempts
@@ -122,7 +149,7 @@ public class OrderCleanupQueue {
                 else throw new IllegalStateException("Unknown cleanup type");
                 int updated =
                         jdbc.update(
-                                "UPDATE orders.cleanup_task SET completed = true, completed_at = now(), lease_id = NULL, lease_until = NULL, last_error = NULL WHERE id = ? AND lease_id = ?",
+                                "UPDATE orders.cleanup_task SET completed = true, completed_at = now(), lease_id = NULL, lease_until = NULL, last_error = NULL WHERE id = ? AND lease_id = ? AND lease_until > clock_timestamp()",
                                 task.id(),
                                 lease);
                 completed += updated;
@@ -130,7 +157,7 @@ public class OrderCleanupQueue {
                         .increment(updated);
             } catch (RuntimeException failure) {
                 jdbc.update(
-                        "UPDATE orders.cleanup_task SET lease_id = NULL, lease_until = NULL, next_attempt_at = now() + interval '1 minute', last_error = ? WHERE id = ? AND lease_id = ?",
+                        "UPDATE orders.cleanup_task SET lease_id = NULL, lease_until = NULL, next_attempt_at = now() + interval '1 minute', last_error = ? WHERE id = ? AND lease_id = ? AND lease_until > clock_timestamp()",
                         failure.getClass().getSimpleName(),
                         task.id(),
                         lease);
@@ -168,7 +195,8 @@ public class OrderCleanupQueue {
 
     private static boolean isReleased(ReservationDto reservation) {
         return "RESERVATION_STATUS_RELEASED".equals(reservation.status())
-                || "RESERVATION_STATUS_EXPIRED".equals(reservation.status());
+                || "RESERVATION_STATUS_EXPIRED".equals(reservation.status())
+                || "RESERVATION_STATUS_RESTOCKED".equals(reservation.status());
     }
 
     private void cleanupPayment(Task task) {

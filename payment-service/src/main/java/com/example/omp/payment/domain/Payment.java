@@ -107,6 +107,48 @@ public class Payment {
     @Column(name = "status", nullable = false, length = 30)
     private PaymentStatus status = PaymentStatus.PENDING;
 
+    @Column(name = "fulfillment_state", nullable = false, length = 16)
+    private String fulfillmentState = "OPEN";
+
+    /** Called only while holding the payment row lock, also used by refund admission. */
+    public void decideFulfillment(String action) {
+        switch (action) {
+            case "BEGIN" -> {
+                if ("SHIPPED".equals(fulfillmentState) || "FULFILLING".equals(fulfillmentState))
+                    return;
+                if (!"OPEN".equals(fulfillmentState) || status != PaymentStatus.CONFIRMED)
+                    throw new IllegalStateException("Payment cannot begin fulfillment");
+                fulfillmentState = "FULFILLING";
+            }
+            case "SHIP" -> {
+                if ("SHIPPED".equals(fulfillmentState)) return;
+                if (!"FULFILLING".equals(fulfillmentState) || status != PaymentStatus.CONFIRMED)
+                    throw new IllegalStateException("Shipment lost the payment decision");
+                fulfillmentState = "SHIPPED";
+            }
+            case "CANCEL" -> {
+                if ("SHIPPED".equals(fulfillmentState)) return;
+                if (!"REFUNDABLE".equals(fulfillmentState)) fulfillmentState = "CANCELLING";
+            }
+            case "ALLOW_REFUND" -> {
+                if ("REFUNDABLE".equals(fulfillmentState)) return;
+                if (!"CANCELLING".equals(fulfillmentState))
+                    throw new IllegalStateException("Inventory compensation must precede refund");
+                fulfillmentState = "REFUNDABLE";
+            }
+            default -> throw new IllegalArgumentException("Invalid fulfillment decision");
+        }
+    }
+
+    public String getFulfillmentState() {
+        return fulfillmentState;
+    }
+
+    public void requireRefundAllowed() {
+        if (!"OPEN".equals(fulfillmentState) && !"REFUNDABLE".equals(fulfillmentState))
+            throw new IllegalStateException("Payment is fenced by order fulfillment");
+    }
+
     /**
      * External provider's reference for this payment (e.g., Stripe's {@code pi_...} id). Set on
      * confirmation. Null while PENDING or after cancellation.

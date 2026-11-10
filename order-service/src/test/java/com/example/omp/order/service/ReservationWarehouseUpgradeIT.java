@@ -54,6 +54,7 @@ class ReservationWarehouseUpgradeIT {
                         .dataSource(source)
                         .schemas("orders")
                         .locations("classpath:db/migration")
+                        .target("14")
                         .load();
         assertThat(current.migrate().migrationsExecuted).isEqualTo(1);
         current.validate();

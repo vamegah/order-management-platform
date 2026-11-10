@@ -117,6 +117,26 @@ jobs:
             chmod 640 "infrastructure/tls/$service/tls.key"
           done
           echo '127.0.0.1 keycloak.localhost product-service.localhost customer-service.localhost order-service.localhost notification.localhost' | sudo tee -a /etc/hosts
+      - name: Provision private development recovery identity for application UID 1000
+        shell: bash
+        run: |
+          sudo --preserve-env=ORDER_RECOVERY_TOKEN_DIRECTORY,ORDER_RECOVERY_CLIENT_SECRET_FILE "$(command -v python)" - <<'PY'
+          import json, os
+          from pathlib import Path
+          projection = Path(os.environ['ORDER_RECOVERY_TOKEN_DIRECTORY'])
+          secret = Path(os.environ['ORDER_RECOVERY_CLIENT_SECRET_FILE'])
+          assert projection.is_absolute() and secret.parent == projection.parent
+          projection.parent.mkdir(mode=0o700)
+          projection.mkdir(mode=0o700)
+          realm = json.loads(Path('infrastructure/keycloak/import/omp-realm.json').read_text())
+          credential = next(c['secret'] for c in realm['clients'] if c['clientId'] == 'order-recovery')
+          with secret.open('x', encoding='utf-8') as target:
+              os.fchmod(target.fileno(), 0o400)
+              target.write(credential)
+              os.fchown(target.fileno(), 1000, 1000)
+          for path in (projection.parent, projection):
+              os.chown(path, 1000, 1000)
+          PY
       - name: Build the six deployed service images sequentially
         shell: bash
         run: |
@@ -126,6 +146,7 @@ jobs:
       - name: Start a fresh stack and require every health check
         run: >-
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml
           up -d --no-build --wait --wait-timeout 600 traefik
           product-service customer-service order-service inventory-service payment-service notification-service
       - name: Exercise authenticated REST, mTLS gRPC and WebSocket journeys
@@ -147,26 +168,6 @@ jobs:
           npm run test:deployed 2>&1 | tee notification-client-deployed.log
       - name: Reject missing or skipped deployed client cases
         run: python scripts/check_junit.py clients/notifications/deployed-results.xml --minimum-tests 2
-      - name: Provision private development recovery identity for application UID 1000
-        shell: bash
-        run: |
-          sudo --preserve-env=ORDER_RECOVERY_TOKEN_DIRECTORY,ORDER_RECOVERY_CLIENT_SECRET_FILE "$(command -v python)" - <<'PY'
-          import json, os
-          from pathlib import Path
-          projection = Path(os.environ['ORDER_RECOVERY_TOKEN_DIRECTORY'])
-          secret = Path(os.environ['ORDER_RECOVERY_CLIENT_SECRET_FILE'])
-          assert projection.is_absolute() and secret.parent == projection.parent
-          projection.parent.mkdir(mode=0o700)
-          projection.mkdir(mode=0o700)
-          realm = json.loads(Path('infrastructure/keycloak/import/omp-realm.json').read_text())
-          credential = next(c['secret'] for c in realm['clients'] if c['clientId'] == 'order-recovery')
-          with secret.open('x', encoding='utf-8') as target:
-              os.fchmod(target.fileno(), 0o400)
-              target.write(credential)
-              os.fchown(target.fileno(), 1000, 1000)
-          for path in (projection.parent, projection):
-              os.chown(path, 1000, 1000)
-          PY
       - name: Deploy the supervised projector and enable isolated scheduled recovery
         run: >-
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
@@ -183,6 +184,22 @@ jobs:
         run: |
           python scripts/check_junit.py integration-tests/target/failsafe-reports/TEST-com.example.omp.integration.ScheduledRecoveryIT.xml --minimum-tests 2
           python scripts/check_verification.py --root integration-tests --include-e2e --include-recovery-e2e
+      - name: Enable short natural expiry only for isolated lifecycle acceptance
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.recovery.yml -f docker-compose.recovery-projector.yml
+          -f docker-compose.recovery-acceptance.yml -f docker-compose.lifecycle-acceptance.yml
+          up -d --no-build --wait --wait-timeout 300 order-service inventory-service
+      - name: Verify accepted expiry, partial fulfillment compensation and shipment/refund races
+        env:
+          E2E_RECOVERY_RESTARTS: 'true'
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress -pl integration-tests -am
+          -Plifecycle-e2e verify
+      - name: Require every lifecycle and earlier deployed acceptance suite
+        run: |
+          python scripts/check_junit.py integration-tests/target/failsafe-reports/TEST-com.example.omp.integration.CoreLifecycleAcceptanceIT.xml --minimum-tests 4
+          python scripts/check_verification.py --root integration-tests --include-e2e --include-recovery-e2e --include-lifecycle-e2e
       - name: Collect deployment diagnostics
         if: always()
         shell: bash

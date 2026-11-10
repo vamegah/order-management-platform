@@ -93,6 +93,20 @@ public abstract class AbstractIntegrationTest {
         registry.add("grpc.client.payment-service.address", () -> "in-process:payment-service");
         registry.add("grpc.client.inventory-service.negotiation-type", () -> "PLAINTEXT");
         registry.add("grpc.client.payment-service.negotiation-type", () -> "PLAINTEXT");
+        registry.add(
+                "omp.order.recovery.token-file",
+                () -> {
+                    try {
+                        var token =
+                                java.nio.file.Files.createTempFile(
+                                        "order-in-process-identity-", ".jwt");
+                        java.nio.file.Files.writeString(token, "fixture.payload.signature");
+                        token.toFile().deleteOnExit();
+                        return token.toString();
+                    } catch (java.io.IOException failure) {
+                        throw new IllegalStateException(failure);
+                    }
+                });
     }
 
     @LocalServerPort protected int port;

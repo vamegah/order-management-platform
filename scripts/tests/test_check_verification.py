@@ -102,6 +102,18 @@ class VerificationEvidenceTest(unittest.TestCase):
         self.report("surefire", "BehaviorTest$Nested")
         self.assertEqual(check(self.root), (2, []))
 
+    def test_lifecycle_acceptance_is_required_only_when_selected_and_cannot_be_skipped(self):
+        self.valid_evidence()
+        self.source("CoreLifecycleAcceptanceIT", '@Tag("lifecycle-e2e")')
+        self.assertEqual(check(self.root), (2, []))
+        self.assertTrue(any("CoreLifecycleAcceptanceIT" in error for error in
+                            check(self.root, include_lifecycle_e2e=True)[1]))
+        self.report("failsafe", "CoreLifecycleAcceptanceIT")
+        self.assertEqual(check(self.root, include_lifecycle_e2e=True), (3, []))
+        self.report("failsafe", "CoreLifecycleAcceptanceIT", skipped=1)
+        self.assertTrue(any("skipped" in error for error in
+                            check(self.root, include_lifecycle_e2e=True)[1]))
+
     def test_zero_tests_and_wrong_phase_do_not_hide_missing_suite(self):
         self.valid_evidence()
         self.report("failsafe", "DatabaseIT", tests=0)

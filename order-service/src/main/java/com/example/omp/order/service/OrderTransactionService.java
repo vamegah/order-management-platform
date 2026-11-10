@@ -152,6 +152,7 @@ public class OrderTransactionService {
         // and history entry are persisted automatically when the order is saved.
         // -------------------------------------------------------------------------
         Order saved = orderRepository.saveAndFlush(order);
+        journal.trackAccepted(orderId);
         events.publishCreated(saved);
 
         return saved;

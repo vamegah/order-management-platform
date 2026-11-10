@@ -45,6 +45,13 @@ public class ReservationHandler {
     private final StockLevelRepository stockLevelRepository;
     private final InventoryEventPublisher eventPublisher;
 
+    @org.springframework.beans.factory.annotation.Value("${omp.inventory.expiry.enabled:false}")
+    private boolean expiryEnabled;
+
+    @org.springframework.beans.factory.annotation.Value(
+            "#{T(java.time.Duration).parse('${omp.inventory.expiry.ttl:PT30M}')}")
+    private java.time.Duration ttl = java.time.Duration.ofMinutes(30);
+
     public ReservationHandler(
             ReservationRepository reservationRepository,
             StockLevelRepository stockLevelRepository,
@@ -70,6 +77,9 @@ public class ReservationHandler {
             backoff = @Backoff(delay = 50, multiplier = 2.0))
     public com.example.omp.proto.inventory.Reservation reserve(ReserveStockRequest request) {
         UUID orderId = UUID.fromString(request.getOrderId());
+        lockOrder(orderId);
+        if (reservationRepository.isOrderCompensated(orderId))
+            throw new IllegalStateException("Order inventory was compensated");
 
         // Idempotency: if a reservation already exists for this (order, sku),
         // return it. The client's retry after a timeout is a no-op.
@@ -148,9 +158,11 @@ public class ReservationHandler {
             backoff = @Backoff(delay = 50, multiplier = 2.0))
     public com.example.omp.proto.inventory.Reservation release(ReleaseReservationRequest request) {
         Reservation reservation = findReservation(request.getReservationId());
+        lockOrder(reservation.getOrderId());
 
         if (reservation.getStatus() == ReservationStatus.RELEASED
-                || reservation.getStatus() == ReservationStatus.EXPIRED) {
+                || reservation.getStatus() == ReservationStatus.EXPIRED
+                || reservation.getStatus() == ReservationStatus.RESTOCKED) {
             // Idempotent: already released.
             return ProtoConverters.toProto(reservation);
         }
@@ -195,6 +207,9 @@ public class ReservationHandler {
             backoff = @Backoff(delay = 50, multiplier = 2.0))
     public com.example.omp.proto.inventory.Reservation commit(CommitReservationRequest request) {
         Reservation reservation = findReservation(request.getReservationId());
+        lockOrder(reservation.getOrderId());
+        if (reservationRepository.isOrderCompensated(reservation.getOrderId()))
+            throw new IllegalStateException("Order inventory was compensated");
 
         if (reservation.getStatus() == ReservationStatus.COMMITTED) {
             // Idempotent: already committed.
@@ -213,6 +228,12 @@ public class ReservationHandler {
                                         new InventoryNotFoundException(
                                                 "Stock record missing for reservation "
                                                         + reservation.getId()));
+        if (expiryEnabled && reservationRepository.isExpired(reservation.getId(), ttl.toMillis())) {
+            stock.release(reservation.getQuantity());
+            reservation.expire();
+            eventPublisher.publishReservationExpired(reservation, "Reservation TTL exceeded");
+            return ProtoConverters.toProto(reservation);
+        }
         stock.commit(reservation.getQuantity());
 
         reservation.commit();
@@ -253,6 +274,53 @@ public class ReservationHandler {
         return com.example.omp.proto.inventory.FindReservationsByOrderResponse.newBuilder()
                 .addAllReservations(reservations.stream().map(ProtoConverters::toProto).toList())
                 .build();
+    }
+
+    @Transactional
+    @Retryable(
+            retryFor = OptimisticLockingFailureException.class,
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 50, multiplier = 2.0))
+    @org.springframework.security.access.prepost.PreAuthorize(
+            "hasRole('admin') or hasAuthority('SCOPE_order.reconcile')")
+    public com.example.omp.proto.inventory.FindReservationsByOrderResponse compensateOrder(
+            com.example.omp.proto.inventory.CompensateOrderRequest request) {
+        UUID orderId = UUID.fromString(request.getOrderId());
+        if (request.getReason().length() > 500)
+            throw new IllegalArgumentException("Compensation reason is too long");
+        lockOrder(orderId);
+        reservationRepository.markOrderCompensated(orderId);
+        var reservations = reservationRepository.findTop101ByOrderIdOrderByCreatedAtAsc(orderId);
+        if (reservations.size() > 100)
+            throw new IllegalStateException("Compensation exceeds 100 reservations");
+        for (var reservation : reservations) {
+            var state = reservation.getStatus();
+            if (state != ReservationStatus.ACTIVE && state != ReservationStatus.COMMITTED) continue;
+            var stock =
+                    stockLevelRepository
+                            .findBySkuAndWarehouseId(
+                                    reservation.getSku(), reservation.getWarehouseId())
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalStateException(
+                                                    "Compensation stock is missing"));
+            if (state == ReservationStatus.COMMITTED) {
+                stock.restock(reservation.getQuantity());
+                reservation.compensateCommitted();
+            } else {
+                stock.release(reservation.getQuantity());
+                reservation.release();
+            }
+            eventPublisher.publishReservationReleased(reservation, "Order compensation");
+        }
+        return com.example.omp.proto.inventory.FindReservationsByOrderResponse.newBuilder()
+                .addAllReservations(reservations.stream().map(ProtoConverters::toProto).toList())
+                .build();
+    }
+
+    private void lockOrder(UUID orderId) {
+        if (!reservationRepository.tryLockOrder(orderId))
+            throw new OptimisticLockingFailureException("Order inventory is busy");
     }
 
     private Reservation findReservation(String idString) {

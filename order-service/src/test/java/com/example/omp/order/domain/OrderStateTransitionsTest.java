@@ -22,7 +22,7 @@ class OrderStateTransitionsTest {
                         new ShippingAddress("1 Main", null, "Chicago", "IL", "60601", "US"),
                         UUID.randomUUID());
         var line = new OrderLine(UUID.randomUUID(), "SKU", "Product", Money.usd("10"), 1);
-        line.setReservationId(UUID.randomUUID());
+        line.bindReservation(UUID.randomUUID(), "WH-1");
         order.addLine(line);
         if (target == OrderStatus.CANCELLED) {
             order.cancel("customer", "Changed mind");
@@ -69,7 +69,6 @@ class OrderStateTransitionsTest {
         "PLACED,DELIVER",
         "CONFIRMED,DELIVER",
         "CONFIRMED,SHIP",
-        "FULFILLING,CANCEL",
         "SHIPPED,CANCEL",
         "DELIVERED,CANCEL",
         "CANCELLED,PLACE",
@@ -95,6 +94,23 @@ class OrderStateTransitionsTest {
     }
 
     @Test
+    void cancellationDuringFulfillmentIsPendingUntilAnAuthorityDecisionCompletesIt() {
+        var order = orderAt(OrderStatus.FULFILLING);
+        order.cancel("operator", "Cancel requested");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLING);
+        order.cancel("system:lifecycle", "Compensation acknowledged");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    void shipmentCanWinAPendingCancellationOnlyBeforeCancellationCompletes() {
+        var order = orderAt(OrderStatus.FULFILLING);
+        order.cancel("operator", "Cancel requested");
+        order.ship("system:lifecycle", "Durable payment shipment decision won");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+    }
+
+    @Test
     void legacyOrderWithoutReservationCannotBeginShipment() {
         var order = orderAt(OrderStatus.CONFIRMED);
         // Rehydrate a historical missing pointer without passing it through new acceptance guards.
@@ -108,12 +124,13 @@ class OrderStateTransitionsTest {
     void duplicatedReservationCannotSatisfyTwoShipmentLines() {
         var order = orderAt(OrderStatus.DRAFT);
         var second = new OrderLine(UUID.randomUUID(), "SKU-2", "Product", Money.usd("1"), 1);
-        second.setReservationId(UUID.randomUUID());
+        second.bindReservation(UUID.randomUUID(), "WH-1");
         order.addLine(second);
         order.place("customer");
         order.confirm("operator", "Paid");
         // Simulate a shared pointer loaded from legacy storage after confirmation.
-        second.setReservationId(order.getLines().getFirst().getReservationId());
+        ReflectionTestUtils.setField(
+                second, "reservationId", order.getLines().getFirst().getReservationId());
         assertThatThrownBy(() -> order.requestShipment("operator", "Requested"))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);

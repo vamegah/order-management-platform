@@ -98,6 +98,7 @@ enum OrderStatus {
 
   "Shipment requested; durable inventory commits are pending. Cancellation is fenced."
   FULFILLING
+  CANCELLING
   "Shipped. In transit."
   SHIPPED
   "Delivered. Terminal state."

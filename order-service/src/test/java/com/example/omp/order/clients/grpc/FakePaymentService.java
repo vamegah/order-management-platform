@@ -16,6 +16,49 @@ public class FakePaymentService extends PaymentServiceGrpc.PaymentServiceImplBas
     private final Map<String, Payment> payments = new ConcurrentHashMap<>();
 
     @Override
+    public void findPaymentsByOrder(
+            FindPaymentsByOrderRequest request,
+            StreamObserver<FindPaymentsByOrderResponse> observer) {
+        observer.onNext(
+                FindPaymentsByOrderResponse.newBuilder()
+                        .addAllPayments(
+                                payments.values().stream()
+                                        .filter(p -> p.getOrderId().equals(request.getOrderId()))
+                                        .toList())
+                        .build());
+        observer.onCompleted();
+    }
+
+    @Override
+    public synchronized void decideFulfillment(
+            FulfillmentDecisionRequest request, StreamObserver<FulfillmentDecision> observer) {
+        var payment = payments.get(request.getPaymentId());
+        if (payment == null || !payment.getOrderId().equals(request.getOrderId())) {
+            observer.onError(io.grpc.Status.NOT_FOUND.asRuntimeException());
+            return;
+        }
+        String state =
+                payment.getFulfillmentState().isEmpty() ? "OPEN" : payment.getFulfillmentState();
+        String next =
+                switch (request.getAction()) {
+                    case FULFILLMENT_ACTION_BEGIN -> state.equals("OPEN") ? "FULFILLING" : state;
+                    case FULFILLMENT_ACTION_SHIP -> state.equals("FULFILLING") ? "SHIPPED" : state;
+                    case FULFILLMENT_ACTION_CANCEL ->
+                            state.equals("SHIPPED") || state.equals("REFUNDABLE")
+                                    ? state
+                                    : "CANCELLING";
+                    case FULFILLMENT_ACTION_ALLOW_REFUND ->
+                            state.equals("CANCELLING") ? "REFUNDABLE" : state;
+                    default -> throw new IllegalArgumentException("Invalid fixture decision");
+                };
+        var updated = payment.toBuilder().setFulfillmentState(next).build();
+        payments.put(updated.getId(), updated);
+        observer.onNext(
+                FulfillmentDecision.newBuilder().setPayment(updated).setState(next).build());
+        observer.onCompleted();
+    }
+
+    @Override
     public void createPaymentIntent(
             CreatePaymentIntentRequest request, StreamObserver<Payment> observer) {
         // Idempotency: return existing payment for idempotency key.

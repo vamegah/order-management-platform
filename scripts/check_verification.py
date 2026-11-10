@@ -24,7 +24,7 @@ def reactor_modules(root):
         yield from reactor_modules(root / module.text.strip())
 
 
-def expected_suites(module, include_e2e, include_recovery_e2e=False):
+def expected_suites(module, include_e2e, include_recovery_e2e=False, include_lifecycle_e2e=False):
     for source in (module / "src/test/java").rglob("*.java"):
         name = source.stem
         if not name.endswith(("Test", "Tests", "IT")):
@@ -36,13 +36,15 @@ def expected_suites(module, include_e2e, include_recovery_e2e=False):
             continue
         if not include_recovery_e2e and re.search(r'@Tag\(\s*"recovery-e2e"\s*\)', code):
             continue
+        if not include_lifecycle_e2e and re.search(r'@Tag\(\s*"lifecycle-e2e"\s*\)', code):
+            continue
         package = re.search(r"^package\s+([\w.]+)\s*;", code, re.MULTILINE)
         if package:
             phase = "failsafe" if name.endswith("IT") else "surefire"
             yield phase, f"{package[1]}.{name}"
 
 
-def check(root, include_e2e=False, include_integration=True, include_recovery_e2e=False):
+def check(root, include_e2e=False, include_integration=True, include_recovery_e2e=False, include_lifecycle_e2e=False):
     errors = []
     test_count = 0
     for module, pom in reactor_modules(root):
@@ -63,7 +65,7 @@ def check(root, include_e2e=False, include_integration=True, include_recovery_e2
                         errors.append(f"{label}: {name}: {count} {result}")
 
         # Maven never compiles src/test in a pom-packaged aggregator.
-        suites = () if pom.findtext("m:packaging", namespaces=NS) == "pom" else expected_suites(module, include_e2e, include_recovery_e2e)
+        suites = () if pom.findtext("m:packaging", namespaces=NS) == "pom" else expected_suites(module, include_e2e, include_recovery_e2e, include_lifecycle_e2e)
         for phase, name in suites:
             if phase == "failsafe" and not include_integration:
                 continue
@@ -95,10 +97,11 @@ def main():
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--include-e2e", action="store_true")
     parser.add_argument("--include-recovery-e2e", action="store_true")
+    parser.add_argument("--include-lifecycle-e2e", action="store_true")
     args = parser.parse_args()
     try:
         count, errors = check(args.root.resolve(), args.include_e2e,
-                              include_recovery_e2e=args.include_recovery_e2e)
+                              include_recovery_e2e=args.include_recovery_e2e, include_lifecycle_e2e=args.include_lifecycle_e2e)
     except (ET.ParseError, OSError, ValueError) as error:
         print(f"Invalid verification evidence: {error}", file=sys.stderr)
         return 1

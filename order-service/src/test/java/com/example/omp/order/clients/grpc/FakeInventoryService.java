@@ -29,6 +29,43 @@ public class FakeInventoryService extends InventoryServiceGrpc.InventoryServiceI
     private int onHandStock = 100;
     private int reservedStock = 0;
 
+    @Override
+    public void findReservationsByOrder(
+            FindReservationsByOrderRequest request,
+            StreamObserver<FindReservationsByOrderResponse> observer) {
+        observer.onNext(
+                FindReservationsByOrderResponse.newBuilder()
+                        .addAllReservations(
+                                reservations.values().stream()
+                                        .filter(r -> r.getOrderId().equals(request.getOrderId()))
+                                        .toList())
+                        .build());
+        observer.onCompleted();
+    }
+
+    @Override
+    public synchronized void compensateOrder(
+            CompensateOrderRequest request,
+            StreamObserver<FindReservationsByOrderResponse> observer) {
+        var result = new java.util.ArrayList<Reservation>();
+        for (var r : reservations.values()) {
+            if (!r.getOrderId().equals(request.getOrderId())) continue;
+            var state = r.getStatus();
+            if (state == ReservationStatus.RESERVATION_STATUS_ACTIVE) {
+                reservedStock -= r.getQuantity();
+                r = r.toBuilder().setStatus(ReservationStatus.RESERVATION_STATUS_RELEASED).build();
+            } else if (state == ReservationStatus.RESERVATION_STATUS_COMMITTED) {
+                onHandStock += r.getQuantity();
+                r = r.toBuilder().setStatus(ReservationStatus.RESERVATION_STATUS_RESTOCKED).build();
+            }
+            reservations.put(r.getId(), r);
+            result.add(r);
+        }
+        observer.onNext(
+                FindReservationsByOrderResponse.newBuilder().addAllReservations(result).build());
+        observer.onCompleted();
+    }
+
     /** Configure the available stock. */
     public void setOnHandStock(int quantity) {
         this.onHandStock = quantity;

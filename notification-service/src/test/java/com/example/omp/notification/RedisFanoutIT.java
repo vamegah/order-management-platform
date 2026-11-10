@@ -1,14 +1,20 @@
 package com.example.omp.notification;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 import com.example.omp.notification.dispatcher.EventDispatcher;
+import com.example.omp.notification.redis.RedisChannels;
 import com.example.omp.notification.redis.RedisEventPublisher;
+import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
@@ -18,6 +24,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 class RedisFanoutIT extends AbstractNotificationTest {
 
     @Autowired RedisEventPublisher publisher;
+    @Autowired StringRedisTemplate redis;
+    @Autowired RedisMessageListenerContainer listener;
 
     @MockitoSpyBean EventDispatcher dispatcher;
 
@@ -33,6 +41,23 @@ class RedisFanoutIT extends AbstractNotificationTest {
             """
                         .formatted(eventId);
 
+        // Pub/sub does not retain a message sent before its subscription is ready.
+        // This Redis instance belongs to this fixture; wait for server acknowledgment
+        // of the listener's three channels, then publish the event exactly once.
+        RedisCallback<Boolean> subscriptionsReady =
+                connection ->
+                        connection.serverCommands().getClientList().stream()
+                                .anyMatch(
+                                        client ->
+                                                client.getChannelSubscribtions() != null
+                                                        && client.getChannelSubscribtions()
+                                                                >= RedisChannels.ALL.length);
+        await().alias("fixture Redis subscriber ready")
+                .atMost(Duration.ofSeconds(30))
+                .until(
+                        () ->
+                                listener.isListening()
+                                        && Boolean.TRUE.equals(redis.execute(subscriptionsReady)));
         publisher.publishToOrdersChannel(eventJson);
 
         // The dispatcher should be invoked within a few seconds.
