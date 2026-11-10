@@ -40,7 +40,9 @@ class OrderTransactionServiceTest {
                                                         Money.usd("1"),
                                                         1)),
                                         UUID.randomUUID(),
-                                        List.of(UUID.randomUUID())))
+                                        List.of(
+                                                new OrderTransactionService.ReservedLine(
+                                                        UUID.randomUUID(), "WH-9"))))
                 .isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(repository, generator, events);
     }
@@ -77,7 +79,7 @@ class OrderTransactionServiceTest {
                                         Money.usd("5.00"),
                                         2)),
                         UUID.randomUUID(),
-                        List.of(reservationId));
+                        List.of(new OrderTransactionService.ReservedLine(reservationId, "WH-9")));
         var writes = inOrder(repository, events);
         writes.verify(repository).saveAndFlush(order);
         writes.verify(events).publishCreated(order);
@@ -87,6 +89,7 @@ class OrderTransactionServiceTest {
                 .satisfies(
                         line -> {
                             assertThat(line.getReservationId()).isEqualTo(reservationId);
+                            assertThat(line.getReservationWarehouseId()).isEqualTo("WH-9");
                             assertThat(line.getOrder()).isSameAs(order);
                         });
         assertThat(order.getTotal().getAmount()).isEqualByComparingTo("10.00");

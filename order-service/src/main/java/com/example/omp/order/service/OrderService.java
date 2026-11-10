@@ -234,7 +234,12 @@ public class OrderService {
                             shippingAddress,
                             drafts,
                             payment.id(),
-                            reservations.stream().map(ReservationDto::id).toList());
+                            reservations.stream()
+                                    .map(
+                                            r ->
+                                                    new OrderTransactionService.ReservedLine(
+                                                            r.id(), r.warehouseId()))
+                                    .toList());
 
             accepted = true;
             log.info(

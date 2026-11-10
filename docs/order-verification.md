@@ -357,3 +357,33 @@ idempotency and durability after real service restarts. It requires full hosted
 `coverage/reference-repair-deployment-local-evidence.zip` and JSON.
 Historical ownership, warehouse provenance, non-NULL conflicts and final
 constraints remain open. See [repair acceptance](order-reservation-repair.md#deployed-repair-and-restart-acceptance).
+
+## Original warehouse provenance continuation
+
+PR #20 is merged with approval as `94435e5`; both its PR and main workflows pass
+all twenty jobs, 1,285 reactor and 28 deployed cases. Source-bound records are
+retained in the `reference-repair-deployment-{ci,main-ci}-evidence.zip` archives
+under `coverage`, with JSON hashes and verified main protection.
+
+The next local batch adds V14 and an insert-only original warehouse snapshot for
+new checkout lines. The existing verified inventory response supplies the value;
+checkout persists it with the ID, order, journal acceptance and event in the same
+transaction. Missing-reference repair rejects another warehouse before entering
+the write transaction when the original snapshot is known. Administrator repair
+inspection gains nullable `reservationWarehouseId`; its POST contract is unchanged.
+
+Clean order/shared verification passes 601 cases (493 unit and 108 integration)
+with no failures, errors or skips, six complete static reports and five focused
+unit coverage comparisons. Database upgrade tests preserve references, business
+rows and migration checksums without inferring old warehouses. New domain cases
+cover immutable bindings and invalid provenance; PostgreSQL repair checks verify
+rejection without audit, version or event changes followed by a valid repair.
+The first upgrade-test comparison failure is retained; its correction preserves
+Flyway's NULL-version schema-creation row in both checksum snapshots.
+
+The updated deployed restart case checks the stored warehouse before repair and
+after restart. It compiles but still requires hosted execution. Local reports are
+retained in `coverage/reservation-warehouse-local-evidence.zip` and JSON; full
+1,303-reactor/28-deployed CI remains required. Historical active ownership,
+conflicting references, coordinated fulfillment/expiry and final constraints
+remain open; the 33 parent items are unchanged.

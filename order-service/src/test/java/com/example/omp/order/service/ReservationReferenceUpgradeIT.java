@@ -57,6 +57,11 @@ class ReservationReferenceUpgradeIT {
                         .load();
         assertThat(current.migrate().migrationsExecuted).isGreaterThan(0);
         current.validate();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM orders.order_line WHERE reservation_warehouse_id IS NOT NULL",
+                                Integer.class))
+                .isZero();
 
         assertThat(snapshot(jdbc, "purchase_order", "version")).isEqualTo(orders);
         assertThat(snapshot(jdbc, "order_line", "reservation_id")).isEqualTo(lines);
@@ -91,7 +96,7 @@ class ReservationReferenceUpgradeIT {
 
     private List<String> snapshot(JdbcTemplate jdbc, String table, String addedColumn) {
         return jdbc.queryForList(
-                "SELECT (to_jsonb(historical_row) - ?)::text FROM orders."
+                "SELECT (to_jsonb(historical_row) - ? - 'reservation_warehouse_id')::text FROM orders."
                         + table
                         + " historical_row ORDER BY id",
                 String.class,

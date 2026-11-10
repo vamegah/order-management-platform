@@ -196,9 +196,50 @@ class OrderPersistenceIT {
                                 new OrderTransactionService.OrderLineDraft(
                                         UUID.randomUUID(), "SKU", "Product", Money.usd("10"), 1)),
                         UUID.randomUUID(),
-                        List.of(reservation));
+                        List.of(new OrderTransactionService.ReservedLine(reservation, "WH-1")));
         assertThat(saved.getId()).isEqualTo(id);
         return id;
+    }
+
+    @Test
+    void checkoutWarehouseSurvivesReloadAndRepairRejectsAnotherWarehouseWithoutWriting() {
+        UUID reservation = UUID.randomUUID();
+        UUID id = create(reservation);
+        var line = orders.findByIdFull(id).getLines().getFirst();
+        assertThat(line.getReservationId()).isEqualTo(reservation);
+        assertThat(line.getReservationWarehouseId()).isEqualTo("WH-1");
+        var intact = repairs.inspect(id);
+        assertThat(intact.lines().getFirst().reservationWarehouseId()).isEqualTo("WH-1");
+        jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
+        var missing = repairs.inspect(id);
+        var plan = repairRequest(id, reservation);
+        long eventsBefore = eventCount(id);
+        when(repairInventory.get(reservation))
+                .thenReturn(
+                        new ReservationDto(
+                                reservation,
+                                "SKU",
+                                "WH-2",
+                                1,
+                                id,
+                                "RESERVATION_STATUS_ACTIVE",
+                                0,
+                                0));
+        assertThatThrownBy(() -> repairs.restore(id, plan, "operator"))
+                .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        assertThat(repairs.inspect(id)).isEqualTo(missing);
+        assertThat(repairAuditCount(id)).isZero();
+        assertThat(eventCount(id)).isEqualTo(eventsBefore);
+        verifiedHold(id, reservation);
+        var restored = repairs.restore(id, plan, "operator");
+        assertThat(restored.restored()).isEqualTo(1);
+        assertThat(restored.lines().getFirst().reservationWarehouseId()).isEqualTo("WH-1");
+        assertThat(restored.lines().getFirst().reservationId()).isEqualTo(reservation);
+        assertThat(restored.version()).isEqualTo(intact.version() + 1);
+        assertThat(repairAuditCount(id)).isEqualTo(1);
+        assertThat(orders.findByIdFull(id).getLines().getFirst().getReservationWarehouseId())
+                .isEqualTo("WH-1");
+        assertThat(eventCount(id)).isEqualTo(eventsBefore);
     }
 
     private long eventCount(UUID id) {
@@ -211,7 +252,9 @@ class OrderPersistenceIT {
     private UUID legacyOrder() {
         UUID id = create(UUID.randomUUID());
         // Reproduce pre-reference/pre-journal historical rows in this owned test database.
-        jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
+        jdbc.update(
+                "UPDATE orders.order_line SET reservation_id = NULL, reservation_warehouse_id = NULL WHERE order_id = ?",
+                id);
         jdbc.update("DELETE FROM orders.checkout_attempt WHERE order_id = ?", id);
         jdbc.update("DELETE FROM orders.outbox_event WHERE aggregate_id = ?", id.toString());
         return id;

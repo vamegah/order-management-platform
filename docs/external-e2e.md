@@ -262,3 +262,18 @@ handles for explicit teardown when an intentionally lost pointer remains
 unresolved. The test does not allocate replacement holds for historical rows or
 modify seed business state. Local exact-source reports cover all three cases;
 full required CI on the proposed revision remains pending.
+
+## Warehouse snapshot assertions
+
+PR #20's original three repair/restart cases pass in both full PR and approved
+main verification (1,285 reactor and 28 deployed cases; twenty jobs each).
+The subsequent local warehouse batch extends the existing restart case to assert
+`lines.reservationWarehouseId` through the administrator inspection before repair
+and after a real service restart. Both fresh line snapshots must be WH-1, matching
+the actually verified checkout resources. The complete-row database snapshots
+also retain the new column while the metadata-loss fixture clears only the ID.
+
+Formatting and compilation of these assertions pass. Their deployed execution
+remains part of the required full 1,303-reactor/28-deployed hosted workflow; the
+local 601-case database/unit run is not deployed evidence. Pre-V14 rows remain
+unknown and no historical warehouse is inferred by this fixture or migration.

@@ -2746,3 +2746,47 @@ does not resolve historical active rows with no recoverable hold, establish thei
 original warehouse intent, replace conflicting non-NULL references, or apply
 final database constraints. No seed business state or historical policy changes.
 The 33 parent items in sections 1-7 remain open under their original acceptance.
+
+## Deployed repair PR and main acceptance (2026-11-09)
+
+The maintainer approved PR #20's exact `4a06b95` ready/merge/main verification.
+Its merge `94435e5` preserves the reviewed tree and expected parents. PR run
+`42722597222` and main run `42726141724` pass all twenty jobs, 1,285 reactor and
+28 deployed cases, fifteen complete static reports, the 211-dependency policy,
+contracts, issuer checks and ten image builds. The PR's fourteen exact-base unit
+coverage comparisons pass. Required quality checks, strict freshness and
+administrator enforcement were rechecked after merging. Both source-bound
+`coverage/reference-repair-deployment-ci-evidence.zip` and
+`coverage/reference-repair-deployment-main-ci-evidence.zip`, with JSON hashes,
+pass archive and contained-file integrity checks. The 33 parent items stay open.
+
+## Original checkout warehouse continuation (2026-11-09)
+
+Checkout had verified the inventory reply's warehouse but discarded it when
+persisting the reservation ID. V14 adds an original warehouse snapshot on new
+lines in the existing local acceptance transaction. Domain guards preserve the
+bound identity/warehouse pair; JPA does not update the warehouse snapshot.
+Administrator repair inspection exposes the nullable snapshot. An otherwise
+matching hold from another warehouse is rejected before local mutation when that
+snapshot is known. The migration does not invent any pre-existing warehouse,
+rewrite business state, allocate stock or change scheduler/deployment defaults.
+
+All 601 focused cases pass: 493 unit and 108 integration, with six complete static
+reports and five nonregressing unit coverage comparisons under unchanged gates.
+Tests cover immutable bindings, invalid/missing remote provenance, durable reload,
+nonmutating rejection and valid repair, and upgrades from pre-V3 and pre-V14 data.
+The first focused run's checksum comparison failure is retained: SQL filtering
+had excluded Flyway's NULL-version schema-creation row, and the corrected check
+compares that row on both sides. The first clean unit run also caught the planned additive admin response field;
+its strict schema checks now retain the original fields and assert nullable,
+read-only and bounded warehouse metadata. Failed reports are preserved.
+The missing local analysis-client image was
+rebuilt from the existing helper; an approval-review usage-limit interruption
+was resolved through the normal approval path. Runtime source was not waived.
+
+Exact source, reports, compiled classes, logs and hashes are retained in
+`coverage/reservation-warehouse-local-evidence.zip` and JSON. Updated real deployed
+restart assertions compile but still require full hosted execution with all 1,303
+reactor and 28 deployed cases. This batch does not close historical active
+ownership/provenance, conflicting pointers, fulfillment/expiry compensation or
+final database integrity. All 33 parent items remain open.

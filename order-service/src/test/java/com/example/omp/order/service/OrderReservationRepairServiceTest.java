@@ -52,7 +52,7 @@ class OrderReservationRepairServiceTest {
                         "DRAFT",
                         0,
                         1,
-                        List.of(new Line(lineId, "SKU", 2, reservationId)));
+                        List.of(new Line(lineId, "SKU", 2, reservationId, null)));
         when(store.restore(
                         orderId,
                         4,
@@ -282,6 +282,56 @@ class OrderReservationRepairServiceTest {
         verify(store, never()).restore(any(), anyLong(), anyMap(), any(), any());
     }
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @ValueSource(strings = {"WH-2", " "})
+    void aKnownOriginalWarehouseRejectsDifferentOrMissingRemoteProvenance(String warehouse) {
+        when(store.inspect(orderId))
+                .thenReturn(
+                        new ReservationReferenceRepairView(
+                                orderId,
+                                4,
+                                "DRAFT",
+                                1,
+                                0,
+                                List.of(new Line(lineId, "SKU", 2, null, "WH-1"))));
+        when(inventory.get(reservationId))
+                .thenReturn(
+                        new ReservationDto(
+                                reservationId,
+                                "SKU",
+                                warehouse,
+                                2,
+                                orderId,
+                                "RESERVATION_STATUS_ACTIVE",
+                                0,
+                                0));
+        assertThatThrownBy(() -> service.restore(orderId, request(), "operator"))
+                .isInstanceOf(InvalidOrderDataException.class);
+        verify(store, never()).restore(any(), anyLong(), anyMap(), any(), any());
+    }
+
+    @Test
+    void theOriginalWarehouseAllowsAnOtherwiseVerifiedRepair() {
+        when(store.inspect(orderId))
+                .thenReturn(
+                        new ReservationReferenceRepairView(
+                                orderId,
+                                4,
+                                "DRAFT",
+                                1,
+                                0,
+                                List.of(new Line(lineId, "SKU", 2, null, "WH-1"))));
+        service.restore(orderId, request(), "operator");
+        verify(store)
+                .restore(
+                        orderId,
+                        4,
+                        Map.of(lineId, reservationId),
+                        "operator",
+                        "Verified remote hold");
+    }
+
     private ReservationReferenceRepairRequest request() {
         return new ReservationReferenceRepairRequest(
                 4L, "  Verified remote hold  ", List.of(new Binding(lineId, reservationId)));
@@ -294,7 +344,7 @@ class OrderReservationRepairServiceTest {
                 status,
                 reference == null ? 1 : 0,
                 0,
-                List.of(new Line(lineId, "SKU", 2, reference)));
+                List.of(new Line(lineId, "SKU", 2, reference, null)));
     }
 
     private static ReservationDto reservation(
