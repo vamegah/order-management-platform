@@ -1,5 +1,6 @@
 package com.example.omp.integration.support;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -8,12 +9,18 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /** Container controls restricted to the explicitly opted-in, isolated acceptance project. */
 public final class RecoveryDeployment {
     private static final Set<String> SERVICES =
-            Set.of("order-service", "inventory-service", "payment-service", "order-recovery-token");
+            Set.of(
+                    "order-service",
+                    "inventory-service",
+                    "payment-service",
+                    "order-recovery-token",
+                    "postgres");
     private final String project;
     private final String docker;
 
@@ -47,6 +54,133 @@ public final class RecoveryDeployment {
                         List.of("inspect", "--format", "{{.State.StartedAt}}", container(service)),
                         15)
                 .trim();
+    }
+
+    /** Emulate lost metadata only on an independent, unchanged two-line acceptance checkout. */
+    public void clearTestOwnedReferences(
+            UUID order,
+            String marker,
+            UUID firstLine,
+            UUID firstHold,
+            UUID secondLine,
+            UUID secondHold)
+            throws Exception {
+        if (marker == null
+                || !marker.matches("e2e-reference-repair-[a-f0-9-]{36}")
+                || firstLine.equals(secondLine)
+                || firstHold.equals(secondHold)) {
+            throw new IllegalArgumentException("Independent reference-repair fixture required");
+        }
+        // UUID values and the restricted marker cannot contain SQL syntax. The fixed statement
+        // also checks the exact fresh order, complete line set and original references atomically.
+        sql(
+                """
+                BEGIN;
+                SET LOCAL statement_timeout = '5s';
+                DO $fixture$
+                DECLARE touched integer;
+                BEGIN
+                  PERFORM id FROM orders.purchase_order
+                  WHERE id = '%s' AND shipping_line1 = '%s' AND status = 'DRAFT' AND version = 0
+                    AND EXISTS (SELECT 1 FROM orders.checkout_attempt
+                                WHERE order_id = '%s' AND status = 'ACCEPTED')
+                  FOR UPDATE;
+                  IF NOT FOUND OR (SELECT count(*) FROM orders.order_line WHERE order_id = '%s') <> 2 THEN
+                    RAISE EXCEPTION 'Fixture is not an independent fresh two-line checkout';
+                  END IF;
+                  UPDATE orders.order_line SET reservation_id = NULL
+                  WHERE order_id = '%s' AND
+                    ((id = '%s' AND reservation_id = '%s') OR (id = '%s' AND reservation_id = '%s'));
+                  GET DIAGNOSTICS touched = ROW_COUNT;
+                  IF touched <> 2 THEN RAISE EXCEPTION 'Fixture references changed'; END IF;
+                END $fixture$;
+                COMMIT;
+                """
+                        .formatted(
+                                order,
+                                marker,
+                                order,
+                                order,
+                                order,
+                                firstLine,
+                                firstHold,
+                                secondLine,
+                                secondHold));
+    }
+
+    /** Bounded rows for this order; outbox publication bookkeeping is deliberately excluded. */
+    public JsonNode referenceSnapshot(UUID order) throws Exception {
+        String id = order.toString();
+        var values = new ArrayList<String>();
+        values.add(
+                "'order', (SELECT to_jsonb(o) FROM orders.purchase_order o WHERE id = '"
+                        + id
+                        + "')");
+        for (String table :
+                List.of(
+                        "order_line",
+                        "order_status_history",
+                        "checkout_attempt",
+                        "cleanup_task",
+                        "fulfillment_request",
+                        "fulfillment_task",
+                        "reservation_reference_repair",
+                        "terminal_reservation_reference_disposition")) {
+            String key =
+                    table.equals("checkout_attempt") || table.equals("fulfillment_request")
+                            ? "order_id"
+                            : "id";
+            values.add(
+                    "'"
+                            + table
+                            + "', (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY "
+                            + key
+                            + "), '[]'::jsonb) FROM (SELECT * FROM orders."
+                            + table
+                            + " WHERE order_id = '"
+                            + id
+                            + "' LIMIT 101) t)");
+        }
+        values.add(
+                "'outbox', (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id), '[]'::jsonb) "
+                        + "FROM (SELECT id, aggregate_id, aggregate_type, event_type, topic, payload, created_at FROM orders.outbox_event "
+                        + "WHERE aggregate_id = '"
+                        + id
+                        + "' LIMIT 101) t)");
+        values.add(
+                "'stock', (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY sku, warehouse_id), '[]'::jsonb) "
+                        + "FROM (SELECT * FROM inventory.stock_level WHERE sku IN "
+                        + "(SELECT product_sku FROM orders.order_line WHERE order_id = '"
+                        + id
+                        + "') LIMIT 101) t)");
+        return new ObjectMapper()
+                .readTree(sql("SELECT jsonb_build_object(" + String.join(",", values) + ");"));
+    }
+
+    private String sql(String statement) throws Exception {
+        var process =
+                new ProcessBuilder(
+                                docker,
+                                "exec",
+                                "-i",
+                                container("postgres"),
+                                "sh",
+                                "-c",
+                                "exec psql -X -w -qAt -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"")
+                        .redirectError(ProcessBuilder.Redirect.DISCARD)
+                        .start();
+        try {
+            try (var input = process.getOutputStream()) {
+                input.write(statement.getBytes(StandardCharsets.UTF_8));
+            }
+            if (!process.waitFor(15, TimeUnit.SECONDS) || process.exitValue() != 0)
+                throw new IOException("Isolated reference fixture command failed");
+            byte[] result = process.getInputStream().readNBytes(16385);
+            if (result.length > 16384) throw new IOException("Unexpected reference fixture output");
+            return new String(result, StandardCharsets.UTF_8).trim();
+        } finally {
+            if (process.isAlive()) process.destroyForcibly().waitFor(5, TimeUnit.SECONDS);
+        }
     }
 
     /** Emits a digest only; credentials and JWTs never leave their private container mounts. */

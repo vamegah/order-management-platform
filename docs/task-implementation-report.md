@@ -2694,3 +2694,55 @@ Task 1.1 remains open for active historical ownership/warehouse provenance,
 deployed repair/restart acceptance and final database integrity. This guard
 prerequisite also supports 1.5; the complete transition/payment/refund race matrix
 remains open.
+
+## Forward-reference guard approved merge and main acceptance (2026-11-09)
+
+The maintainer approved marking PR #19 ready, merging reviewed `8798a01` and
+verifying main. The resulting merge `b2cc691` has the reviewed source tree and
+expected parents. Its PR run `42704184608` and main run `42709496849` pass all
+twenty jobs: 1,285 reactor cases, 25 deployed cases, fifteen complete static
+reports, dependency policy, contracts, issuer checks and ten container builds.
+The PR also passes fourteen exact-base unit coverage comparisons. All thirty-five
+new guard regressions execute, and existing crash/retry timing requirements pass.
+Required GitHub Actions checks, strict freshness and administrator enforcement
+were rechecked. Both `coverage/active-reference-guards-ci-evidence.zip` and
+`coverage/active-reference-guards-main-ci-evidence.zip`, with JSON hashes, pass
+archive and contained-file integrity checks. Parent tasks 1.1 and 1.5 stay open.
+
+## Deployed reference repair and restart continuation (2026-11-09)
+
+Three new `ReservationReferenceRepairIT` cases exercise the actual deployed
+ingress, Keycloak, order/inventory/payment services, PostgreSQL and mTLS client.
+A fresh two-line checkout exposes distinct durable references that match the
+actual order, SKU, quantity and WH-1 inventory records before and after real
+service restarts. A bounded fixture emulates lost metadata on that independent,
+unchanged draft; a mismatched original handle rolls back the whole fixture.
+
+Concurrent administrator repairs restore the verified original holds with one
+order version increment and one durable audit per line. The audit retains the
+issued administrator subject and operational reason. Another order/inventory/
+payment restart and exact stale-version retry preserve references and the
+original audit without further writes. Snapshots compare business rows, history,
+journal, queues, audit, outbox content, stock quantities/versions and actual
+reservation/payment messages. Outbox publication bookkeeping may progress.
+
+The development issuer also declares Bob as a non-admin customer with the existing
+foreign customer UUID. Local provisioning matches that declared fixture.
+Anonymous inspection and owner/foreign-user inspection/mutation are rejected.
+Foreign-order, incomplete, duplicate and stale plans preserve local and remote
+state; an inactive original hold cannot produce a partial binding or audit.
+Test teardown retains the original resource handles to release any hold whose
+pointer was deliberately removed, alongside normal order/payment cancellation.
+
+All three deployed cases pass locally without failures, errors or skips; four
+isolation/TLS/override preflight checks and clean compilation/formatting pass.
+The six runtime packages come from the accepted main production source.
+Exact-source local reports and logs are retained in
+`coverage/reference-repair-deployment-local-evidence.zip` and JSON. Hosted CI
+must still execute 1,285 reactor and 28 deployed cases and all current gates.
+
+This proves deployed repair/retry durability for known, verified resources. It
+does not resolve historical active rows with no recoverable hold, establish their
+original warehouse intent, replace conflicting non-NULL references, or apply
+final database constraints. No seed business state or historical policy changes.
+The 33 parent items in sections 1-7 remain open under their original acceptance.

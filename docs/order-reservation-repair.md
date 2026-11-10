@@ -203,3 +203,22 @@ cleanup before an irrecoverability attestation; an accepted cancellation is not
 proof that unknown remote resources do not exist. Existing non-NULL foreign or
 conflicting pointers, warehouse provenance and final database integrity require
 the remaining historical ownership work.
+
+## Deployed repair and restart acceptance
+
+`ReservationReferenceRepairIT` uses actual HTTP/JWT/mTLS service boundaries and
+PostgreSQL. Its three cases verify distinct fresh checkout references across
+service restart, concurrent complete repair of deliberately lost pointers, and
+durable audit/idempotent retry after another restart. The issued administrator
+subject is retained. Stock quantities/versions, payment/reservation records,
+business history, queues and outbox content remain unchanged by metadata repair.
+Owner and foreign-user requests cannot inspect or mutate repairs. Foreign-order,
+incomplete, duplicate, stale and inactive plans cannot write a partial repair.
+
+These local cases and four deployment guards pass; full hosted verification of
+1,285 reactor and 28 deployed cases is still required for this follow-up.
+Source-bound reports are retained in
+`coverage/reference-repair-deployment-local-evidence.zip` and JSON.
+The fixtures use independent fresh resources with known provenance; unresolved
+historical active rows, original warehouse intent, conflicting existing pointers
+and final database integrity remain separate acceptance requirements.

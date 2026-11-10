@@ -18,6 +18,7 @@ public final class AuthSupport {
     private static final String CLIENT_ID = "postman"; // password grant enabled
 
     private static Token aliceToken;
+    private static Token bobToken;
     private static Token adminToken;
 
     private AuthSupport() {}
@@ -34,6 +35,13 @@ public final class AuthSupport {
             adminToken = acquireToken("ADMIN", "admin");
         }
         return adminToken.value();
+    }
+
+    public static synchronized String bobToken() {
+        if (bobToken == null || !bobToken.refreshAt().isAfter(Instant.now())) {
+            bobToken = acquireToken("BOB", "bob");
+        }
+        return bobToken.value();
     }
 
     private static Token acquireToken(String name, String fallback) {

@@ -237,3 +237,28 @@ cases (25 deployed cases in total). The default reactor retains 1,196 cases.
 This is development-provider recovery acceptance; full checkout failure injection,
 accepted-order expiry/fulfillment compensation and production identity/provider
 acceptance remain open.
+
+## Deployed reservation reference repair acceptance
+
+The `recovery-e2e` profile also discovers `ReservationReferenceRepairIT` (three
+cases). It requires the same isolated, opted-in project, supervised projector,
+issued identities and mTLS stack as `ScheduledRecoveryIT`. Run it with
+`-Precovery-e2e -Dit.test=ReservationReferenceRepairIT`; shared reactor modules
+also need `-Dfailsafe.failIfNoSpecifiedTests=false`. The required suite discovery
+includes the class, so an absent or skipped repair report fails verification.
+The full external total becomes 28 cases including the two packaged client cases.
+
+These tests create independent two-line checkouts and compare actual reservation,
+payment, stock and durable order records. Their fixed database fixture accepts
+only a fresh DRAFT with its exact unique test marker, original version, complete
+two-line set and original handles, and rolls back on any mismatch. Container
+operations verify the opted-in project and ownership labels. Ordinary owners and
+a real foreign user cannot inspect or execute administrator repairs.
+
+Two actual order/inventory/payment restart cycles prove fresh reference and
+repair audit durability; concurrent and lost-response retries preserve the first
+audit. Negative plans preserve all observed state. The fixture retains original
+handles for explicit teardown when an intentionally lost pointer remains
+unresolved. The test does not allocate replacement holds for historical rows or
+modify seed business state. Local exact-source reports cover all three cases;
+full required CI on the proposed revision remains pending.

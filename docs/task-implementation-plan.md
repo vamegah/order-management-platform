@@ -11,21 +11,19 @@ acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `93df5e3`, the approved terminal-policy merge of
-[PR #18](https://github.com/vamegah/order-management-platform/pull/18).
-Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42667095347)
-and [recovered main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42673767265)
-pass all twenty jobs, 1,250 reactor cases and 25 deployed service/client cases.
-The initial main push attempts and a fresh workflow's abandoned jobs encountered
-GitHub internal server errors. Retrying the abandoned prerequisites recovered the
-complete required gate on the unchanged merge source. Those failures, logs and
-retry records are retained alongside the exact source and successful reports in
-`coverage/terminal-reservation-disposition-ci-evidence.zip` and
-`coverage/terminal-reservation-disposition-main-ci-evidence.zip`, with JSON hashes.
-The next local batch adds reference-shape guards to forward transitions; active
-historical ownership, deployed repair and final constraints remain open.
-Subsequent publication and merge actions follow the existing scoped approval
-agreement.
+The accepted main baseline is `b2cc691`, the approved forward-reference guard
+merge of [PR #19](https://github.com/vamegah/order-management-platform/pull/19).
+Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42704184608)
+and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42709496849)
+pass all twenty jobs, 1,285 reactor cases and 25 deployed service/client cases.
+Exact-source reports and merge/protection records are retained in
+`coverage/active-reference-guards-ci-evidence.zip` and
+`coverage/active-reference-guards-main-ci-evidence.zip`, with JSON hashes.
+The next local batch adds three deployed reference repair/restart cases and
+passes four deployment guards. It still requires full hosted verification of
+1,285 reactor and 28 deployed cases. Historical active ownership, original
+warehouse provenance, conflicting references and final constraints remain open.
+Publication and merge actions follow the existing scoped approval agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
 [implementation report](task-implementation-report.md). Its early summaries and
