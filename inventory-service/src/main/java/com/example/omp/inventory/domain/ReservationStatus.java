@@ -28,7 +28,10 @@ public enum ReservationStatus {
     RELEASED,
 
     /** Expired without commit or release (system-cleaned). Terminal. */
-    EXPIRED;
+    EXPIRED,
+
+    /** A committed decrement reversed by the privileged order compensation workflow. */
+    RESTOCKED;
 
     public boolean isTerminal() {
         return this != ACTIVE;

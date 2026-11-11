@@ -59,6 +59,7 @@ class OrderServiceTest {
                             mutation.accept(order);
                             return order;
                         });
+        when(tx.findByIdFull(id)).thenReturn(order);
         orderService.cancel(id, "alice", "Changed mind");
         orderService.cancel(id, "alice", "Retry cleanup");
         org.mockito.Mockito.verify(cleanup, org.mockito.Mockito.times(2)).retryOrder(id, 100);
@@ -80,6 +81,35 @@ class OrderServiceTest {
     @Mock private OrderCleanupQueue cleanup;
     @Mock private CheckoutJournal journal;
 
+    @Test
+    void oversizedTransitionReasonsFailBeforeAnyTransactionOrDownstreamCall() {
+        UUID id = UUID.randomUUID();
+        String reason = "x".repeat(501);
+        assertThatThrownBy(() -> orderService.confirm(id, "operator", reason))
+                .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        assertThatThrownBy(() -> orderService.ship(id, "operator", reason))
+                .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        assertThatThrownBy(() -> orderService.deliver(id, "operator", reason))
+                .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        assertThatThrownBy(() -> orderService.cancel(id, "operator", reason))
+                .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        org.mockito.Mockito.verifyNoInteractions(
+                tx, paymentClient, inventoryClient, eventPublisher, cleanup);
+    }
+
+    @Test
+    void transitionsRequireABoundedVerifiedActor() {
+        UUID id = UUID.randomUUID();
+        for (String actor : java.util.Arrays.asList(null, "", " ", "x".repeat(101))) {
+            assertThatThrownBy(() -> orderService.place(id, actor))
+                    .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+            assertThatThrownBy(() -> orderService.cancel(id, actor, "reason"))
+                    .isInstanceOf(com.example.omp.order.error.InvalidOrderDataException.class);
+        }
+        org.mockito.Mockito.verifyNoInteractions(
+                tx, paymentClient, inventoryClient, eventPublisher, cleanup);
+    }
+
     private OrderService orderService;
 
     private final UUID customerId = UUID.randomUUID();
@@ -99,7 +129,9 @@ class OrderServiceTest {
                         cleanup,
                         journal,
                         org.mockito.Mockito.mock(OrderFulfillmentStore.class),
-                        org.mockito.Mockito.mock(OrderFulfillmentQueue.class));
+                        org.mockito.Mockito.mock(OrderFulfillmentQueue.class),
+                        org.mockito.Mockito.mock(
+                                com.example.omp.order.service.OrderLifecycleCoordinator.class));
     }
 
     // -------------------------------------------------------------------------

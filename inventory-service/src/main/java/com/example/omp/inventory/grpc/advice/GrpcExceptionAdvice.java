@@ -23,6 +23,28 @@ public class GrpcExceptionAdvice {
 
     private static final Logger log = LoggerFactory.getLogger(GrpcExceptionAdvice.class);
 
+    /** Stable, redacted status for observer callbacks, which bypass annotated advice. */
+    public static Status toStatus(Exception failure) {
+        Throwable cause = failure;
+        for (int depth = 0; cause != null && depth < 8; depth++, cause = cause.getCause()) {
+            if (cause instanceof org.springframework.security.core.AuthenticationException)
+                return Status.UNAUTHENTICATED.withDescription("Authentication required");
+            if (cause == cause.getCause()) break;
+        }
+        if (failure instanceof org.springframework.security.access.AccessDeniedException)
+            return Status.PERMISSION_DENIED.withDescription("Recovery scope required");
+        if (failure instanceof InventoryNotFoundException)
+            return Status.NOT_FOUND.withDescription("Inventory resource not found");
+        if (failure instanceof org.springframework.dao.ConcurrencyFailureException)
+            return Status.ABORTED.withDescription("Concurrent inventory update; retry");
+        if (failure instanceof IllegalArgumentException)
+            return Status.INVALID_ARGUMENT.withDescription("Invalid inventory request");
+        if (failure instanceof IllegalStateException)
+            return Status.FAILED_PRECONDITION.withDescription(
+                    "Inventory decision conflicts with current state");
+        return Status.INTERNAL.withDescription("Inventory operation unavailable");
+    }
+
     @GrpcExceptionHandler(InventoryNotFoundException.class)
     public Status handleNotFound(InventoryNotFoundException e) {
         log.debug("Mapping InventoryNotFoundException to NOT_FOUND: {}", e.getMessage());

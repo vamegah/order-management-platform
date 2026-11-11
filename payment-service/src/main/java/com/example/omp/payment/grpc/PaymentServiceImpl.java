@@ -43,6 +43,20 @@ public class PaymentServiceImpl extends PaymentServiceGrpc.PaymentServiceImplBas
 
     private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
 
+    @Override
+    public void decideFulfillment(
+            com.example.omp.proto.payment.FulfillmentDecisionRequest request,
+            StreamObserver<com.example.omp.proto.payment.FulfillmentDecision> observer) {
+        try {
+            observer.onNext(intentHandler.decideFulfillment(request));
+            observer.onCompleted();
+        } catch (Exception failure) {
+            observer.onError(
+                    com.example.omp.payment.grpc.advice.GrpcExceptionAdvice.toStatus(failure)
+                            .asRuntimeException());
+        }
+    }
+
     private final PaymentIntentHandler intentHandler;
     private final PaymentQueryHandler queryHandler;
     private final RefundHandler refundHandler;

@@ -22,8 +22,9 @@ import org.springframework.stereotype.Component;
  * apply their own per-user authorization. A service-account approach would lose this — downstream
  * services would see "order-service" instead of "alice".
  *
- * <p>Background recovery can supply a scoped service JWT from a rotating mounted file. Caller JWTs
- * take precedence, and no credential is retained after the worker exits.
+ * <p>A narrowly scoped workload identity takes precedence only while trusted order-owned work has
+ * explicitly opened that scope. Otherwise the caller's JWT is relayed. No credential is retained
+ * after the scope exits.
  *
  * <p><b>Registration:</b> added to every gRPC client via {@link
  * com.example.omp.order.config.GrpcClientConfig}.
@@ -44,10 +45,11 @@ public class AuthForwardingInterceptor implements ClientInterceptor {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-                if (auth instanceof JwtAuthenticationToken jwtAuth) {
+                String serviceToken = ServiceTokenScope.current();
+                if (serviceToken != null) {
+                    headers.put(AUTHORIZATION, "Bearer " + serviceToken);
+                } else if (auth instanceof JwtAuthenticationToken jwtAuth) {
                     headers.put(AUTHORIZATION, "Bearer " + jwtAuth.getToken().getTokenValue());
-                } else if (ServiceTokenScope.current() != null) {
-                    headers.put(AUTHORIZATION, "Bearer " + ServiceTokenScope.current());
                 }
                 super.start(responseListener, headers);
             }

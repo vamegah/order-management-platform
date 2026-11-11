@@ -48,6 +48,21 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
 
     private static final Logger log = LoggerFactory.getLogger(InventoryServiceImpl.class);
 
+    @Override
+    public void compensateOrder(
+            com.example.omp.proto.inventory.CompensateOrderRequest request,
+            StreamObserver<com.example.omp.proto.inventory.FindReservationsByOrderResponse>
+                    observer) {
+        try {
+            observer.onNext(reservationHandler.compensateOrder(request));
+            observer.onCompleted();
+        } catch (Exception failure) {
+            observer.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(failure)
+                            .asRuntimeException());
+        }
+    }
+
     private final StockQueryHandler stockQueryHandler;
     private final ReservationHandler reservationHandler;
     private final BulkOperationsHandler bulkOperationsHandler;

@@ -7,8 +7,10 @@ import static org.mockito.Mockito.*;
 import com.example.omp.order.clients.grpc.*;
 import com.example.omp.order.clients.grpc.dto.PaymentIntentDto;
 import com.example.omp.order.clients.grpc.interceptor.AuthForwardingInterceptor;
+import com.example.omp.order.clients.grpc.interceptor.ServiceTokenScope;
 import com.example.omp.order.domain.*;
 import com.example.omp.proto.inventory.*;
+import com.example.omp.proto.payment.FulfillmentAction;
 import com.example.omp.shared.domain.Money;
 import io.grpc.*;
 import io.grpc.inprocess.*;
@@ -57,7 +59,7 @@ class OrderFulfillmentQueueTest {
                         new ShippingAddress("1 Main", null, "Chicago", "IL", "60601", "US"),
                         UUID.randomUUID());
         var line = new OrderLine(UUID.randomUUID(), "SKU-1", "Product", Money.usd("10"), 1);
-        line.setReservationId(reservationId);
+        line.bindReservation(reservationId, "WH-1");
         order.addLine(line);
         order.place("customer");
         order.confirm("operator", "Paid");
@@ -85,7 +87,8 @@ class OrderFulfillmentQueueTest {
                         "PAYMENT_STATUS_CONFIRMED",
                         "pi-confirmed",
                         0,
-                        0);
+                        0,
+                        "SHIPPED");
         String name = InProcessServerBuilder.generateName();
         server =
                 InProcessServerBuilder.forName(name)
@@ -176,6 +179,21 @@ class OrderFulfillmentQueueTest {
         when(store.readyForCompletion(id)).thenReturn(true);
         when(orders.findByIdFull(id)).thenReturn(order);
         when(payments.get(order.getPaymentId())).thenReturn(payment);
+        when(payments.decide(order.getPaymentId(), id, FulfillmentAction.FULFILLMENT_ACTION_BEGIN))
+                .thenReturn(
+                        new PaymentIntentDto(
+                                payment.id(),
+                                payment.orderId(),
+                                payment.customerId(),
+                                payment.amount(),
+                                payment.currency(),
+                                payment.status(),
+                                payment.providerReference(),
+                                0,
+                                0,
+                                "FULFILLING"));
+        when(payments.decide(order.getPaymentId(), id, FulfillmentAction.FULFILLMENT_ACTION_SHIP))
+                .thenReturn(payment);
         when(store.finish(id, payment))
                 .thenAnswer(
                         invocation -> {
@@ -207,9 +225,27 @@ class OrderFulfillmentQueueTest {
         assertThat(deadlines).allSatisfy(value -> assertThat(value).isBetween(1L, 5000L));
         var ordered = inOrder(store, payments);
         ordered.verify(store).completeTask(task);
-        ordered.verify(payments).get(order.getPaymentId());
+        ordered.verify(payments)
+                .decide(
+                        order.getPaymentId(),
+                        order.getId(),
+                        FulfillmentAction.FULFILLMENT_ACTION_SHIP);
         ordered.verify(store).finish(order.getId(), payment);
         assertThat(metrics.get("order.fulfillment.completed").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void shipmentUsesProjectedIdentityInsteadOfRelayingTheRequestToken(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        var tokenFile = directory.resolve("access.jwt");
+        java.nio.file.Files.writeString(tokenFile, "header.payload.signature");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                queue, "tokenFile", tokenFile.toString());
+
+        assertThat(queue.retryOrder(order.getId(), 100)).isEqualTo(1);
+
+        assertThat(tokens).containsOnly("Bearer header.payload.signature");
+        assertThat(ServiceTokenScope.isActive()).isFalse();
     }
 
     @Test
@@ -289,13 +325,41 @@ class OrderFulfillmentQueueTest {
     }
 
     @Test
-    void failedHoldDoesNotPreventProcessingAnotherHold() {
+    void expiredHoldRequestsCompensationBeforeAnyAdditionalCommit() {
         reservations.compute(
                 task.reservationId(),
                 (key, value) ->
                         value.toBuilder()
                                 .setStatus(ReservationStatus.RESERVATION_STATUS_EXPIRED)
                                 .build());
+        UUID secondId = UUID.randomUUID();
+        var second =
+                new OrderFulfillmentStore.Task(
+                        UUID.randomUUID(), order.getId(), secondId, "SKU-2", 2, UUID.randomUUID());
+        reservations.put(
+                secondId,
+                Reservation.newBuilder()
+                        .setId(secondId.toString())
+                        .setOrderId(order.getId().toString())
+                        .setSku("SKU-2")
+                        .setQuantity(2)
+                        .setWarehouseId("WH-1")
+                        .setStatus(ReservationStatus.RESERVATION_STATUS_ACTIVE)
+                        .build());
+        when(store.claimTask(order.getId()))
+                .thenReturn(Optional.of(task), Optional.of(second), Optional.empty());
+        when(store.readyForCompletion(order.getId())).thenReturn(false);
+        assertThat(queue.retryOrder(order.getId(), 100)).isZero();
+        verify(store).failTask(eq(task), any());
+        verify(store, never()).completeTask(second);
+        verify(store).requestAbort(order.getId(), "Required shipment inventory is unavailable");
+        verify(store, never()).finish(any(), any());
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.FULFILLING);
+    }
+
+    @Test
+    void aTransientLostCommitReplyDoesNotPreventProcessingAnotherOwnedHold() {
+        loseCommitReply = true;
         UUID secondId = UUID.randomUUID();
         var second =
                 new OrderFulfillmentStore.Task(
@@ -322,9 +386,11 @@ class OrderFulfillmentQueueTest {
 
     @Test
     void paymentRefundedDuringCommitPreventsShipmentCompletion() {
-        when(payments.get(order.getPaymentId()))
+        when(payments.decide(
+                        order.getPaymentId(),
+                        order.getId(),
+                        FulfillmentAction.FULFILLMENT_ACTION_SHIP))
                 .thenReturn(
-                        payment,
                         new PaymentIntentDto(
                                 payment.id(),
                                 payment.orderId(),
@@ -366,7 +432,10 @@ class OrderFulfillmentQueueTest {
 
     @Test
     void refundedPaymentBeforeRetryCannotConsumeAnyMoreStock() {
-        when(payments.get(order.getPaymentId()))
+        when(payments.decide(
+                        order.getPaymentId(),
+                        order.getId(),
+                        FulfillmentAction.FULFILLMENT_ACTION_BEGIN))
                 .thenReturn(
                         new PaymentIntentDto(
                                 payment.id(),

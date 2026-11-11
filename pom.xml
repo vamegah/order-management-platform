@@ -164,7 +164,7 @@
         <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
         <dependency-check-maven.version>13.0.0</dependency-check-maven.version>
         <!-- A full verify includes container ITs; e2e additionally needs a running stack. -->
-        <test.excludedGroups>e2e,recovery-e2e</test.excludedGroups>
+        <test.excludedGroups>e2e,recovery-e2e,lifecycle-e2e</test.excludedGroups>
         <test.includedGroups></test.includedGroups>
     </properties>
 
@@ -761,11 +761,18 @@
             <id>e2e</id>
             <properties>
                 <!-- Include e2e without filtering out untagged integration tests. -->
-                <test.excludedGroups>recovery-e2e</test.excludedGroups>
+                <test.excludedGroups>recovery-e2e,lifecycle-e2e</test.excludedGroups>
             </properties>
         </profile>
 
         <!-- Runs only the isolated scheduled-recovery acceptance after ordinary e2e. -->
+        <profile>
+            <id>lifecycle-e2e</id>
+            <properties>
+                <test.includedGroups>lifecycle-e2e</test.includedGroups>
+                <test.excludedGroups></test.excludedGroups>
+            </properties>
+        </profile>
         <profile>
             <id>recovery-e2e</id>
             <properties>

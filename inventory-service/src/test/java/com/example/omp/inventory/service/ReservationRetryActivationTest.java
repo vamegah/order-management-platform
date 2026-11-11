@@ -23,7 +23,9 @@ class ReservationRetryActivationTest {
     static class Beans {
         @Bean
         ReservationRepository reservations() {
-            return mock(ReservationRepository.class);
+            var repository = mock(ReservationRepository.class);
+            when(repository.tryLockOrder(any())).thenReturn(true);
+            return repository;
         }
 
         @Bean

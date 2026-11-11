@@ -100,6 +100,13 @@ public class Reservation {
         this.status = ReservationStatus.EXPIRED;
     }
 
+    public void compensateCommitted() {
+        if (status == ReservationStatus.RESTOCKED) return;
+        if (status != ReservationStatus.COMMITTED)
+            throw new IllegalStateException("Only committed inventory can be restocked");
+        status = ReservationStatus.RESTOCKED;
+    }
+
     private void requireActive(String action) {
         if (this.status != ReservationStatus.ACTIVE) {
             throw new IllegalStateException(

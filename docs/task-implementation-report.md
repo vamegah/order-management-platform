@@ -1,24 +1,23 @@
 # TASKS.md implementation report
 
-Updated: 2026-11-08. Feature and release acceptance remain incomplete.
+Updated: 2026-11-09 (America/Chicago). Feature and release acceptance remain incomplete.
 
-The accepted main baseline is `a3e4b85` (PR #16, merged by the repository owner).
-Its complete protected workflow passes all twenty jobs, 1,196 reactor cases and
-25 deployed service/client cases. Exact source, reports and merge/protection
-records are retained in the supervised recovery CI evidence archives documented
-in the latest acceptance section.
+The accepted main baseline is `7986d3e`, the approved warehouse-provenance merge
+of [PR #21](https://github.com/vamegah/order-management-platform/pull/21).
+Its [complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42755330384)
+passes all twenty jobs, 1,303 reactor cases and 28 deployed service/client cases.
+The [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42751851607)
+also passes. Exact source, reports and merge/protection records are retained in
+`coverage/reservation-warehouse-ci-evidence.zip` and
+`coverage/reservation-warehouse-main-ci-evidence.zip`, with JSON hashes.
 
-The current local follow-up implements a bounded administrator census of missing
-and shared reservation references. It remains separate from accepted PR #16;
-local verification prepares it for publication review. Complete hosted CI and
-main verification remain required before acceptance.
-
-Sections 1-7 retain 33 open items. The [implementation plan](task-implementation-plan.md)
-defines their delivery order and completion criteria; [TASKS.md](../TASKS.md)
-records acceptance. Earlier sections below are historical checkpoints, including
-superseded failure/environment reports. Use the latest dated evidence for each
-scope. Production security, performance, recovery and release requirements remain
-open.
+The completed-task review closes proto evolution (3.3) and WSDL drift protection
+(6.5). Sections 1-7 now retain 31 open items. The
+[implementation plan](task-implementation-plan.md) defines their delivery order
+and completion criteria; [TASKS.md](../TASKS.md) records acceptance. Earlier
+sections below are historical checkpoints, including superseded failure,
+environment and open-item counts. Use the latest dated evidence for each scope.
+Production security, performance, recovery and release requirements remain open.
 
 ## Implemented changes
 
@@ -2790,3 +2789,60 @@ restart assertions compile but still require full hosted execution with all 1,30
 reactor and 28 deployed cases. This batch does not close historical active
 ownership/provenance, conflicting pointers, fulfillment/expiry compensation or
 final database integrity. All 33 parent items remain open.
+
+## 2026-11-09 completed-task review
+
+Reviewed every unchecked parent task against its acceptance criteria, current
+source and the accepted PR #21/main evidence. Two stale open tasks now satisfy
+their complete contract-enforcement scope:
+
+- **3.3 Harden proto evolution:** all seven generated-protocol tests pass,
+  covering incompatible fields, reservations, oneof/map encoding, streaming modes,
+  additive evolution, generated stubs and unknown-field/enum preservation.
+  The PR job generates the exact base descriptor and compares it independently
+  of the head's published fixture. Ownership and release/version rules are in
+  [contract evolution](contract-evolution.md).
+- **6.5 Add WSDL drift protection:** all seven SOAP guard regressions pass,
+  including incompatible schema/operation/action changes, embedded-schema parity,
+  missing/malformed input and replacement of every head fixture together.
+  The exact-base PR comparison and clean JAXB regeneration pass, followed by
+  all 25 bank/adapter tests. This closes drift protection; deployed banking TLS,
+  rotation, full error-contract and resilience requirements stay open.
+
+Both repository workflows pass all 32 Java contract cases. The required GitHub
+Actions `quality-gate` includes `contract-compatibility`, fails when any required
+job fails or is skipped, and remains protected by strict freshness and
+administrator enforcement. Live main/protection checks were refreshed for this
+review. Archive integrity and every contained evidence hash were verified:
+
+- PR archive SHA-256: `aafaa3384fdb99497e7d4b5123a4c69e0e7543a953d3e54149501c280edf8f90`.
+- Main archive SHA-256: `0d58a9ca6850cb615d4830194eff9364728a57e41511af18836af5dd4c27a73a`.
+
+Only these two checkboxes change. The other 31 parent tasks in sections 1-7 and
+the three open section 8 items keep their acceptance criteria. Partial lifecycle
+milestones do not close unresolved historical ownership, cancellation discovery,
+committed-stock compensation, refund/fulfillment fencing or accepted-order expiry.
+No application, migration, test or CI policy changes are part of this review.
+
+## Core Order Lifecycle closeout (2026-11-10)
+
+Section 1 is complete. The upgrade-time integrity gate now resolves every seeded
+legacy order: active orders have verified reservation references, while approved
+historical exceptions are explicitly audited. The only seeded active row with no
+recoverable reservation, order 302, is canceled through the lifecycle coordinator;
+its synthetic confirmed payment is refunded and the durable cleanup task completes.
+Migration V9 identifies only the exact bundled order-302 test payment as `noop`
+using its known ID, order, idempotency key, provider reference and prior status.
+Other provider-unknown historical payments are unchanged.
+
+The deployed `CoreLifecycleAcceptanceIT` suite passes all four cases without
+failures, errors or skips. It exercises automatic accepted-order expiry, cleanup,
+partial inventory commit and restock across a real service restart, concurrent
+refund/shipment fencing, historical integrity and administrator-only retry. The
+order, inventory and payment module verification builds pass with static analysis.
+The
+ordinary end-to-end, recovery and lifecycle reports contain 30 executed cases and
+pass the evidence integrity checker. These results supersede earlier continuation
+notes in this report that described historical active-order and accepted-order
+expiry coordination as open. Local inventory/payment gRPC authentication logging no longer writes bearer credentials.
+The projected identity still passes the deployed lifecycle worker acceptance.

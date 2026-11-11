@@ -36,6 +36,7 @@ class InventoryRpcContractTest {
 
     @BeforeEach
     void start() throws Exception {
+        when(holds.tryLockOrder(any())).thenReturn(true);
         ReflectionTestUtils.setField(stock, "lastUpdated", Instant.parse("2026-01-01T00:00:00Z"));
         when(stocks.findBySkuAndWarehouseId("SKU", "WH")).thenReturn(Optional.of(stock));
         when(stocks.findBySku("SKU")).thenReturn(List.of(stock));

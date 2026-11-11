@@ -36,6 +36,13 @@ public class CheckoutJournal {
         }
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void trackAccepted(UUID orderId) {
+        jdbc.update(
+                "INSERT INTO orders.lifecycle_watch(order_id) VALUES (?) ON CONFLICT DO NOTHING",
+                orderId);
+    }
+
     @Transactional
     public void fail(UUID orderId) {
         jdbc.update(

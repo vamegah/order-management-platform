@@ -68,12 +68,19 @@ public class OrderReservationRepairStore {
         if (missing == 0) return current;
         requireVersion(current, expectedVersion);
         for (var line : current.lines()) {
-            if (line.reservationId() != null) continue;
+            if (line.reservationId() != null) {
+                jdbc.update(
+                        "UPDATE orders.order_line SET reservation_verified = true WHERE id = ? AND order_id = ? AND reservation_id = ?",
+                        line.lineId(),
+                        orderId,
+                        line.reservationId());
+                continue;
+            }
             UUID reservationId = bindings.get(line.lineId());
             int changed =
                     jdbc.update(
                             """
-                    UPDATE orders.order_line SET reservation_id = ?
+                    UPDATE orders.order_line SET reservation_id = ?, reservation_verified = true
                     WHERE id = ? AND order_id = ? AND reservation_id IS NULL
                     """,
                             reservationId,

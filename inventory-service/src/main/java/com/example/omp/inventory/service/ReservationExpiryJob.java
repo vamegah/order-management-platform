@@ -6,7 +6,6 @@ import com.example.omp.inventory.repository.ReservationRepository;
 import com.example.omp.inventory.repository.StockLevelRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
-import java.time.Instant;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -54,9 +53,12 @@ public class ReservationExpiryJob {
                     transactions.execute(
                             status -> {
                                 var batch =
-                                        reservations.lockExpiredBatch(
-                                                Instant.now().minus(ttl), batchSize);
+                                        reservations.lockExpiredByTtl(ttl.toMillis(), batchSize);
+                                int count = 0;
                                 for (Reservation reservation : batch) {
+                                    // Never wait for an order lock while holding its reservation.
+                                    if (!reservations.tryLockOrder(reservation.getOrderId()))
+                                        continue;
                                     var stock =
                                             stocks.findBySkuAndWarehouseId(
                                                             reservation.getSku(),
@@ -69,8 +71,9 @@ public class ReservationExpiryJob {
                                     reservation.expire();
                                     events.publishReservationExpired(
                                             reservation, "Reservation TTL exceeded");
+                                    count++;
                                 }
-                                return batch.size();
+                                return count;
                             });
             metrics.counter("inventory.reservation.expiry.completed")
                     .increment(expired == null ? 0 : expired);

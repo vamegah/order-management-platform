@@ -7,7 +7,7 @@
 logging:
   level:
     com.example.omp.inventory: DEBUG
-    net.devh.boot.grpc.server: DEBUG
+    net.devh.boot.grpc.server: INFO
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE

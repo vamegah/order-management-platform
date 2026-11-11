@@ -72,6 +72,8 @@ public final class ProtoConverters {
                     com.example.omp.proto.inventory.ReservationStatus.RESERVATION_STATUS_RELEASED;
             case EXPIRED ->
                     com.example.omp.proto.inventory.ReservationStatus.RESERVATION_STATUS_EXPIRED;
+            case RESTOCKED ->
+                    com.example.omp.proto.inventory.ReservationStatus.RESERVATION_STATUS_RESTOCKED;
         };
     }
 }

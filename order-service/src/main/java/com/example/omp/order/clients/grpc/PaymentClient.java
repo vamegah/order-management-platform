@@ -209,6 +209,33 @@ public class PaymentClient {
                 proto.getStatus().name(),
                 proto.getProviderReference().isEmpty() ? null : proto.getProviderReference(),
                 proto.getCreatedAtEpochMillis(),
-                proto.getUpdatedAtEpochMillis());
+                proto.getUpdatedAtEpochMillis(),
+                proto.getFulfillmentState().isEmpty() ? "OPEN" : proto.getFulfillmentState());
+    }
+
+    public PaymentIntentDto decide(UUID paymentId, UUID orderId, FulfillmentAction action) {
+        try {
+            var response =
+                    stub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+                            .decideFulfillment(
+                                    FulfillmentDecisionRequest.newBuilder()
+                                            .setPaymentId(paymentId.toString())
+                                            .setOrderId(orderId.toString())
+                                            .setAction(action)
+                                            .build());
+            var payment = toDomain(response.getPayment());
+            if (!paymentId.equals(payment.id())
+                    || !orderId.equals(payment.orderId())
+                    || !response.getState().equals(payment.fulfillmentState())
+                    || !java.util.Set.of("FULFILLING", "SHIPPED", "CANCELLING", "REFUNDABLE")
+                            .contains(response.getState()))
+                throw new IllegalStateException("Invalid payment decision response");
+            return payment;
+        } catch (StatusRuntimeException
+                | IllegalArgumentException
+                | IllegalStateException failure) {
+            throw new com.example.omp.order.error.DownstreamServiceException(
+                    "payment-service", 502, "Payment decision unavailable");
+        }
     }
 }

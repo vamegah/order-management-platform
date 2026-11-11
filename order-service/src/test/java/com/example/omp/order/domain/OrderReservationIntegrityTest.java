@@ -32,7 +32,8 @@ class OrderReservationIntegrityTest {
             case "MISSING" -> ReflectionTestUtils.setField(lines.getFirst(), "reservationId", null);
             case "SHARED" -> {
                 var duplicate = line();
-                duplicate.setReservationId(lines.getFirst().getReservationId());
+                ReflectionTestUtils.setField(
+                        duplicate, "reservationId", lines.getFirst().getReservationId());
                 lines.add(duplicate);
             }
             case "OVERSIZED" -> {
@@ -107,7 +108,7 @@ class OrderReservationIntegrityTest {
                         "Product",
                         Money.usd("1"),
                         1);
-        line.setReservationId(UUID.randomUUID());
+        line.bindReservation(UUID.randomUUID(), "WH-1");
         return line;
     }
 

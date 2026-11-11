@@ -16,7 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OrderFulfillmentStore {
     public record Task(
-            UUID id, UUID orderId, UUID reservationId, String sku, int quantity, UUID leaseId) {}
+            UUID id,
+            UUID orderId,
+            UUID reservationId,
+            String sku,
+            int quantity,
+            UUID leaseId,
+            String warehouseId) {
+        public Task(
+                UUID id, UUID orderId, UUID reservationId, String sku, int quantity, UUID leaseId) {
+            this(id, orderId, reservationId, sku, quantity, leaseId, null);
+        }
+    }
 
     private record Request(String requestedBy, String reason) {}
 
@@ -52,12 +63,13 @@ public class OrderFulfillmentStore {
             if (line.getReservationId() == null)
                 throw new IllegalStateException("Missing shipment reservation");
             jdbc.update(
-                    "INSERT INTO orders.fulfillment_task (id, order_id, reservation_id, sku, quantity) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO orders.fulfillment_task (id, order_id, reservation_id, sku, quantity, warehouse_id) VALUES (?, ?, ?, ?, ?, ?)",
                     UUID.randomUUID(),
                     order.getId(),
                     line.getReservationId(),
                     line.getProductSku(),
-                    line.getQuantity());
+                    line.getQuantity(),
+                    line.getReservationWarehouseId());
         }
     }
 
@@ -104,7 +116,7 @@ public class OrderFulfillmentStore {
                         AND NOT task.completed AND task.next_attempt_at <= now()
                         AND (task.lease_until IS NULL OR task.lease_until < now())
                     ORDER BY task.created_at, task.id LIMIT 1 FOR UPDATE OF task SKIP LOCKED
-                ) RETURNING id, order_id, reservation_id, sku, quantity, lease_id
+                ) RETURNING id, order_id, reservation_id, sku, quantity, lease_id, warehouse_id
                 """,
                         (rs, row) ->
                                 new Task(
@@ -113,7 +125,8 @@ public class OrderFulfillmentStore {
                                         rs.getObject("reservation_id", UUID.class),
                                         rs.getString("sku"),
                                         rs.getInt("quantity"),
-                                        rs.getObject("lease_id", UUID.class)),
+                                        rs.getObject("lease_id", UUID.class),
+                                        rs.getString("warehouse_id")),
                         lease,
                         orderId);
         return tasks.stream().findFirst();
@@ -125,7 +138,7 @@ public class OrderFulfillmentStore {
                         """
                 UPDATE orders.fulfillment_task SET completed = true, completed_at = now(),
                     lease_id = NULL, lease_until = NULL, last_error = NULL
-                WHERE id = ? AND lease_id = ? AND NOT completed
+                WHERE id = ? AND lease_id = ? AND NOT completed AND lease_until > clock_timestamp()
                 """,
                         task.id(),
                         task.leaseId())
@@ -160,6 +173,8 @@ public class OrderFulfillmentStore {
 
     @Transactional
     public boolean finish(UUID orderId, PaymentIntentDto payment) {
+        if (payment == null || !"SHIPPED".equals(payment.fulfillmentState()))
+            throw new IllegalStateException("Shipment requires the durable payment decision");
         // Serialize finalizers; aggregate, history, outbox and request completion commit together.
         var requests =
                 jdbc.query(
@@ -184,7 +199,8 @@ public class OrderFulfillmentStore {
         orders.findAndApply(
                 orderId,
                 order -> {
-                    if (order.getStatus() != OrderStatus.FULFILLING
+                    if ((order.getStatus() != OrderStatus.FULFILLING
+                                    && order.getStatus() != OrderStatus.CANCELLING)
                             || order.getLines().size() != total)
                         throw new IllegalStateException(
                                 "Shipment no longer matches its durable intent");
@@ -196,6 +212,23 @@ public class OrderFulfillmentStore {
                 "UPDATE orders.fulfillment_request SET completed_at = now(), last_error = NULL WHERE order_id = ?",
                 orderId);
         return true;
+    }
+
+    @Transactional
+    public void requestAbort(UUID orderId, String reason) {
+        orders.findAndApply(
+                orderId,
+                order -> {
+                    if (order.getStatus() == OrderStatus.FULFILLING)
+                        order.cancel("system:lifecycle", reason);
+                });
+        jdbc.update(
+                """
+            INSERT INTO orders.lifecycle_watch(order_id, reason) VALUES (?, ?)
+            ON CONFLICT (order_id) DO UPDATE SET next_scan_at = clock_timestamp(), reason = EXCLUDED.reason
+            """,
+                orderId,
+                reason);
     }
 
     @Transactional

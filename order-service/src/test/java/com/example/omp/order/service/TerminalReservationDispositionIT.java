@@ -131,29 +131,23 @@ class TerminalReservationDispositionIT {
         assertThatThrownBy(() -> service.record(ACTIVE, request(ACTIVE), "admin"))
                 .isInstanceOf(InvalidOrderStateException.class);
         UUID future = UUID.randomUUID();
-        jdbc.update(
-                """
-                INSERT INTO orders.purchase_order (id, order_number, customer_id, customer_email,
-                    status, currency, shipping_line1, shipping_city, shipping_postal_code, shipping_country)
-                SELECT ?, ?, customer_id, customer_email, 'DELIVERED', currency,
-                    shipping_line1, shipping_city, shipping_postal_code, shipping_country
-                FROM orders.purchase_order WHERE id = ?
-                """,
-                future,
-                "FUTURE-" + future.toString().substring(0, 16),
-                DELIVERED);
-        jdbc.update(
-                """
-                INSERT INTO orders.order_line (id, order_id, product_id, product_sku, product_name,
-                    unit_price_amount, unit_price_currency, quantity, line_total)
-                SELECT ?, ?, product_id, product_sku, product_name, unit_price_amount,
-                    unit_price_currency, quantity, line_total FROM orders.order_line WHERE order_id = ?
-                """,
-                UUID.randomUUID(),
-                future,
-                DELIVERED);
-        assertThatThrownBy(() -> service.record(future, request(future), "admin"))
-                .isInstanceOf(InvalidOrderStateException.class);
+        // Future aggregates cannot enter the historical policy: final integrity now
+        // rejects a terminal order without verified lines before it can be persisted.
+        assertThatThrownBy(
+                        () ->
+                                jdbc.update(
+                                        """
+                                        INSERT INTO orders.purchase_order (id, order_number, customer_id, customer_email,
+                                            status, currency, shipping_line1, shipping_city, shipping_postal_code, shipping_country)
+                                        SELECT ?, ?, customer_id, customer_email, 'DELIVERED', currency,
+                                            shipping_line1, shipping_city, shipping_postal_code, shipping_country
+                                        FROM orders.purchase_order WHERE id = ?
+                                        """,
+                                        future,
+                                        "FUTURE-" + future.toString().substring(0, 16),
+                                        DELIVERED))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("Order requires 1..100 verified lines");
         jdbc.update(
                 "UPDATE orders.order_line SET quantity = 2, line_total = 2 * unit_price_amount WHERE order_id = ?",
                 DELIVERED);

@@ -3,26 +3,30 @@
 > **Status:** In progress; implementation and acceptance remain tracked in TASKS.md
 > **Last reviewed:** 2026-11-09
 
-Deliver the **33 unchecked items** in [TASKS.md](../TASKS.md), following its section
-order. Five other items in these sections are already checked; preserve their
-behavior and regression coverage. The IDs below identify existing backlog items,
-not additional completion requirements. Section 8 documentation and final release
+Deliver the **31 unchecked items** in [TASKS.md](../TASKS.md), following its section
+order. Seven other items in these sections are already checked; preserve their
+behavior and regression coverage. Items 3.3 and 6.5 are retained below as accepted
+records after the completed-task review. The IDs below identify existing backlog
+items, not additional completion requirements. Section 8 documentation and final release
 acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `94435e5`, the approved deployed reference repair
-merge of [PR #20](https://github.com/vamegah/order-management-platform/pull/20).
-Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42722597222)
-and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42726141724)
-pass all twenty jobs, 1,285 reactor and 28 deployed service/client cases.
-Exact-source evidence is retained in `coverage/reference-repair-deployment-ci-evidence.zip`
-and `coverage/reference-repair-deployment-main-ci-evidence.zip`, with JSON hashes.
-The next local batch preserves original warehouse intent for new checkouts and
-checks known warehouse snapshots during missing-reference repair. All 601 focused
-cases, six static reports and five unit comparisons pass; complete hosted
-verification of 1,303 reactor and 28 deployed cases remains required. Historical
-active ownership/provenance, conflicting pointers and final constraints stay open.
+The accepted main baseline is `7986d3e`, the approved warehouse-provenance merge
+of [PR #21](https://github.com/vamegah/order-management-platform/pull/21).
+Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42751851607)
+and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42755330384)
+pass all twenty jobs, 1,303 reactor and 28 deployed service/client cases.
+Exact-source evidence is retained in `coverage/reservation-warehouse-ci-evidence.zip`
+and `coverage/reservation-warehouse-main-ci-evidence.zip`, with JSON hashes.
+New checkouts preserve original warehouse intent; missing-reference repair checks
+known snapshots, including across real service restarts. Historical active
+ownership/provenance, conflicting pointers and final constraints stay open.
+
+The completed-task review closes proto evolution (3.3) and WSDL drift protection
+(6.5): their compatibility regressions, clean client generation, exact-base PR
+checks and required protected CI all pass. Their original acceptance scope is
+preserved below. The remaining 31 items retain their completion gates.
 Publication and merge actions follow the existing scoped approval agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
@@ -36,10 +40,10 @@ before rebuilding working features or reopening accepted fixes.
 | --- | ---: | --- | --- |
 | 1. Core lifecycle | 4 | Durable references, compensation, coordinated expiry and safe transitions | Real deployed failures recover with conserved inventory and correct payment outcomes |
 | 2. Public APIs | 2 | Published OpenAPI and external REST/GraphQL compatibility tests | Contract drift, authorization, pagination and errors checked in required CI |
-| 3. gRPC | 4 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
+| 3. gRPC | 3 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
 | 4. Events and WebSockets | 5 | Versioned events, complete outbox coverage, quarantine/replay and secure real-time delivery | Crash/replay/ownership tests and measured 1,000-client run |
 | 5. Payments and webhooks | 6 | Real simulator integration, tokenized payments/SCA, asynchronous refunds and secure delivery | Provider outcome, signature, SSRF, recovery and load scenarios pass |
-| 6. SOAP | 5 | Deployed secured banking flow, stable faults and safe resilience | Trusted-TLS journey, duplicate-transfer prevention and contract gates pass |
+| 6. SOAP | 4 | Deployed secured banking flow, stable faults and safe resilience | Trusted-TLS journey, duplicate-transfer prevention and contract gates pass |
 | 7. Operations and release | 7 | Coordinated quotas, security review, telemetry, recovery drills and signed releases | Executed operational evidence and reproducible promotion/rollback |
 
 Finish each stage's acceptance before moving to the next feature stage. Bring
@@ -131,9 +135,10 @@ Reuse the existing journal, cleanup/fulfillment queues, leases and scoped identi
   duplicate requests and failed compensation. Stage 5 extends this same matrix
   with provider SCA and delayed outcomes rather than creating a second contract.
 
-**Suggested batches:** deployed scheduled recovery; historical repair/reference
-closure; coordinated expiry and compensation/fencing; complete transition matrix
-and stage acceptance. Item 1.4 (immutable public order lines) remains accepted.
+**Status (2026-11-10): Complete.** Deployed scheduled recovery, historical
+reference closure, coordinated expiry and compensation, and transition acceptance
+all pass. Immutable public order lines remain the documented policy; see the final
+[implementation evidence](task-implementation-report.md#core-order-lifecycle-closeout-2026-11-10).
 
 ## 2. Complete REST and GraphQL public APIs
 
@@ -198,17 +203,19 @@ clients, TLS tooling, production topology and deployed contract suites.
   of durable stream replay. Cross-replica inventory/payment fan-out is a future
   topology change, not required by the existing single-replica acceptance option.
 
-### 3.3 Harden proto evolution
+### 3.3 Harden proto evolution (accepted)
 
-- **Implement:** Audit the existing descriptor, exact-base and generated-Java
-  gates against accepted CI artifacts. Complete any missing ownership enforcement,
-  field/enum reservation checks, client verification and published version policy.
-  Add regressions for uncovered incompatibilities rather than replacing a
-  working compatibility tool solely to introduce buf.
-- **Close when:** Required protected-branch CI rejects incompatible fields,
-  reservations, RPC types/streaming changes and fixture replacement bypasses;
-  old generated consumers still work. Link executed evidence to close the stale
-  continuation notes in TASKS.md.
+Accepted by the completed-task review against the PR #21 and main workflows
+linked above; [TASKS.md](../TASKS.md) records the source-bound evidence.
+
+- **Implemented:** Audited the published-descriptor and exact-base comparisons,
+  field/enum reservation guards, generated Java/stub verification and documented
+  ownership/version policy. The seven protobuf regressions pass in required CI.
+- **Accepted scope:** Protected-branch CI rejects incompatible fields,
+  reservations, RPC types/streaming changes and fixture replacement bypasses.
+  Base clients/descriptors regenerate successfully, and the protocol tests verify
+  additive evolution and unknown-field/enum preservation. TASKS.md links the
+  accepted runs and source-bound reports.
 
 ### 3.4 Harden internal transport
 
@@ -399,14 +406,18 @@ contracts, banking infrastructure, dashboards and deployed acceptance suites.
   bounded work, useful fallback errors and breaker/retry metrics without a
   cascading failure.
 
-### 6.5 Add WSDL drift protection
+### 6.5 Add WSDL drift protection (accepted)
 
-- **Implement:** Audit the existing frozen WSDL/XSD, exact-base comparison,
-  published-schema parity, JAXB regeneration and Java boundary gates. Repair
-  only missing enforcement/evidence; keep incompatible v1 changes blocked.
-- **Close when:** Required CI demonstrates fresh generated artifacts and rejects
-  incompatible WSDL/XSD changes even when all head fixtures change together.
-  Link the accepted repository runs and ownership/version policy to TASKS.md.
+Accepted by the completed-task review against the PR #21 and main workflows
+linked above; [TASKS.md](../TASKS.md) records the source-bound evidence.
+
+- **Implemented:** Audited frozen WSDL/XSD fixtures, exact-base comparison,
+  published-schema parity, clean JAXB regeneration and Java boundary gates.
+  The seven SOAP guard regressions and all 25 bank/adapter tests pass.
+- **Accepted scope:** Required CI demonstrates fresh generated artifacts and
+  rejects incompatible WSDL/XSD changes even when all head fixtures change
+  together. TASKS.md links the accepted runs, source-bound reports and
+  ownership/version policy.
 
 ## 7. Security, operations and release readiness
 
@@ -519,5 +530,5 @@ keep any affected real-provider/operational acceptance explicitly open until run
 For each batch, report: backlog IDs addressed, implemented behavior, executed
 evidence, remaining acceptance and the next batch. Update this plan by replacing
 superseded decisions, and keep historical results in the implementation report.
-After all 33 items close, execute section 8's consolidated documentation, approved
-release checklist and fresh full-stack acceptance.
+After all remaining items close, execute section 8's consolidated documentation,
+approved release checklist and fresh full-stack acceptance.

@@ -1,0 +1,9 @@
+# Isolated acceptance phase only. Natural hold expiry exercises the full lifecycle worker.
+services:
+  order-service:
+    environment:
+      OMP_ORDER_LIFECYCLE_INTERVAL_MS: "1000"
+  inventory-service:
+    environment:
+      OMP_INVENTORY_EXPIRY_TTL: PT20S
+      OMP_INVENTORY_EXPIRY_INTERVAL_MS: "1000"

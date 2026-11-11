@@ -68,6 +68,7 @@ public final class ProtoConverters {
                         .setCustomerId(payment.getCustomerId().toString())
                         .setAmount(moneyConverter.toProto(payment.getAmount()))
                         .setStatus(toProtoStatus(payment.getStatus()))
+                        .setFulfillmentState(payment.getFulfillmentState())
                         .setCreatedAtEpochMillis(payment.getCreatedAt().toEpochMilli())
                         .setUpdatedAtEpochMillis(payment.getUpdatedAt().toEpochMilli());
 

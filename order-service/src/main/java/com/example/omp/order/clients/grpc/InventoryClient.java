@@ -186,6 +186,25 @@ public class InventoryClient {
         }
     }
 
+    public java.util.List<ReservationDto> compensateOrder(UUID orderId) {
+        try {
+            return stub
+                    .withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .compensateOrder(
+                            CompensateOrderRequest.newBuilder()
+                                    .setOrderId(orderId.toString())
+                                    .setReason("Order lifecycle compensation")
+                                    .build())
+                    .getReservationsList()
+                    .stream()
+                    .map(this::toDomain)
+                    .toList();
+        } catch (StatusRuntimeException | IllegalArgumentException failure) {
+            throw new DownstreamServiceException(
+                    "inventory-service", 502, "Inventory compensation unavailable");
+        }
+    }
+
     private ReservationDto toDomain(Reservation proto) {
         return new ReservationDto(
                 UUID.fromString(proto.getId()),

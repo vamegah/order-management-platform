@@ -4,6 +4,7 @@ import com.example.omp.order.clients.grpc.InventoryClient;
 import com.example.omp.order.clients.grpc.PaymentClient;
 import com.example.omp.order.clients.grpc.dto.PaymentIntentDto;
 import com.example.omp.order.clients.grpc.dto.ReservationDto;
+import com.example.omp.order.clients.grpc.interceptor.ServiceTokenScope;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Durable, leased cleanup work. RPCs run outside database transactions using caller authentication.
+ * Durable, leased cleanup work. RPCs run outside database transactions using the scoped order
+ * workload identity when configured.
  */
 @Service
 public class OrderCleanupQueue {
@@ -25,6 +27,9 @@ public class OrderCleanupQueue {
     private final InventoryClient inventory;
     private final PaymentClient payments;
     private final MeterRegistry metrics;
+
+    @org.springframework.beans.factory.annotation.Value("${omp.order.recovery.token-file:}")
+    private String tokenFile = "";
 
     public OrderCleanupQueue(
             JdbcTemplate jdbc,
@@ -53,12 +58,35 @@ public class OrderCleanupQueue {
     public void enqueue(UUID orderId, String type, UUID resourceId) {
         if (!List.of("RESERVATION", "PAYMENT").contains(type))
             throw new IllegalArgumentException("Invalid cleanup type");
+        int inserted =
+                jdbc.update(
+                        "INSERT INTO orders.cleanup_task (id, order_id, resource_type, resource_id) VALUES (?, ?, ?, ?) ON CONFLICT (resource_type, resource_id) DO NOTHING",
+                        UUID.randomUUID(),
+                        orderId,
+                        type,
+                        resourceId);
+        if (inserted != 0) return;
+        var owner =
+                jdbc.queryForObject(
+                        "SELECT order_id FROM orders.cleanup_task WHERE resource_type = ? AND resource_id = ?",
+                        UUID.class,
+                        type,
+                        resourceId);
+        if (!orderId.equals(owner))
+            throw new IllegalStateException("Cleanup resource belongs to another order");
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void trackCancellation(UUID orderId, String actor, String reason) {
         jdbc.update(
-                "INSERT INTO orders.cleanup_task (id, order_id, resource_type, resource_id) VALUES (?, ?, ?, ?) ON CONFLICT (resource_type, resource_id) DO NOTHING",
-                UUID.randomUUID(),
+                """
+            INSERT INTO orders.lifecycle_watch(order_id, requested_by, reason) VALUES (?, ?, ?)
+            ON CONFLICT (order_id) DO UPDATE SET next_scan_at = clock_timestamp(),
+                requested_by = EXCLUDED.requested_by, reason = EXCLUDED.reason
+            """,
                 orderId,
-                type,
-                resourceId);
+                actor,
+                reason == null ? "Order cancellation" : reason);
     }
 
     public int retryDue() {
@@ -69,7 +97,9 @@ public class OrderCleanupQueue {
                 WHERE NOT completed AND next_attempt_at <= now()
                 AND (lease_until IS NULL OR lease_until < now())
                 AND NOT EXISTS (SELECT 1 FROM orders.purchase_order existing_order
-                    WHERE existing_order.id = task.order_id AND existing_order.status <> 'CANCELLED')
+                    WHERE existing_order.id = task.order_id AND (existing_order.status <> 'CANCELLED'
+                        OR NOT EXISTS (SELECT 1 FROM orders.lifecycle_watch w
+                            WHERE w.order_id = task.order_id AND w.compensation_ready)))
                 GROUP BY task.order_id ORDER BY min(next_attempt_at), task.order_id LIMIT 10
                 """,
                         (rs, row) -> rs.getObject("order_id", UUID.class));
@@ -81,6 +111,11 @@ public class OrderCleanupQueue {
     public int retryOrder(UUID orderId, int limit) {
         if (limit < 1 || limit > 100)
             throw new IllegalArgumentException("Cleanup limit must be 1..100");
+        return ServiceTokenScope.withProjectedIdentity(
+                tokenFile, () -> retryOrderWithIdentity(orderId, limit));
+    }
+
+    private int retryOrderWithIdentity(UUID orderId, int limit) {
         if (org.springframework.transaction.support.TransactionSynchronizationManager
                 .isActualTransactionActive())
             throw new IllegalStateException("Cleanup RPCs require no ambient transaction");
@@ -99,7 +134,9 @@ public class OrderCleanupQueue {
                     AND order_id = ?
                     AND NOT EXISTS (
                         SELECT 1 FROM orders.purchase_order existing_order
-                        WHERE existing_order.id = task.order_id AND existing_order.status <> 'CANCELLED'
+                        WHERE existing_order.id = task.order_id AND (existing_order.status <> 'CANCELLED'
+                            OR NOT EXISTS (SELECT 1 FROM orders.lifecycle_watch w
+                                WHERE w.order_id = task.order_id AND w.compensation_ready))
                     )
                     ORDER BY created_at, id LIMIT ? FOR UPDATE SKIP LOCKED
                 ) RETURNING id, order_id, resource_type, resource_id, attempts
@@ -122,7 +159,7 @@ public class OrderCleanupQueue {
                 else throw new IllegalStateException("Unknown cleanup type");
                 int updated =
                         jdbc.update(
-                                "UPDATE orders.cleanup_task SET completed = true, completed_at = now(), lease_id = NULL, lease_until = NULL, last_error = NULL WHERE id = ? AND lease_id = ?",
+                                "UPDATE orders.cleanup_task SET completed = true, completed_at = now(), lease_id = NULL, lease_until = NULL, last_error = NULL WHERE id = ? AND lease_id = ? AND lease_until > clock_timestamp()",
                                 task.id(),
                                 lease);
                 completed += updated;
@@ -130,7 +167,7 @@ public class OrderCleanupQueue {
                         .increment(updated);
             } catch (RuntimeException failure) {
                 jdbc.update(
-                        "UPDATE orders.cleanup_task SET lease_id = NULL, lease_until = NULL, next_attempt_at = now() + interval '1 minute', last_error = ? WHERE id = ? AND lease_id = ?",
+                        "UPDATE orders.cleanup_task SET lease_id = NULL, lease_until = NULL, next_attempt_at = now() + interval '1 minute', last_error = ? WHERE id = ? AND lease_id = ? AND lease_until > clock_timestamp()",
                         failure.getClass().getSimpleName(),
                         task.id(),
                         lease);
@@ -168,7 +205,8 @@ public class OrderCleanupQueue {
 
     private static boolean isReleased(ReservationDto reservation) {
         return "RESERVATION_STATUS_RELEASED".equals(reservation.status())
-                || "RESERVATION_STATUS_EXPIRED".equals(reservation.status());
+                || "RESERVATION_STATUS_EXPIRED".equals(reservation.status())
+                || "RESERVATION_STATUS_RESTOCKED".equals(reservation.status());
     }
 
     private void cleanupPayment(Task task) {

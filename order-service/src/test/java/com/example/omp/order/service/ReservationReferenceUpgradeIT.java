@@ -96,7 +96,7 @@ class ReservationReferenceUpgradeIT {
 
     private List<String> snapshot(JdbcTemplate jdbc, String table, String addedColumn) {
         return jdbc.queryForList(
-                "SELECT (to_jsonb(historical_row) - ? - 'reservation_warehouse_id')::text FROM orders."
+                "SELECT (to_jsonb(historical_row) - ? - 'reservation_warehouse_id' - 'reservation_verified')::text FROM orders."
                         + table
                         + " historical_row ORDER BY id",
                 String.class,

@@ -45,12 +45,21 @@ class AuthForwardingInterceptorTest {
     }
 
     @Test
-    void callerIdentityTakesPrecedenceOverWorkerIdentity() {
+    void explicitlyScopedWorkerIdentityTakesPrecedenceOverCaller() {
         var jwt =
                 Jwt.withTokenValue("user-token").header("alg", "RS256").subject("customer").build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         try (var scope = ServiceTokenScope.open("service-token")) {
-            assertThat(bearer()).isEqualTo("Bearer user-token");
+            assertThat(bearer()).isEqualTo("Bearer service-token");
         }
+        assertThat(bearer()).isEqualTo("Bearer user-token");
+    }
+
+    @Test
+    void relaysCallerIdentityWhenNoWorkerScopeIsOpen() {
+        var jwt =
+                Jwt.withTokenValue("user-token").header("alg", "RS256").subject("customer").build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        assertThat(bearer()).isEqualTo("Bearer user-token");
     }
 }

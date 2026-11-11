@@ -65,4 +65,35 @@ class DownstreamFixtureContractTest {
         assertThat(payments.get(payment.id()).orderId()).isEqualTo(order);
         assertThat(payments.get(payment.id()).customerId()).isEqualTo(customer);
     }
+
+    @Test
+    void compensationAndPaymentDecisionsRoundTripThroughGeneratedClients() {
+        UUID order = UUID.randomUUID(), customer = UUID.randomUUID();
+        var hold = inventory.reserve(order, "SKU", "WH-1", 2);
+        inventory.commit(hold.id().toString());
+        assertThat(inventory.findByOrder(order)).hasSize(1);
+        assertThat(inventory.compensateOrder(order))
+                .singleElement()
+                .satisfies(r -> assertThat(r.status()).isEqualTo("RESERVATION_STATUS_RESTOCKED"));
+        inventory.compensateOrder(order);
+        assertThat(inventory.getStockLevel("SKU", "WH-1").quantityOnHand()).isEqualTo(100);
+        var payment = payments.createIntent(order, customer, "10", "USD", "decision-fixture");
+        assertThat(payments.findByOrder(order)).hasSize(1);
+        assertThat(
+                        payments.decide(
+                                        payment.id(),
+                                        order,
+                                        com.example.omp.proto.payment.FulfillmentAction
+                                                .FULFILLMENT_ACTION_CANCEL)
+                                .fulfillmentState())
+                .isEqualTo("CANCELLING");
+        assertThat(
+                        payments.decide(
+                                        payment.id(),
+                                        order,
+                                        com.example.omp.proto.payment.FulfillmentAction
+                                                .FULFILLMENT_ACTION_ALLOW_REFUND)
+                                .fulfillmentState())
+                .isEqualTo("REFUNDABLE");
+    }
 }

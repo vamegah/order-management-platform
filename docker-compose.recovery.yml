@@ -4,6 +4,7 @@ services:
   order-service:
     environment:
       OMP_ORDER_RECOVERY_ENABLED: "true"
+      OMP_ORDER_LIFECYCLE_ENABLED: "true"
       OMP_ORDER_RECOVERY_TOKEN_FILE: /run/order-recovery/access.jwt
     volumes:
       - type: bind
@@ -12,3 +13,7 @@ services:
         read_only: true
         bind:
           create_host_path: false
+  inventory-service:
+    environment:
+      OMP_INVENTORY_EXPIRY_ENABLED: "true"
+      OMP_INVENTORY_EXPIRY_TTL: PT30M

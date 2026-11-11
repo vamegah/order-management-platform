@@ -51,6 +51,16 @@ public class OrderReservationRepairService {
             if (reservation == null || !reservationId.equals(reservation.id()))
                 throw new DownstreamServiceException(
                         "inventory-service", 502, "Invalid reservation verification response");
+            if (line.reservationWarehouseId() != null
+                    && !line.reservationWarehouseId().equals(reservation.warehouseId()))
+                throw new InvalidOrderDataException(
+                        "The reservation does not match the original warehouse");
+            if (reservation.warehouseId() == null
+                    || reservation.warehouseId().isBlank()
+                    || reservation.warehouseId().length() > 64
+                    || !reservation.warehouseId().equals(reservation.warehouseId().strip()))
+                throw new DownstreamServiceException(
+                        "inventory-service", 502, "Invalid reservation warehouse response");
             if (!orderId.equals(reservation.orderId())
                     || !line.sku().equals(reservation.sku())
                     || line.quantity() != reservation.quantity()

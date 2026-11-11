@@ -35,12 +35,11 @@ import org.junit.jupiter.api.Timeout;
 @Tag("recovery-e2e")
 @Timeout(value = 15, unit = TimeUnit.MINUTES)
 class ReservationReferenceRepairIT {
-    private static final String ORDERS =
-            System.getenv().getOrDefault("ORDER_SERVICE_URL", "http://order-service.localhost")
-                    + "/api/v1/orders";
-    private static final String REPAIRS =
-            System.getenv().getOrDefault("ORDER_SERVICE_URL", "http://order-service.localhost")
-                    + "/api/v1/order-reservation-repairs/";
+    private static final String ORDER_SERVICE =
+            System.getenv().getOrDefault("ORDER_SERVICE_URL", "http://order-service.localhost");
+    private static final String ORDERS = ORDER_SERVICE + "/api/v1/orders";
+    private static final String REPAIRS = ORDER_SERVICE + "/api/v1/order-reservation-repairs/";
+    private static final String HEALTH = ORDER_SERVICE + "/actuator/health";
     private static final String REASON = "e2e restore original verified checkout references";
 
     @AfterAll
@@ -264,7 +263,9 @@ class ReservationReferenceRepairIT {
     private static JsonNode businessState(JsonNode snapshot) {
         ObjectNode copy = snapshot.deepCopy();
         ((ObjectNode) copy.path("order")).remove(List.of("version", "updated_at"));
-        for (var line : copy.path("order_line")) ((ObjectNode) line).remove("reservation_id");
+        for (var line : copy.path("order_line")) {
+            ((ObjectNode) line).remove(List.of("reservation_id", "reservation_verified"));
+        }
         copy.remove("reservation_reference_repair");
         return copy;
     }
@@ -298,10 +299,18 @@ class ReservationReferenceRepairIT {
         GrpcClientFactory.shutdown();
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         while (System.nanoTime() < until) {
-            if (OrderJourney.authenticated(AuthSupport.adminToken())
-                            .get(REPAIRS + "00000000-0000-0000-0000-000000000303")
-                            .statusCode()
-                    == 200) return;
+            var health =
+                    given().config(
+                                    io.restassured.config.RestAssuredConfig.config()
+                                            .httpClient(
+                                                    io.restassured.config.HttpClientConfig
+                                                            .httpClientConfig()
+                                                            .setParam(
+                                                                    "http.connection.timeout", 5000)
+                                                            .setParam("http.socket.timeout", 5000)))
+                            .get(HEALTH);
+            if (health.statusCode() == 200 && "UP".equals(health.jsonPath().getString("status")))
+                return;
             Thread.sleep(1000);
         }
         throw new IllegalStateException("Order ingress did not recover");

@@ -4,11 +4,22 @@ Inventory reservation transitions now carry an optimistic-lock version. Reserve 
 
 Reservation creation, commit, release, and expiry write events to inventory.outbox_event inside the state-change transaction. Kafka delivery uses the shared outbox drainer and has at-least-once semantics; consumers must deduplicate.
 
-The optional expiry worker is disabled by default. Enable with `omp.inventory.expiry.enabled=true` only after the order lifecycle handles expired holds. Configure `omp.inventory.expiry.ttl=PT30M`, `batch-size=100` (1..1000), and `interval-ms=60000`. TTL starts at reservation creation and is not renewed. An accepted draft may therefore lose its hold; order/payment reconciliation remains unfinished.
+The base deployment leaves expiry disabled. The supported supervised lifecycle
+and recovery overlays enable expiry with `omp.inventory.expiry.ttl=PT30M`,
+`batch-size=100` (1..1000), and `interval-ms=60000`. TTL starts at reservation
+creation and is not renewed. Accepted-order reconciliation cancels an order that
+loses a required hold and durably coordinates stock/payment cleanup. Provision
+the workload projector and enable both lifecycle and orphan recovery as described
+in [core lifecycle deployment](core-order-lifecycle.md#deployment-and-operations).
+The short TTL overlay is isolated acceptance configuration.
 
-Each tick selects a bounded oldest-first batch using PostgreSQL FOR UPDATE SKIP LOCKED. Stock release, EXPIRED status, and outbox events commit together. Optimistic locking protects concurrent RPC transitions. Any error rolls back the entire batch and the next tick retries. Multiple workers skip locked reservations; stock contention may still cause a batch rollback.
+Each tick selects a bounded oldest-first batch using PostgreSQL FOR UPDATE SKIP LOCKED. Stock release, EXPIRED status, and outbox events commit together. Commit checks the database deadline directly. A shared per-order advisory lock protects reserve/commit/compensation, and expiry tries that lock without waiting while holding a reservation row. Optimistic locking protects stock contention. Any error rolls back the entire batch and the next tick retries. Multiple workers skip locked reservations; stock contention may still cause a batch rollback.
 
-Monitor `inventory.reservation.expiry.completed` and `inventory.reservation.expiry.failures` (Prometheus underscores). Repeated failures require investigation of missing stock rows, contention, and database availability. Expiry retries on the next tick and has no dedicated operator retry API. Order checkout recovery can discover orphaned resources through its [journal and cleanup worker](order-cleanup.md); shipment now uses [durable fulfillment](order-fulfillment.md), but permanent-failure refund/restock coordination remains unfinished. PostgreSQL concurrency and transactional rollback are now tested below; process-crash and deployed recovery acceptance remain open.
+Monitor `inventory.reservation.expiry.completed` and `inventory.reservation.expiry.failures` (Prometheus underscores). Repeated failures require investigation of missing stock rows, contention, and database availability. Expiry retries on the next tick and has no dedicated operator retry API. Order checkout recovery discovers orphaned resources through its
+[journal and cleanup worker](order-cleanup.md). The lifecycle worker handles
+accepted-order expiry, stock compensation, payment fencing and audited retries.
+See [current lifecycle verification](core-order-lifecycle.md#verification); the
+older focused milestone below retains its original limited scope.
 
 ## Executed PostgreSQL acceptance
 

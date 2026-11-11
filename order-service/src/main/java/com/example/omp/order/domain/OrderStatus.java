@@ -31,8 +31,11 @@ public enum OrderStatus {
     /** Payment confirmed. Awaiting fulfillment. */
     CONFIRMED,
 
-    /** Shipment requested durably. Inventory commits may be partially complete; no cancellation. */
+    /** Shipment requested durably. Inventory commits may be partially complete. */
     FULFILLING,
+
+    /** Cancellation requested after shipment work began; the durable payment decision wins. */
+    CANCELLING,
 
     /** Shipped. In transit to the customer. */
     SHIPPED,
@@ -62,7 +65,8 @@ public enum OrderStatus {
             case DRAFT -> Set.of(PLACED, CANCELLED);
             case PLACED -> Set.of(CONFIRMED, CANCELLED);
             case CONFIRMED -> Set.of(FULFILLING, CANCELLED);
-            case FULFILLING -> Set.of(SHIPPED);
+            case FULFILLING -> Set.of(SHIPPED, CANCELLING);
+            case CANCELLING -> Set.of(CANCELLED, SHIPPED);
             case SHIPPED -> Set.of(DELIVERED);
             case DELIVERED -> Set.of(); // terminal
             case CANCELLED -> Set.of(); // terminal

@@ -17,6 +17,7 @@ class ReservationRetryTest {
     void changedRetryCannotSilentlyReuseInsufficientHold() {
         UUID orderId = UUID.randomUUID();
         var repository = mock(ReservationRepository.class);
+        when(repository.tryLockOrder(any())).thenReturn(true);
         var stocks = mock(StockLevelRepository.class);
         var events = mock(InventoryEventPublisher.class);
         when(repository.findByOrderIdAndSku(orderId, "SKU"))
@@ -38,6 +39,7 @@ class ReservationRetryTest {
     void expiredHoldCannotBeReactivatedByRetry() {
         UUID orderId = UUID.randomUUID();
         var repository = mock(ReservationRepository.class);
+        when(repository.tryLockOrder(any())).thenReturn(true);
         var reservation = new Reservation("SKU", "WH-1", 1, orderId);
         reservation.expire();
         when(repository.findByOrderIdAndSku(orderId, "SKU")).thenReturn(Optional.of(reservation));

@@ -40,7 +40,8 @@ class OrderReferenceIntegrityIT extends AbstractIntegrationTest {
                 fixture.lines().stream().map(line -> inventory.get(line.reservation())).toList();
         var payment = payments.get(fixture.payment());
 
-        // Emulate legacy/corrupt stored metadata after a valid checkout and any preceding steps.
+        // Model a captured pre-upgrade aggregate before corrupting its metadata.
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, fixture.order());
         if (fault.equals("MISSING")) {
             jdbc.update(
                     "UPDATE orders.order_line SET reservation_id = NULL WHERE id = ?",
@@ -64,6 +65,7 @@ class OrderReferenceIntegrityIT extends AbstractIntegrationTest {
     @Test
     void verifiedCompleteRepairAllowsPlacementAndConfirmationAfterSafeRejection() {
         var fixture = createTwoLineDraft();
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, fixture.order());
         jdbc.update(
                 "UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?",
                 fixture.order());
@@ -139,7 +141,7 @@ class OrderReferenceIntegrityIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void historicalDraftCanBeCancelledWithoutFabricatingReferencesOrAnAudit() {
+    void historicalDraftCancellationRecordsApprovedExceptionsWithoutFabricatingReferences() {
         UUID historical = UUID.fromString("00000000-0000-0000-0000-000000000303");
         command(historical, "place", 409);
         command(historical, "cancel", 200);
@@ -154,7 +156,7 @@ class OrderReferenceIntegrityIT extends AbstractIntegrationTest {
                                 "SELECT count(*) FROM orders.terminal_reservation_reference_disposition WHERE order_id = ?",
                                 Long.class,
                                 historical))
-                .isZero();
+                .isEqualTo(2);
         given().auth()
                 .oauth2(TestSecurityConfig.adminToken())
                 .get("/api/v1/order-reservation-repairs/" + historical + "/terminal-dispositions")

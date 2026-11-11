@@ -139,6 +139,40 @@ public class PaymentIntentHandler {
     // Helpers
     // =========================================================================
 
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize(
+            "hasRole('admin') or hasAuthority('SCOPE_order.reconcile')")
+    public com.example.omp.proto.payment.FulfillmentDecision decideFulfillment(
+            com.example.omp.proto.payment.FulfillmentDecisionRequest request) {
+        var payment =
+                paymentRepository
+                        .lockForRefund(UUID.fromString(request.getPaymentId()))
+                        .orElseThrow(() -> new PaymentNotFoundException("Payment not found"));
+        if (!payment.getOrderId().equals(UUID.fromString(request.getOrderId())))
+            throw new IllegalArgumentException("Payment does not belong to order");
+        String action =
+                switch (request.getAction()) {
+                    case FULFILLMENT_ACTION_BEGIN -> "BEGIN";
+                    case FULFILLMENT_ACTION_SHIP -> "SHIP";
+                    case FULFILLMENT_ACTION_CANCEL -> "CANCEL";
+                    case FULFILLMENT_ACTION_ALLOW_REFUND -> "ALLOW_REFUND";
+                    default -> throw new IllegalArgumentException("Invalid fulfillment action");
+                };
+        if ("BEGIN".equals(action)
+                && payment.getRefunds().stream()
+                        .anyMatch(
+                                refund ->
+                                        refund.getStatus()
+                                                == com.example.omp.payment.domain.RefundStatus
+                                                        .PENDING))
+            throw new IllegalStateException("A refund is already pending");
+        payment.decideFulfillment(action);
+        return com.example.omp.proto.payment.FulfillmentDecision.newBuilder()
+                .setPayment(ProtoConverters.toProto(payment, moneyConverter))
+                .setState(payment.getFulfillmentState())
+                .build();
+    }
+
     private Payment findPayment(String idString) {
         UUID id;
         try {

@@ -23,6 +23,13 @@ import java.util.UUID;
 @Table(name = "order_line", schema = "orders")
 public class OrderLine {
 
+    @Column(name = "reservation_verified", nullable = false)
+    private boolean reservationVerified;
+
+    public boolean isReservationVerified() {
+        return reservationVerified;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
@@ -59,6 +66,7 @@ public class OrderLine {
             throw new IllegalStateException("Original reservation provenance cannot be replaced");
         this.reservationId = reservationId;
         this.reservationWarehouseId = warehouseId;
+        this.reservationVerified = true;
     }
 
     public UUID getReservationId() {

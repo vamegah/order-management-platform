@@ -11,4 +11,28 @@ public record PaymentIntentDto(
         String status,
         String providerReference,
         long createdAtEpochMillis,
-        long updatedAtEpochMillis) {}
+        long updatedAtEpochMillis,
+        String fulfillmentState) {
+    public PaymentIntentDto(
+            UUID id,
+            UUID orderId,
+            UUID customerId,
+            String amount,
+            String currency,
+            String status,
+            String providerReference,
+            long createdAtEpochMillis,
+            long updatedAtEpochMillis) {
+        this(
+                id,
+                orderId,
+                customerId,
+                amount,
+                currency,
+                status,
+                providerReference,
+                createdAtEpochMillis,
+                updatedAtEpochMillis,
+                "OPEN");
+    }
+}

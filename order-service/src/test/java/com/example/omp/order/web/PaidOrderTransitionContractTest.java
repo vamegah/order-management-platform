@@ -66,7 +66,7 @@ class PaidOrderTransitionContractTest {
                         new ShippingAddress("1 Main", null, "Chicago", "IL", "60601", "US"),
                         UUID.randomUUID());
         var line = new OrderLine(UUID.randomUUID(), "SKU", "Product", Money.usd("10"), 1);
-        line.setReservationId(UUID.randomUUID());
+        line.bindReservation(UUID.randomUUID(), "WH-1");
         order.addLine(line);
         order.place("customer");
         payment =
@@ -157,7 +157,8 @@ class PaidOrderTransitionContractTest {
                         cleanup,
                         mock(CheckoutJournal.class),
                         fulfillmentStore,
-                        fulfillment);
+                        fulfillment,
+                        mock(com.example.omp.order.service.OrderLifecycleCoordinator.class));
         mvc =
                 MockMvcBuilders.standaloneSetup(
                                 new OrderController(service, mock(PageableResolver.class)))
@@ -336,7 +337,8 @@ class PaidOrderTransitionContractTest {
     }
 
     @Test
-    void durablePendingShipmentCanRetryAfterRestartAndCannotBeCancelled() throws Exception {
+    void durablePendingShipmentCanRetryAfterRestartAndCancellationRemainsPending()
+            throws Exception {
         order.confirm("operator", "Paid");
         order.requestShipment("operator", "Shipment requested before restart");
         when(fulfillment.retryOrder(order.getId(), 100))
@@ -349,8 +351,12 @@ class PaidOrderTransitionContractTest {
                         .getResponse()
                         .getContentAsString();
         assertThat(response).doesNotContain("downstream-secret");
-        mvc.perform(post(path("cancel"))).andExpect(status().isConflict());
-        verifyNoInteractions(fulfillmentStore, events, cleanup);
+        mvc.perform(post(path("cancel")))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.status").value("CANCELLING"));
+        verify(cleanup).trackCancellation(eq(order.getId()), eq("operator"), isNull());
+        verifyNoInteractions(fulfillmentStore, events);
     }
 
     @Test

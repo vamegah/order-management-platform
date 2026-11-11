@@ -266,6 +266,7 @@ class OrderControllerIT extends AbstractIntegrationTest {
         Long version =
                 jdbc.queryForObject(
                         "SELECT version FROM orders.purchase_order WHERE id = ?", Long.class, id);
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, id);
         jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
         String body = repairBody(version, line.get("id"), line.get("reservation_id"));
         String path = "/api/v1/order-reservation-repairs/" + id;
@@ -312,6 +313,7 @@ class OrderControllerIT extends AbstractIntegrationTest {
         Long version =
                 jdbc.queryForObject(
                         "SELECT version FROM orders.purchase_order WHERE id = ?", Long.class, id);
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, id);
         jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
         given().auth()
                 .oauth2(TestSecurityConfig.adminToken())

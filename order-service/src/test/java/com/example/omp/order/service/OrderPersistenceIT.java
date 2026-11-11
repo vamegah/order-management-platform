@@ -210,6 +210,7 @@ class OrderPersistenceIT {
         assertThat(line.getReservationWarehouseId()).isEqualTo("WH-1");
         var intact = repairs.inspect(id);
         assertThat(intact.lines().getFirst().reservationWarehouseId()).isEqualTo("WH-1");
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, id);
         jdbc.update("UPDATE orders.order_line SET reservation_id = NULL WHERE order_id = ?", id);
         var missing = repairs.inspect(id);
         var plan = repairRequest(id, reservation);
@@ -249,9 +250,20 @@ class OrderPersistenceIT {
                 id.toString());
     }
 
+    private UUID legacyShared(UUID reservation) {
+        UUID id = create(UUID.randomUUID());
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, id);
+        jdbc.update(
+                "UPDATE orders.order_line SET reservation_id = ? WHERE order_id = ?",
+                reservation,
+                id);
+        return id;
+    }
+
     private UUID legacyOrder() {
         UUID id = create(UUID.randomUUID());
         // Reproduce pre-reference/pre-journal historical rows in this owned test database.
+        com.example.omp.order.LegacyReferenceFixture.capture(jdbc, id);
         jdbc.update(
                 "UPDATE orders.order_line SET reservation_id = NULL, reservation_warehouse_id = NULL WHERE order_id = ?",
                 id);
@@ -299,7 +311,9 @@ class OrderPersistenceIT {
     @Test
     void censusPagesAllLinesFindsMissingAndSharedReferencesWithoutWritingOrCallingInventory() {
         UUID missing = legacyOrder(), shared = UUID.randomUUID();
-        UUID first = create(shared), second = create(shared), healthy = create(UUID.randomUUID());
+        UUID first = legacyShared(shared),
+                second = legacyShared(shared),
+                healthy = create(UUID.randomUUID());
         var ids = List.of(missing, first, second, healthy);
         var before = ids.stream().map(repairs::inspect).toList();
         long auditsBefore =
@@ -698,7 +712,8 @@ class OrderPersistenceIT {
                 "PAYMENT_STATUS_CONFIRMED",
                 "pi-confirmed",
                 0,
-                0);
+                0,
+                "SHIPPED");
     }
 
     @Test
@@ -824,6 +839,34 @@ class OrderPersistenceIT {
                                     .isFalse();
                             return payment(id);
                         });
+        when(payments.decide(
+                        any(),
+                        eq(id),
+                        eq(
+                                com.example.omp.proto.payment.FulfillmentAction
+                                        .FULFILLMENT_ACTION_BEGIN)))
+                .thenAnswer(
+                        call -> {
+                            var p = payment(id);
+                            return new com.example.omp.order.clients.grpc.dto.PaymentIntentDto(
+                                    p.id(),
+                                    p.orderId(),
+                                    p.customerId(),
+                                    p.amount(),
+                                    p.currency(),
+                                    p.status(),
+                                    p.providerReference(),
+                                    0,
+                                    0,
+                                    "FULFILLING");
+                        });
+        when(payments.decide(
+                        any(),
+                        eq(id),
+                        eq(
+                                com.example.omp.proto.payment.FulfillmentAction
+                                        .FULFILLMENT_ACTION_SHIP)))
+                .thenAnswer(call -> payment(id));
         var queue =
                 new OrderFulfillmentQueue(
                         fulfillment,
@@ -843,7 +886,7 @@ class OrderPersistenceIT {
                 order -> {
                     var second =
                             new OrderLine(UUID.randomUUID(), "SKU-2", "Second", Money.usd("10"), 1);
-                    second.setReservationId(UUID.randomUUID());
+                    second.bindReservation(UUID.randomUUID(), "WH-1");
                     order.addLine(second);
                     order.place("customer");
                     order.confirm("operator", "Paid");

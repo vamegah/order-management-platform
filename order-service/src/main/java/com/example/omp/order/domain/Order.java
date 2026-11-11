@@ -308,7 +308,10 @@ public class Order {
 
     /** Cancels the order. Allowed from DRAFT, PLACED, and CONFIRMED. */
     public void cancel(String by, String reason) {
-        transitionTo(OrderStatus.CANCELLED, reason, by);
+        transitionTo(
+                status == OrderStatus.FULFILLING ? OrderStatus.CANCELLING : OrderStatus.CANCELLED,
+                reason,
+                by);
     }
 
     private void transitionTo(OrderStatus next, String reason, String by) {
@@ -349,7 +352,11 @@ public class Order {
     private void requireReservationReferences() {
         requireAtLeastOneLine();
         if (lines.size() > 100
-                || lines.stream().anyMatch(line -> line.getReservationId() == null)
+                || lines.stream()
+                        .anyMatch(
+                                line ->
+                                        line.getReservationId() == null
+                                                || !line.isReservationVerified())
                 || lines.stream().map(OrderLine::getReservationId).distinct().count()
                         != lines.size()) {
             throw new IllegalStateException(

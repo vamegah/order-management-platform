@@ -72,6 +72,7 @@ public class RefundStore {
             }
             return existing;
         }
+        payment.requireRefundAllowed();
         requireProvider(payment, provider);
         if (!payment.getStatus().isRefundable())
             throw new IllegalStateException("Payment is not refundable");
