@@ -135,9 +135,10 @@ Reuse the existing journal, cleanup/fulfillment queues, leases and scoped identi
   duplicate requests and failed compensation. Stage 5 extends this same matrix
   with provider SCA and delayed outcomes rather than creating a second contract.
 
-**Suggested batches:** deployed scheduled recovery; historical repair/reference
-closure; coordinated expiry and compensation/fencing; complete transition matrix
-and stage acceptance. Item 1.4 (immutable public order lines) remains accepted.
+**Status (2026-11-10): Complete.** Deployed scheduled recovery, historical
+reference closure, coordinated expiry and compensation, and transition acceptance
+all pass. Immutable public order lines remain the documented policy; see the final
+[implementation evidence](task-implementation-report.md#core-order-lifecycle-closeout-2026-11-10).
 
 ## 2. Complete REST and GraphQL public APIs
 

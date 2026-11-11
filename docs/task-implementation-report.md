@@ -2823,3 +2823,26 @@ the three open section 8 items keep their acceptance criteria. Partial lifecycle
 milestones do not close unresolved historical ownership, cancellation discovery,
 committed-stock compensation, refund/fulfillment fencing or accepted-order expiry.
 No application, migration, test or CI policy changes are part of this review.
+
+## Core Order Lifecycle closeout (2026-11-10)
+
+Section 1 is complete. The upgrade-time integrity gate now resolves every seeded
+legacy order: active orders have verified reservation references, while approved
+historical exceptions are explicitly audited. The only seeded active row with no
+recoverable reservation, order 302, is canceled through the lifecycle coordinator;
+its synthetic confirmed payment is refunded and the durable cleanup task completes.
+Migration V9 identifies only the exact bundled order-302 test payment as `noop`
+using its known ID, order, idempotency key, provider reference and prior status.
+Other provider-unknown historical payments are unchanged.
+
+The deployed `CoreLifecycleAcceptanceIT` suite passes all four cases without
+failures, errors or skips. It exercises automatic accepted-order expiry, cleanup,
+partial inventory commit and restock across a real service restart, concurrent
+refund/shipment fencing, historical integrity and administrator-only retry. The
+order, inventory and payment module verification builds pass with static analysis.
+The
+ordinary end-to-end, recovery and lifecycle reports contain 30 executed cases and
+pass the evidence integrity checker. These results supersede earlier continuation
+notes in this report that described historical active-order and accepted-order
+expiry coordination as open. Local inventory/payment gRPC authentication logging no longer writes bearer credentials.
+The projected identity still passes the deployed lifecycle worker acceptance.

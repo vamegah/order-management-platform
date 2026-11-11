@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.example.omp.order.clients.grpc.*;
 import com.example.omp.order.clients.grpc.dto.PaymentIntentDto;
 import com.example.omp.order.clients.grpc.interceptor.AuthForwardingInterceptor;
+import com.example.omp.order.clients.grpc.interceptor.ServiceTokenScope;
 import com.example.omp.order.domain.*;
 import com.example.omp.proto.inventory.*;
 import com.example.omp.proto.payment.FulfillmentAction;
@@ -231,6 +232,20 @@ class OrderFulfillmentQueueTest {
                         FulfillmentAction.FULFILLMENT_ACTION_SHIP);
         ordered.verify(store).finish(order.getId(), payment);
         assertThat(metrics.get("order.fulfillment.completed").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void shipmentUsesProjectedIdentityInsteadOfRelayingTheRequestToken(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        var tokenFile = directory.resolve("access.jwt");
+        java.nio.file.Files.writeString(tokenFile, "header.payload.signature");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                queue, "tokenFile", tokenFile.toString());
+
+        assertThat(queue.retryOrder(order.getId(), 100)).isEqualTo(1);
+
+        assertThat(tokens).containsOnly("Bearer header.payload.signature");
+        assertThat(ServiceTokenScope.isActive()).isFalse();
     }
 
     @Test

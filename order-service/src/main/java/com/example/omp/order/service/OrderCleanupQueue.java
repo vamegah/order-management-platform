@@ -4,6 +4,7 @@ import com.example.omp.order.clients.grpc.InventoryClient;
 import com.example.omp.order.clients.grpc.PaymentClient;
 import com.example.omp.order.clients.grpc.dto.PaymentIntentDto;
 import com.example.omp.order.clients.grpc.dto.ReservationDto;
+import com.example.omp.order.clients.grpc.interceptor.ServiceTokenScope;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Durable, leased cleanup work. RPCs run outside database transactions using caller authentication.
+ * Durable, leased cleanup work. RPCs run outside database transactions using the scoped order
+ * workload identity when configured.
  */
 @Service
 public class OrderCleanupQueue {
@@ -25,6 +27,9 @@ public class OrderCleanupQueue {
     private final InventoryClient inventory;
     private final PaymentClient payments;
     private final MeterRegistry metrics;
+
+    @org.springframework.beans.factory.annotation.Value("${omp.order.recovery.token-file:}")
+    private String tokenFile = "";
 
     public OrderCleanupQueue(
             JdbcTemplate jdbc,
@@ -106,6 +111,11 @@ public class OrderCleanupQueue {
     public int retryOrder(UUID orderId, int limit) {
         if (limit < 1 || limit > 100)
             throw new IllegalArgumentException("Cleanup limit must be 1..100");
+        return ServiceTokenScope.withProjectedIdentity(
+                tokenFile, () -> retryOrderWithIdentity(orderId, limit));
+    }
+
+    private int retryOrderWithIdentity(UUID orderId, int limit) {
         if (org.springframework.transaction.support.TransactionSynchronizationManager
                 .isActualTransactionActive())
             throw new IllegalStateException("Cleanup RPCs require no ambient transaction");

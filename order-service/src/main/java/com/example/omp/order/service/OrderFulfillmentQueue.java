@@ -3,6 +3,7 @@ package com.example.omp.order.service;
 import com.example.omp.order.clients.grpc.InventoryClient;
 import com.example.omp.order.clients.grpc.PaymentClient;
 import com.example.omp.order.clients.grpc.dto.ReservationDto;
+import com.example.omp.order.clients.grpc.interceptor.ServiceTokenScope;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,9 @@ public class OrderFulfillmentQueue {
     private final MeterRegistry metrics;
     private final PaymentClient payments;
     private final OrderTransactionService orders;
+
+    @org.springframework.beans.factory.annotation.Value("${omp.order.recovery.token-file:}")
+    private String tokenFile = "";
 
     public OrderFulfillmentQueue(
             OrderFulfillmentStore store,
@@ -35,6 +39,11 @@ public class OrderFulfillmentQueue {
     public int retryOrder(UUID orderId, int limit) {
         if (limit < 1 || limit > 100)
             throw new IllegalArgumentException("Fulfillment limit must be 1..100");
+        return ServiceTokenScope.withProjectedIdentity(
+                tokenFile, () -> retryOrderWithIdentity(orderId, limit));
+    }
+
+    private int retryOrderWithIdentity(UUID orderId, int limit) {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Fulfillment RPCs require a committed shipment intent");
         if (Thread.currentThread().isInterrupted()) return 0;
