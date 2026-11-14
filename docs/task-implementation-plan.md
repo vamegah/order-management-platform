@@ -4,7 +4,7 @@
 > **Last reviewed:** 2026-11-14
 
 Deliver the remaining unchecked items in [TASKS.md](../TASKS.md), following its
-section order. Sections 1 and 2 are complete; preserve all accepted behavior and
+section order. Sections 1, 2 and 3 are complete; preserve all accepted behavior and
 regression coverage. Items 3.3 and 6.5 are retained below as accepted
 records after the completed-task review. The IDs below identify existing backlog
 items, not additional completion requirements. Section 8 documentation and final release
@@ -40,7 +40,7 @@ before rebuilding working features or reopening accepted fixes.
 | --- | ---: | --- | --- |
 | 1. Core lifecycle | 0 | Durable references, compensation, coordinated expiry and safe transitions | Real deployed failures recover with conserved inventory and correct payment outcomes |
 | 2. Public APIs | 0 | Published OpenAPI and external REST/GraphQL compatibility tests | Contract drift, authorization, pagination and errors checked in required CI |
-| 3. gRPC | 3 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
+| 3. gRPC | 0 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
 | 4. Events and WebSockets | 5 | Versioned events, complete outbox coverage, quarantine/replay and secure real-time delivery | Crash/replay/ownership tests and measured 1,000-client run |
 | 5. Payments and webhooks | 6 | Real simulator integration, tokenized payments/SCA, asynchronous refunds and secure delivery | Provider outcome, signature, SSRF, recovery and load scenarios pass |
 | 6. SOAP | 4 | Deployed secured banking flow, stable faults and safe resilience | Trusted-TLS journey, duplicate-transfer prevention and contract gates pass |
@@ -182,26 +182,26 @@ clients, TLS tooling, production topology and deployed contract suites.
 
 ### 3.1 Validate all gRPC patterns end to end
 
-- **Implement:** Derive an RPC inventory from descriptors and track positive,
+- **Implemented:** Derive an RPC inventory from descriptors and track positive,
   business-error, authorization, deadline and cancellation coverage per RPC.
   Add the bidirectional `CheckAvailabilityStream` read API alongside existing
   unary, client-streaming and server-streaming calls. Replies correlate by request
   order. A one-request inbound window and one pending reply bound each session;
   bulk requests additionally bound item count and serialized size. Apply
   cancellation cleanup and bounded buffering to every streaming pattern.
-- **Close when:** Containerized JWT/mTLS tests cover every RPC and all four
+- **Validated:** Containerized JWT/mTLS tests cover every RPC and all four
   patterns. Slow readers, invalid messages, early cancellation and expired
   deadlines leave bounded memory and no leaked subscribers/tasks. Descriptor
   coverage checks reject a newly added RPC with missing required cases.
 
 ### 3.2 Make stream fan-out multi-replica safe
 
-- **Implement:** Complete the already selected supported topology: one inventory
+- **Implemented:** Complete the already selected supported topology: one inventory
   and one payment replica, enforced after all deployment overrides. Test
   process/container replacement, reconnect/resubscribe and canonical-state
   reconciliation. Apply the same policy to the bidirectional query sessions.
   Notification replicas are tested independently in stage 4.
-- **Close when:** Forbidden scaling/overlap configurations fail CI; a subscriber
+- **Validated:** Forbidden scaling/overlap configurations fail CI; a subscriber
   reconnects after replacement and converges to authoritative state, including
   changes made while disconnected. Document the service interruption and absence
   of durable stream replay. Cross-replica inventory/payment fan-out is a future
@@ -223,14 +223,18 @@ linked above; [TASKS.md](../TASKS.md) records the source-bound evidence.
 
 ### 3.4 Harden internal transport
 
-- **Implement:** Externalize trust/identity provisioning and implement overlapping
+- **Implemented:** Externalize trust/identity provisioning and implement overlapping
   trust-bundle rotation plus certificate/channel reload. The single-replica
   topology requires reload without stopping its service to meet rotation
   acceptance. Add controlled credential expiry and least-privilege checks.
-- **Close when:** Plaintext, absent/wrong-CA/expired client certificates, wrong
+- **Validated:** Plaintext, absent/wrong-CA/expired client certificates, wrong
   server identity and invalid bearer callers are rejected. Continuous authorized
   calls succeed through leaf and CA rotation, old trust is retired, streams
   reconnect safely where required, and no secret is retained in logs/artifacts.
+
+Section 3 acceptance passes all 82 deployed cases and every required CI job at
+`bbf6df8`: [verified workflow](https://github.com/vamegah/order-management-platform/actions/runs/43639186455).
+The descriptor-derived matrix covers nineteen RPCs and all required scenarios.
 
 ## 4. Make events and WebSockets durable and secure
 

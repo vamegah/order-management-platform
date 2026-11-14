@@ -2896,3 +2896,39 @@ closed by this supporting deployment.
 Two additional provider contract cases connect the published Noop/Stripe header
 names to their actual signature verifiers, including modified-body and bearer-header
 rejection. Both pass.
+
+## Production gRPC closeout (2026-11-14)
+
+Section 3 is complete. The additive bidirectional availability RPC uses one inbound
+request credit and one pending reply. Bulk input is bounded to 100 items of 4096
+serialized bytes each, including unknown fields, while preserving per-item business
+failures and idempotent replay. Stock/payment streams publish immutable snapshots
+after commit across gRPC, REST and provider mutations; PostgreSQL rollback checks
+prove that aborted writes do not emit notifications.
+
+The supported topology remains one inventory/payment replica with stop-first
+updates and rollbacks. Real replacements prove resubscription, missed-state
+reconciliation and subsequent stock/payment delivery, plus reopened bidirectional
+queries. Resolved production configuration rejects unsafe scaling and TLS overrides.
+
+Workloads consume read-only identity and public-trust directories; signing keys
+stay on the issuer host. A supervised signer renews leaves. Validated server/client
+TLS contexts switch atomically, with separate session caches preventing an in-flight
+handshake from restoring old resumption state. Existing HTTP/2 transports remain
+open. Deployed acceptance covers continuous calls and live streams across leaf
+renewal, expanded old+new CA trust, replacement leaves and retirement of the old
+root. Still-valid old-root clients are rejected on new handshakes. Plaintext, missing
+or untrusted clients, expired certificates, incorrect EKUs, untrusted server roots
+and wrong hostnames are rejected.
+
+All 82 production-profile deployed cases pass without failures, errors or skips.
+The matrix records all nineteen fully qualified RPCs with positive, error, missing
+and invalid identity, deadline and cancellation evidence. All 69 verification-tooling
+tests pass. All fourteen exact-base unit-coverage comparisons pass: shared gRPC
+remains at 100%, inventory rises to 89.571899% and payment to 74.529933%.
+
+[PR #24](https://github.com/vamegah/order-management-platform/pull/24), implementation
+`bbf6df8`, passes all twenty-two required jobs in the
+[verified workflow](https://github.com/vamegah/order-management-platform/actions/runs/43639186455). Source-bound CI artifacts and their hashes are retained
+in `coverage/grpc-production-ci-evidence/metadata.json`. The supported procedure is
+in [gRPC production operation](grpc-production.md).
