@@ -21,6 +21,18 @@ public class RefundController {
     }
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "Refund completed",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "202",
+            description = "Refund pending; retry with the same caller key",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "422",
+            description = "Refund failed",
+            useReturnTypeSchema = true)
     @org.springframework.security.access.prepost.PreAuthorize(
             "@paymentAccess.canAccess(#paymentId, authentication)")
     public ResponseEntity<RefundResponse> refund(
@@ -48,10 +60,12 @@ public class RefundController {
             long amountMinor,
             String currency,
             String status,
-            String providerReference,
-            String reason,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String providerReference,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String reason,
             String createdAt,
-            String completedAt) {
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String completedAt) {
         static RefundResponse from(Refund r) {
             return new RefundResponse(
                     r.getId(),

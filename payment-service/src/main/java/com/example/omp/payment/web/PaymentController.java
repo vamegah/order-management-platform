@@ -27,6 +27,22 @@ public class PaymentController {
     }
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "Charge confirmed",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "202",
+            description = "Customer action required",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "402",
+            description = "Charge declined",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "502",
+            description = "Provider outcome unavailable",
+            useReturnTypeSchema = true)
     public ResponseEntity<ChargeResponse> charge(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChargeHttpRequest body) {
         String claim = jwt.getClaimAsString("customer_id");
@@ -75,11 +91,15 @@ public class PaymentController {
 
     public record ChargeResponse(
             String result,
-            UUID paymentId,
-            String providerReference,
-            String failureCode,
-            String failureMessage,
-            String requiresActionUrl) {
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) UUID paymentId,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String providerReference,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String failureCode,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String failureMessage,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String requiresActionUrl) {
         static ChargeResponse from(ChargeOutcome o) {
             return new ChargeResponse(
                     o.result(),
@@ -94,18 +114,23 @@ public class PaymentController {
     public record PaymentResponse(
             UUID id,
             UUID orderId,
-            UUID customerId,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) UUID customerId,
             long amountMinor,
             String currency,
             String status,
             String provider,
-            String providerReference,
-            String failureCode,
-            String failureMessage,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String providerReference,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String failureCode,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String failureMessage,
             String createdAt,
-            String capturedAt,
-            String failedAt,
-            String refundedAt) {
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String capturedAt,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String failedAt,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String refundedAt) {
         static PaymentResponse from(Payment p) {
             return new PaymentResponse(
                     p.getId(),

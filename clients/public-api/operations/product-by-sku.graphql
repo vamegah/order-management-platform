@@ -1,0 +1,1 @@
+query ProductBySku($sku: String!) { productBySku(sku: $sku) { id sku name status } }

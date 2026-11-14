@@ -1,0 +1,115 @@
+# Isolated acceptance only: published REST, development GraphQL and production GraphQL.
+# Combine with base, e2e, lifecycle and recovery-projector overlays.
+services:
+  traefik:
+    labels: !reset []
+    command: !override
+      - --ping=true
+      - --entrypoints.traefik.address=127.0.0.1:8080
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME:?Use an isolated public API project}_edge
+      - '--providers.docker.constraints=Label(`com.docker.compose.project`,`${COMPOSE_PROJECT_NAME}`)'
+      - --entrypoints.web.address=:80
+      - --log.level=INFO
+    networks:
+      edge:
+        aliases: [keycloak.localhost, product-service.localhost, customer-service.localhost,
+                  order-service.localhost, notification.localhost, payment-service.localhost,
+                  banking.localhost, graphql.localhost, graphql-prod.localhost]
+  order-service:
+    depends_on:
+      order-recovery-token:
+        condition: service_healthy
+  payment-service:
+    environment:
+      PAYMENT_PROVIDER: noop
+      STRIPE_API_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+  graphql-gateway:
+    environment:
+      OMP_GRAPHQL_PROTECTION_REQUESTSPERWINDOW: "60"
+      JAVA_TOOL_OPTIONS: -Xmx256m
+    healthcheck:
+      start_period: 180s
+      retries: 20
+      interval: 10s
+  graphql-gateway-prod:
+    image: omp/graphql-gateway:1.0.0-SNAPSHOT
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      OMP_DOMAIN: acceptance.localhost
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+      PRODUCT_SERVICE_URL: http://product-service:8081
+      CUSTOMER_SERVICE_URL: http://customer-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OMP_GRAPHQL_PROTECTION_REQUESTSPERWINDOW: "60"
+      JAVA_TOOL_OPTIONS: -Xmx256m
+    depends_on:
+      keycloak: {condition: service_healthy}
+      product-service: {condition: service_healthy}
+      customer-service: {condition: service_healthy}
+      order-service: {condition: service_healthy}
+    networks: [edge, app]
+    deploy:
+      resources:
+        limits: {memory: 512M, cpus: "1.0"}
+    healthcheck:
+      test: [CMD, wget, -q, -O, '-', 'http://localhost:8000/actuator/health']
+      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.graphql-public-api-prod.rule=Host(`graphql-prod.localhost`)
+      - traefik.http.routers.graphql-public-api-prod.entrypoints=web
+      - traefik.http.routers.graphql-public-api-prod.service=graphql-public-api-prod
+      - traefik.http.services.graphql-public-api-prod.loadbalancer.server.port=8000
+  legacy-bank-service:
+    healthcheck:
+      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      SERVER_SSL_KEYSTORE: file:/run/bank-tls/tls.p12
+      SERVER_SSL_KEYSTOREPASSWORD: ${PUBLIC_API_TLS_PASSWORD:-public-api-acceptance}
+      SERVER_SSL_KEYALIAS: legacy-bank-service
+      JAVA_TOOL_OPTIONS: -Xmx256m
+    volumes:
+      - type: bind
+        source: ./infrastructure/tls/legacy-bank-service/tls.p12
+        target: /run/bank-tls/tls.p12
+        read_only: true
+        bind: {create_host_path: false}
+    deploy:
+      resources:
+        limits: {memory: 512M, cpus: "0.75"}
+  legacy-banking-adapter:
+    environment:
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+      BANK_WS_URL: https://legacy-bank-service:8443/ws
+      JAVA_TOOL_OPTIONS: >-
+        -Xmx256m
+        -Djavax.net.ssl.trustStore=/run/bank-tls/truststore.p12
+        -Djavax.net.ssl.trustStorePassword=${PUBLIC_API_TLS_PASSWORD:-public-api-acceptance}
+    volumes:
+      - type: bind
+        source: ./infrastructure/tls/legacy-bank-service/truststore.p12
+        target: /run/bank-tls/truststore.p12
+        read_only: true
+        bind: {create_host_path: false}
+    deploy:
+      resources:
+        limits: {memory: 512M, cpus: "0.75"}
+    healthcheck:
+      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 20

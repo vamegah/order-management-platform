@@ -1,0 +1,1 @@
+query Product($id: ID!) { product(id: $id) { id sku name description status price { amount currency } images { id url altText sortOrder } } }

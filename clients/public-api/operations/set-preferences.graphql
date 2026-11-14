@@ -1,0 +1,1 @@
+mutation SetPreferences($customerId: ID!, $input: CustomerPreferencesInput!) { setCustomerPreferences(customerId: $customerId, input: $input) { locale currency marketingOptIn notificationEmail notificationSms } }

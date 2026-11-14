@@ -42,17 +42,19 @@ public record OrderDto(
     @Schema(description = "Shipping address snapshot")
     public record ShippingAddressDto(
             String line1,
-            String line2,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String line2,
             String city,
-            String state,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String state,
             String postalCode,
             String country) {}
 
     @Schema(description = "Status history entry")
     public record OrderStatusHistoryDto(
-            String fromStatus,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String fromStatus,
             String toStatus,
-            String reason,
-            String changedBy,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String reason,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String changedBy,
             Instant changedAt) {}
 }

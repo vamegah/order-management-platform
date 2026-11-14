@@ -1,0 +1,1 @@
+query CustomerOrders($id: ID!, $limit: Int = 2) { customer(id: $id) { id orders(limit: $limit) { id orderNumber customerId status total { amount currency } } } }

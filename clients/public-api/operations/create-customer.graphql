@@ -1,0 +1,1 @@
+mutation CreateCustomer($input: CreateCustomerInput!) { createCustomer(input: $input) { id email firstName lastName status dateOfBirth createdAt preferences { locale currency marketingOptIn notificationEmail notificationSms } } }

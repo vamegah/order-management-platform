@@ -86,7 +86,7 @@ spring:
           jwk-set-uri: ${OIDC_JWK_SET_URI:http://keycloak:8080/realms/omp/protocol/openid-connect/certs}
 
   # ----------------------------------------------------------------------------
-  # No `server:` block. There is no Tomcat.
+  # Business HTTP endpoints use port 8080; gRPC and management use separate ports.
   # ----------------------------------------------------------------------------
 
 
@@ -233,3 +233,13 @@ logging:
     io.grpc: INFO
   pattern:
     console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+
+springdoc:
+  api-docs:
+    version: OPENAPI_3_1
+    enabled: ${API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}

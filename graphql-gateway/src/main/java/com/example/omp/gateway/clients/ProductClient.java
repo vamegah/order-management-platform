@@ -37,11 +37,11 @@ public interface ProductClient {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String sort);
 
-    @PostMapping("/api/v1/products")
+    @PostMapping(value = "/api/v1/products", consumes = "application/json")
     @CircuitBreaker(name = "productClient")
     ProductClientDto createProduct(@RequestBody CreateProductRequest request);
 
-    @PutMapping("/api/v1/products/{id}")
+    @PutMapping(value = "/api/v1/products/{id}", consumes = "application/json")
     @CircuitBreaker(name = "productClient")
     ProductClientDto updateProduct(
             @PathVariable("id") UUID id, @RequestBody UpdateProductRequest request);

@@ -37,9 +37,28 @@ class BankingAdapterBoundaryTest {
     @Autowired private WebServiceTemplate soap;
     private MockWebServiceServer bank;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    org.springframework.security.oauth2.jwt.JwtDecoder decoder;
+
     @BeforeEach
     void prepare() {
         bank = MockWebServiceServer.createServer(soap);
+        org.mockito.Mockito.when(decoder.decode("boundary-admin"))
+                .thenReturn(
+                        org.springframework.security.oauth2.jwt.Jwt.withTokenValue("boundary-admin")
+                                .header("alg", "RS256")
+                                .subject("boundary-admin")
+                                .claim(
+                                        "realm_access",
+                                        java.util.Map.of("roles", java.util.List.of("admin")))
+                                .build());
+        http.getRestTemplate()
+                .setInterceptors(
+                        java.util.List.of(
+                                (request, body, execution) -> {
+                                    request.getHeaders().setBearerAuth("boundary-admin");
+                                    return execution.execute(request, body);
+                                }));
     }
 
     private TransferRequest transfer(String amount) {

@@ -1,0 +1,1 @@
+query Customer($id: ID!) { customer(id: $id) { id email firstName lastName status dateOfBirth createdAt updatedAt addresses { id city addressType } preferences { locale currency marketingOptIn notificationEmail notificationSms } } }

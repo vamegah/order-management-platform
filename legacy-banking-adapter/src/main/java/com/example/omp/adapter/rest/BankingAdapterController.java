@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/banking")
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('admin')")
 public class BankingAdapterController {
     private final BankingPort bankingPort;
     private final IdempotencyStore idempotencyStore;

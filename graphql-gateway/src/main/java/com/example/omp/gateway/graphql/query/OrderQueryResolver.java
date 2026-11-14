@@ -31,8 +31,20 @@ public class OrderQueryResolver {
     @PreAuthorize("hasRole('admin')")
     public OrderPageDto orders(
             @Argument Map<String, Object> filter, @Argument Integer page, @Argument Integer size) {
-        if (text(filter, "placedAfter") != null || text(filter, "placedBefore") != null)
-            throw new IllegalArgumentException("Date filters are not supported by the order API");
+        var after = placedDate(filter, "placedAfter");
+        var before = placedDate(filter, "placedBefore");
+        if (after != null && before != null && after.isAfter(before))
+            throw new IllegalArgumentException("Invalid placement interval");
+        if (after != null || before != null)
+            return client.listOrdersByPlacement(
+                    id(filter, "customerId"),
+                    text(filter, "status"),
+                    text(filter, "orderNumber"),
+                    page(page),
+                    size(size),
+                    null,
+                    after,
+                    before);
         return client.listOrders(
                 id(filter, "customerId"),
                 text(filter, "status"),
@@ -40,5 +52,16 @@ public class OrderQueryResolver {
                 page(page),
                 size(size),
                 null);
+    }
+
+    private static java.time.Instant placedDate(Map<String, Object> filter, String name) {
+        if (filter == null || filter.get(name) == null) return null;
+        Object value = filter.get(name);
+        if (value instanceof java.time.Instant instant) return instant;
+        try {
+            return java.time.OffsetDateTime.parse(value.toString()).toInstant();
+        } catch (java.time.DateTimeException failure) {
+            throw new IllegalArgumentException("Invalid placement date");
+        }
     }
 }

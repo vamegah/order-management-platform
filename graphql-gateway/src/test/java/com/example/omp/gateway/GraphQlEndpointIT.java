@@ -32,7 +32,7 @@ import org.springframework.test.context.ActiveProfiles;
  * AbstractGraphQlTest}. The gateway's Feign clients point at those servers (via
  * {@code @DynamicPropertySource}).
  *
- * <p><b>Note on HTTP status codes:</b> GraphQL always returns HTTP 200 — even for business errors
+ * <p><b>Note on HTTP status codes:</b> GraphQL always returns HTTP 200 â€” even for business errors
  * like NOT_FOUND or FORBIDDEN. Errors appear in the response body's {@code errors} array. Only auth
  * failures (missing/invalid JWT) return 401, because they're rejected before GraphQL execution
  * begins.
@@ -110,7 +110,7 @@ class GraphQlEndpointIT extends AbstractGraphQlTest {
     }
 
     // =========================================================================
-    // Authorization — GraphQL returns 200 with errors[]
+    // Authorization â€” GraphQL returns 200 with errors[]
     // =========================================================================
 
     @Test
@@ -125,7 +125,7 @@ class GraphQlEndpointIT extends AbstractGraphQlTest {
                 .when()
                 .post("/graphql")
                 .then()
-                .statusCode(200) // NOT 403 — GraphQL semantics
+                .statusCode(200) // NOT 403 â€” GraphQL semantics
                 .body("data.createCustomer", nullValue())
                 .body("errors", hasSize(1))
                 .body("errors[0].extensions.code", equalTo("FORBIDDEN"));
@@ -224,7 +224,7 @@ class GraphQlEndpointIT extends AbstractGraphQlTest {
     }
 
     // =========================================================================
-    // Cross-service query — one HTTP request, multiple downstream calls
+    // Cross-service query â€” one HTTP request, multiple downstream calls
     // =========================================================================
 
     @Test
@@ -242,7 +242,7 @@ class GraphQlEndpointIT extends AbstractGraphQlTest {
         WireMockDownstreamConfig.stubProduct(
                 PRODUCT_ID, "LAPTOP-PRO-14", "Pro Laptop", "2499.99", "USD");
 
-        // One GraphQL query → three downstream calls (order, customer, product).
+        // One GraphQL query â†’ three downstream calls (order, customer, product).
         given().auth()
                 .oauth2(TestSecurityConfig.aliceToken())
                 .contentType(ContentType.JSON)
@@ -290,5 +290,41 @@ class GraphQlEndpointIT extends AbstractGraphQlTest {
                 .post("/graphql")
                 .then()
                 .statusCode(400); // Spring GraphQL validates the request envelope
+    }
+
+    @Test
+    void mutationForwardsJsonContentTypeAndAuthenticatedIdentity() {
+        UUID created = UUID.randomUUID();
+        WireMockDownstreamConfig.stubCreateProduct(
+                created, "JSON-CONTRACT", "JSON product", "12.50", "USD");
+        String query =
+                "mutation { createProduct(input:{sku:\"JSON-CONTRACT\",name:\"JSON product\",categoryId:\"00000000-0000-0000-0000-000000000001\",price:{amount:\"12.50\",currency:\"USD\"}}) { id } }";
+        given().auth()
+                .oauth2(TestSecurityConfig.adminToken())
+                .contentType(ContentType.JSON)
+                .body(Map.of("query", query))
+                .when()
+                .post("/graphql")
+                .then()
+                .statusCode(200)
+                .body("data.createProduct.id", equalTo(created.toString()))
+                .body("errors", nullValue());
+        productWireMock.verify(
+                com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
+                                com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo(
+                                        "/api/v1/products"))
+                        .withHeader(
+                                "Content-Type",
+                                com.github.tomakehurst.wiremock.client.WireMock.containing(
+                                        "application/json"))
+                        .withHeader(
+                                "Authorization",
+                                com.github.tomakehurst.wiremock.client.WireMock.equalTo(
+                                        "Bearer " + TestSecurityConfig.adminToken()))
+                        .withRequestBody(
+                                com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                                        "$.sku",
+                                        com.github.tomakehurst.wiremock.client.WireMock.equalTo(
+                                                "JSON-CONTRACT"))));
     }
 }

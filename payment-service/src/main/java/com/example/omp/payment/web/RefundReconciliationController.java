@@ -18,6 +18,22 @@ public class RefundReconciliationController {
     }
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "Refund reconciled",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "202",
+            description = "Reconciliation pending",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "409",
+            description = "Reconciliation blocked",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "422",
+            description = "Refund failed",
+            useReturnTypeSchema = true)
     public ResponseEntity<Response> reconcile(
             @PathVariable UUID paymentId,
             @PathVariable UUID refundId,

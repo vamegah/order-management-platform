@@ -145,6 +145,14 @@ class WebhookManagementIT extends AbstractNotificationTest {
     }
 
     @Test
+    void replayAliasRequiresAdministratorAndPreservesNotFoundSemantics() {
+        String path = "/api/v1/webhook-deliveries/" + UUID.randomUUID() + "/replay";
+        given().port(port).post(path).then().statusCode(401);
+        as(TestTokens.alice()).post(path).then().statusCode(403);
+        as(TestTokens.admin()).post(path).then().statusCode(404);
+    }
+
+    @Test
     void invalidRequestAndMalformedIdHaveClientErrorResponses() {
         as(TestTokens.alice())
                 .body(Map.of("name", "", "targetUrl", "file:///tmp/hook", "eventTypes", List.of()))

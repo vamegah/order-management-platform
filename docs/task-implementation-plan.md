@@ -1,11 +1,11 @@
 # Implementation plan for TASKS.md sections 1-7
 
 > **Status:** In progress; implementation and acceptance remain tracked in TASKS.md
-> **Last reviewed:** 2026-11-09
+> **Last reviewed:** 2026-11-14
 
-Deliver the **31 unchecked items** in [TASKS.md](../TASKS.md), following its section
-order. Seven other items in these sections are already checked; preserve their
-behavior and regression coverage. Items 3.3 and 6.5 are retained below as accepted
+Deliver the remaining unchecked items in [TASKS.md](../TASKS.md), following its
+section order. Sections 1 and 2 are complete; preserve all accepted behavior and
+regression coverage. Items 3.3 and 6.5 are retained below as accepted
 records after the completed-task review. The IDs below identify existing backlog
 items, not additional completion requirements. Section 8 documentation and final release
 acceptance remain a separate final milestone.
@@ -26,7 +26,7 @@ ownership/provenance, conflicting pointers and final constraints stay open.
 The completed-task review closes proto evolution (3.3) and WSDL drift protection
 (6.5): their compatibility regressions, clean client generation, exact-base PR
 checks and required protected CI all pass. Their original acceptance scope is
-preserved below. The remaining 31 items retain their completion gates.
+preserved below. Later open items retain their completion gates.
 Publication and merge actions follow the existing scoped approval agreement.
 
 Use the latest source-bound CI evidence and the dated continuations in the
@@ -38,8 +38,8 @@ before rebuilding working features or reopening accepted fixes.
 
 | Stage | Open items | Main deliverable | Gate before proceeding |
 | --- | ---: | --- | --- |
-| 1. Core lifecycle | 4 | Durable references, compensation, coordinated expiry and safe transitions | Real deployed failures recover with conserved inventory and correct payment outcomes |
-| 2. Public APIs | 2 | Published OpenAPI and external REST/GraphQL compatibility tests | Contract drift, authorization, pagination and errors checked in required CI |
+| 1. Core lifecycle | 0 | Durable references, compensation, coordinated expiry and safe transitions | Real deployed failures recover with conserved inventory and correct payment outcomes |
+| 2. Public APIs | 0 | Published OpenAPI and external REST/GraphQL compatibility tests | Contract drift, authorization, pagination and errors checked in required CI |
 | 3. gRPC | 3 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
 | 4. Events and WebSockets | 5 | Versioned events, complete outbox coverage, quarantine/replay and secure real-time delivery | Crash/replay/ownership tests and measured 1,000-client run |
 | 5. Payments and webhooks | 6 | Real simulator integration, tokenized payments/SCA, asynchronous refunds and secure delivery | Provider outcome, signature, SSRF, recovery and load scenarios pass |
@@ -141,6 +141,10 @@ all pass. Immutable public order lines remain the documented policy; see the fin
 [implementation evidence](task-implementation-report.md#core-order-lifecycle-closeout-2026-11-10).
 
 ## 2. Complete REST and GraphQL public APIs
+
+Accepted 2026-11-14: both remaining items are complete. See the
+[closeout evidence](task-implementation-report.md#rest-and-graphql-public-api-closeout-2026-11-14)
+and [executed public API acceptance procedure](public-api-contracts.md).
 
 Primary areas: public service controllers, `graphql-gateway`, `contracts`,
 `integration-tests`, contract tooling and `.github/workflows/verify.yml`.

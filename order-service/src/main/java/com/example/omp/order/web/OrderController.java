@@ -41,16 +41,37 @@ public class OrderController {
     // -------------------------------------------------------------------------
 
     @GetMapping
-    @Operation(summary = "List orders (admin only)")
-    @PreAuthorize("hasRole('admin')")
+    @Operation(
+            summary =
+                    "List orders: verified owner with an explicit customerId filter, or administrator")
+    @PreAuthorize(
+            "hasRole('admin') or (#customerId != null and #customerId.toString() == authentication.token.claims['customer_id'])")
     public PageResponse<OrderDto> list(
             @RequestParam(required = false) UUID customerId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String orderNumber,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String sort) {
-        OrderFilter filter = new OrderFilter(customerId, status, orderNumber, null, null);
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false)
+                    @org.springframework.format.annotation.DateTimeFormat(
+                            iso =
+                                    org.springframework.format.annotation.DateTimeFormat.ISO
+                                            .DATE_TIME)
+                    java.time.OffsetDateTime placedAfter,
+            @RequestParam(required = false)
+                    @org.springframework.format.annotation.DateTimeFormat(
+                            iso =
+                                    org.springframework.format.annotation.DateTimeFormat.ISO
+                                            .DATE_TIME)
+                    java.time.OffsetDateTime placedBefore) {
+        OrderFilter filter =
+                new OrderFilter(
+                        customerId,
+                        status,
+                        orderNumber,
+                        placedAfter == null ? null : placedAfter.toInstant(),
+                        placedBefore == null ? null : placedBefore.toInstant());
         return orderService.list(filter, pageableResolver.resolve(page, size, sort));
     }
 
@@ -77,6 +98,7 @@ public class OrderController {
     // -------------------------------------------------------------------------
 
     @PostMapping
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     @PreAuthorize(
             "hasRole('admin') or @orderAuthorization.ownsCustomer(#request.customerId(), authentication.token)")
     @Operation(summary = "Create a DRAFT order")
