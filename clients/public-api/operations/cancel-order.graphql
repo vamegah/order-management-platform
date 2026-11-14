@@ -1,0 +1,1 @@
+mutation CancelOrder($id: ID!, $reason: String) { cancelOrder(id: $id, reason: $reason) { id status statusHistory { fromStatus toStatus reason changedBy changedAt } } }

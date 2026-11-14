@@ -7,7 +7,6 @@ import com.example.omp.notification.webhook.dto.SubscriptionSecretResponse;
 import com.example.omp.notification.webhook.dto.UpdateSubscriptionRequest;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +32,7 @@ public class WebhookSubscriptionController {
     }
 
     @PostMapping
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ResponseEntity<SubscriptionSecretResponse> create(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateSubscriptionRequest request) {
@@ -87,13 +87,15 @@ public class WebhookSubscriptionController {
     }
 
     @PostMapping("/{id}/test")
-    public ResponseEntity<Map<String, String>> sendTest(
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ResponseEntity<TestDeliveryResponse> sendTest(
             @AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
 
         SubscriptionOwner owner = ownerResolver.resolve(jwt);
         WebhookSubscription sub = service.loadOwned(id, owner.type(), owner.id());
         UUID deliveryId = testPublisher.publishTest(sub);
-        return ResponseEntity.accepted()
-                .body(Map.of("deliveryId", deliveryId.toString(), "status", "queued"));
+        return ResponseEntity.accepted().body(new TestDeliveryResponse(deliveryId, "queued"));
     }
+
+    public record TestDeliveryResponse(UUID deliveryId, String status) {}
 }

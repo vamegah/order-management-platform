@@ -25,6 +25,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ProblemDetails> forbidden(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
@@ -32,6 +33,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> malformedJson(HttpServletRequest request) {
         return ResponseEntity.badRequest()
                 .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
@@ -40,6 +42,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(
             org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> invalidParameter(HttpServletRequest request) {
         return ResponseEntity.badRequest()
                 .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
@@ -47,6 +50,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     public ResponseEntity<ProblemDetails> unsupportedMediaType(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
@@ -54,6 +58,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ProblemDetails> handleConcurrentUpdate(
             org.springframework.dao.OptimisticLockingFailureException ex,
             HttpServletRequest request) {
@@ -63,6 +68,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OrderNotFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseEntity<ProblemDetails> handleOrderNotFound(
             OrderNotFoundException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -73,6 +79,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(CustomerNotFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseEntity<ProblemDetails> handleCustomerNotFound(
             CustomerNotFoundException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -86,6 +93,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidOrderStateException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ProblemDetails> handleInvalidState(
             InvalidOrderStateException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -94,6 +102,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({InvalidOrderDataException.class, ProductUnavailableException.class})
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> handleInvalidData(
             RuntimeException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -102,6 +111,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OrderAccessDeniedException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ProblemDetails> handleAccessDenied(
             OrderAccessDeniedException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -110,6 +120,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(DownstreamServiceException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_GATEWAY)
     public ResponseEntity<ProblemDetails> handleDownstream(
             DownstreamServiceException ex, HttpServletRequest request) {
         log.warn("Downstream failure: {}", ex.getMessage());
@@ -121,6 +132,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -129,6 +141,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<ProblemDetails> handleGeneric(Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception processing {}", request.getRequestURI(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -137,6 +150,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidPaginationException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> handleInvalidPagination(
             InvalidPaginationException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

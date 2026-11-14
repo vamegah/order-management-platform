@@ -1,0 +1,1 @@
+query Order($id: ID!) { order(id: $id) { id orderNumber customerId status placedAt notes createdAt updatedAt statusHistory { fromStatus toStatus reason changedBy changedAt } } }

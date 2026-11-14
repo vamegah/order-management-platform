@@ -8,9 +8,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
-public class BankingExceptionHandler {
+public class BankingExceptionHandler
+        extends org.springframework.web.servlet.mvc.method.annotation
+                .ResponseEntityExceptionHandler {
 
     @ExceptionHandler(com.example.omp.adapter.idempotency.IdempotencyConflictException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CONFLICT)
     public ProblemDetail handleIdempotencyConflict() {
         var problem =
                 ProblemDetail.forStatusAndDetail(
@@ -21,6 +24,30 @@ public class BankingExceptionHandler {
     }
 
     @ExceptionHandler(BankingException.class)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "400",
+            description = "Invalid banking request",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "404",
+            description = "Account not found",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "422",
+            description = "Banking request declined",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "429",
+            description = "Daily banking limit exceeded",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "502",
+            description = "Invalid upstream banking response",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "503",
+            description = "Banking service unavailable",
+            useReturnTypeSchema = true)
     public ProblemDetail handle(BankingException ex) {
         HttpStatus status = mapStatus(ex.getCode());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());

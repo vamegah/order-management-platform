@@ -1,0 +1,1 @@
+mutation DeactivateProduct($id: ID!) { deactivateProduct(id: $id) { id status } }

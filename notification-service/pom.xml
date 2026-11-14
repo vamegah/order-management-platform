@@ -38,6 +38,12 @@
          DEPENDENCIES
          ===================================================================== -->
     <dependencies>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
 
         <dependency>
             <groupId>com.example.omp</groupId>
@@ -314,8 +320,7 @@
             <artifactId>logstash-logback-encoder</artifactId>
         </dependency>
 
-        <!-- Note: no springdoc-openapi. WebSocket endpoints aren't REST;
-             no OpenAPI document is generated. -->
+        <!-- Springdoc publishes the webhook-management REST API. STOMP is documented separately. -->
 
         <!-- ================================================================
              Test dependencies

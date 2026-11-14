@@ -1,0 +1,1 @@
+query Orders($filter: OrderFilterInput, $page: Int = 0, $size: Int = 2) { orders(filter: $filter, page: $page, size: $size) { content { id orderNumber customerId status placedAt createdAt } page size totalElements totalPages first last } }

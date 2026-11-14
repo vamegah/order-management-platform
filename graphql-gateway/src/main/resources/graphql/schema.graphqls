@@ -1,27 +1,27 @@
 # ==============================================================================
-# Order Management Platform — GraphQL Schema
+# Order Management Platform â€” GraphQL Schema
 # ------------------------------------------------------------------------------
 # This schema is the public contract for the GraphQL gateway. It aggregates
 # three REST services:
-#   - product-service   → Product, Category types
-#   - customer-service  → Customer, Address, CustomerPreferences types
-#   - order-service     → Order, OrderLine, OrderStatusHistory types
+#   - product-service   â†’ Product, Category types
+#   - customer-service  â†’ Customer, Address, CustomerPreferences types
+#   - order-service     â†’ Order, OrderLine, OrderStatusHistory types
 #
 # CROSS-SERVICE FIELDS
 #   Some fields cross service boundaries:
-#     - Customer.orders            → resolved by calling order-service
-#     - Order.customer             → resolved by calling customer-service
-#     - Order.lines[].product      → resolved by calling product-service
-#   These are the "value" of GraphQL — one query, multiple services.
+#     - Customer.orders            â†’ resolved by calling order-service
+#     - Order.customer             â†’ resolved by calling customer-service
+#     - Order.lines[].product      â†’ resolved by calling product-service
+#   These are the "value" of GraphQL â€” one query, multiple services.
 #
 # NULLABILITY
 #   Fields are non-null (!) unless absence is meaningful. `[Order!]!` means
 #   "a list (never null) of non-null Order values (may be empty)."
 #
 # CUSTOM SCALARS
-#   - Date     — ISO 8601 date (yyyy-MM-dd)
-#   - DateTime — ISO 8601 timestamp with UTC offset
-#   - Decimal  — Arbitrary-precision decimal, serialized as String
+#   - Date     â€” ISO 8601 date (yyyy-MM-dd)
+#   - DateTime â€” ISO 8601 timestamp with UTC offset
+#   - Decimal  â€” Arbitrary-precision decimal, serialized as String
 #
 # ERROR MODEL
 #   GraphQL returns HTTP 200 even for business errors. Errors appear in the
@@ -53,7 +53,7 @@ scalar DateTime
 """
 An arbitrary-precision decimal, serialized as a String to preserve precision.
 Example: "2499.9900"
-Use Decimal for monetary amounts — GraphQL's Float loses precision.
+Use Decimal for monetary amounts â€” GraphQL's Float loses precision.
 """
 scalar Decimal
 
@@ -405,7 +405,7 @@ type OrderLine {
   "Quantity."
   quantity: Int!
 
-  "Line total (unit price × quantity)."
+  "Line total (unit price Ã— quantity)."
   lineTotal: Decimal!
 }
 
@@ -674,16 +674,16 @@ type Mutation {
   "Create a DRAFT order."
   createOrder(input: CreateOrderInput!): Order!
 
-  "Place the order (DRAFT → PLACED)."
+  "Place the order (DRAFT â†’ PLACED)."
   placeOrder(id: ID!): Order!
 
-  "Confirm the order (PLACED → CONFIRMED, admin only)."
+  "Confirm the order (PLACED â†’ CONFIRMED, admin only)."
   confirmOrder(id: ID!, reason: String): Order!
 
-  "Request or retry shipment (CONFIRMED → FULFILLING → SHIPPED, admin only)."
+  "Request or retry shipment (CONFIRMED â†’ FULFILLING â†’ SHIPPED, admin only)."
   shipOrder(id: ID!, reason: String): Order!
 
-  "Mark the order delivered (SHIPPED → DELIVERED, admin only)."
+  "Mark the order delivered (SHIPPED â†’ DELIVERED, admin only)."
   deliverOrder(id: ID!, reason: String): Order!
 
   "Cancel the order (owner or admin)."
@@ -701,7 +701,8 @@ type Mutation {
 type Subscription {
   """
   Emits whenever an order's status changes.
-  Implemented in Phase 4 (WebSocket integration).
+  Reserved declaration; GraphQL HTTP subscriptions are not supported.
+  Live order notifications use the separate STOMP transport.
   """
   orderStatusChanged(orderId: ID!): Order!
 }

@@ -11,6 +11,12 @@ public record OrderFilter(
         String orderNumber,
         Instant placedAfter,
         Instant placedBefore) {
+    public OrderFilter {
+        if (placedAfter != null && placedBefore != null && placedAfter.isAfter(placedBefore))
+            throw new com.example.omp.order.error.InvalidOrderDataException(
+                    "placedAfter must not exceed placedBefore");
+    }
+
     public static OrderFilter empty() {
         return new OrderFilter(null, null, null, null, null);
     }

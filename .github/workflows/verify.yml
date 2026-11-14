@@ -222,6 +222,110 @@ jobs:
         if: always()
         run: docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.recovery.yml -f docker-compose.recovery-projector.yml -f docker-compose.recovery-acceptance.yml down --volumes --remove-orphans
 
+  public-api-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      COMPOSE_PROJECT_NAME: omp-public-api-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Define private development recovery identity paths
+        shell: bash
+        run: |
+          printf 'ORDER_RECOVERY_TOKEN_DIRECTORY=%s/scheduled-recovery/projection\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'ORDER_RECOVERY_CLIENT_SECRET_FILE=%s/scheduled-recovery/client-secret\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare isolated development identities and local routing
+        shell: bash
+        run: |
+          bash scripts/setup-public-api-acceptance.sh
+          # The host tests own the keys; container UID/GID 1000 also needs read access.
+          for service in order-service inventory-service payment-service; do
+            sudo chgrp 1000 "infrastructure/tls/$service/tls.key"
+            chmod 640 "infrastructure/tls/$service/tls.key"
+          done
+          sudo chgrp 1000 infrastructure/tls/legacy-bank-service/tls.p12
+          chmod 640 infrastructure/tls/legacy-bank-service/tls.p12
+          echo '127.0.0.1 keycloak.localhost product-service.localhost customer-service.localhost order-service.localhost notification.localhost payment-service.localhost banking.localhost graphql.localhost graphql-prod.localhost' | sudo tee -a /etc/hosts
+      - name: Provision private development recovery identity for application UID 1000
+        shell: bash
+        run: |
+          sudo --preserve-env=ORDER_RECOVERY_TOKEN_DIRECTORY,ORDER_RECOVERY_CLIENT_SECRET_FILE "$(command -v python)" - <<'PY'
+          import json, os
+          from pathlib import Path
+          projection = Path(os.environ['ORDER_RECOVERY_TOKEN_DIRECTORY'])
+          secret = Path(os.environ['ORDER_RECOVERY_CLIENT_SECRET_FILE'])
+          assert projection.is_absolute() and secret.parent == projection.parent
+          projection.parent.mkdir(mode=0o700)
+          projection.mkdir(mode=0o700)
+          realm = json.loads(Path('infrastructure/keycloak/import/omp-realm.json').read_text())
+          credential = next(c['secret'] for c in realm['clients'] if c['clientId'] == 'order-recovery')
+          with secret.open('x', encoding='utf-8') as target:
+              os.fchmod(target.fileno(), 0o400)
+              target.write(credential)
+              os.fchown(target.fileno(), 1000, 1000)
+          for path in (projection.parent, projection):
+              os.chown(path, 1000, 1000)
+          PY
+      - name: Build the public API service images sequentially
+        shell: bash
+        run: |
+          for service in product-service customer-service order-service inventory-service payment-service notification-service graphql-gateway legacy-banking-adapter legacy-bank-service; do
+            docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml build "$service"
+          done
+      - name: Start a fresh stack and require every health check
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml
+          -f docker-compose.public-api-e2e.yml
+          up -d --no-build --wait --wait-timeout 600 traefik
+          product-service customer-service order-service inventory-service payment-service notification-service
+          graphql-gateway graphql-gateway-prod legacy-banking-adapter
+      - name: Install pinned public API contract tooling
+        run: python -m pip install -r scripts/contracts-requirements.lock
+      - name: Compare published HTTP contracts with the packaged implementations
+        run: |
+          python clients/public-api/export_live.py
+          python scripts/check_api_contracts.py --live-root clients/public-api/build/live
+      - name: Compile a consumer from published HTTP and GraphQL artifacts
+        run: python clients/public-api/generate.py
+      - name: Exercise authenticated public consumers through Traefik
+        env:
+          PUBLIC_API_E2E: '1'
+        run: python clients/public-api/run_deployed.py
+      - name: Require every public API acceptance case
+        run: python scripts/check_junit.py clients/public-api/deployed-results.xml --minimum-tests 30
+      - name: Collect public API diagnostics
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml
+          -f docker-compose.public-api-e2e.yml logs --no-color > public-api-stack.log
+      - name: Publish public API contract and consumer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-api-contract-reports
+          path: |
+            clients/public-api/deployed-results.xml
+            clients/public-api/build/**
+            public-api-stack.log
+          if-no-files-found: error
+      - name: Remove only this public API project
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml
+          -f docker-compose.public-api-e2e.yml down --volumes --remove-orphans
+
   notification-client:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -303,6 +407,19 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           path: baseline
           persist-credentials: false
+      - name: Install public HTTP and GraphQL contract tooling
+        run: python -m pip install -r scripts/contracts-requirements.lock
+      - name: Verify published public APIs and compile current and prior consumers
+        shell: bash
+        run: |
+          options=()
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            options+=(--base-root baseline)
+          fi
+          python -m unittest discover -s scripts/contracts_tests -v
+          python -m unittest discover -s clients/public-api/tests/unit -v
+          python scripts/check_api_contracts.py "${options[@]}"
+          python clients/public-api/generate.py "${options[@]}"
       - name: Generate and verify base protobuf clients and descriptors
         if: github.event_name == 'pull_request'
         working-directory: baseline
@@ -493,7 +610,7 @@ jobs:
 
   quality-gate:
     if: always()
-    needs: [verify, packaged-payment-journey, external-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
+    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -502,6 +619,7 @@ jobs:
           TEST_RESULT: ${{ needs.verify.result }}
           JOURNEY_RESULT: ${{ needs['packaged-payment-journey'].result }}
           EXTERNAL_RESULT: ${{ needs['external-e2e'].result }}
+          PUBLIC_API_RESULT: ${{ needs['public-api-e2e'].result }}
           CLIENT_RESULT: ${{ needs['notification-client'].result }}
           STATIC_RESULT: ${{ needs['static-analysis'].result }}
           CONTRACT_RESULT: ${{ needs['contract-compatibility'].result }}
@@ -510,7 +628,7 @@ jobs:
           IMAGE_RESULT: ${{ needs.images.result }}
           IDENTITY_RESULT: ${{ needs['workload-identity'].result }}
         run: |
-          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required verification job failed, was cancelled, or was skipped."
               exit 1

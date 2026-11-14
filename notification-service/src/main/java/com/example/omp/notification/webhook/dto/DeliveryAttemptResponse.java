@@ -12,12 +12,14 @@ public record DeliveryAttemptResponse(
         String eventType,
         int attemptNumber,
         String status,
-        Integer responseStatus,
-        String responseBody,
-        String errorMessage,
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"integer", "null"})
+                Integer responseStatus,
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String responseBody,
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) String errorMessage,
         Instant scheduledAt,
-        Instant startedAt,
-        Instant completedAt) {
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) Instant startedAt,
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                Instant completedAt) {
 
     public static DeliveryAttemptResponse from(WebhookDeliveryAttempt a) {
         return new DeliveryAttemptResponse(

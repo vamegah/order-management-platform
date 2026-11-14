@@ -1,4 +1,4 @@
-﻿# Order Management Platform
+# Order Management Platform
 
 A Java 21 / Spring Boot 4.1 reference application combining REST, GraphQL, gRPC,
 WebSocket, webhooks and SOAP in an e-commerce order journey.
@@ -9,11 +9,13 @@ The eighteen-module reactor contains ten executable services and shared domain,
 web, event, gRPC integration and generated protobuf libraries. [TASKS.md](TASKS.md) tracks remaining
 requirements; [the implementation report](docs/task-implementation-report.md)
 records executed checks. Unchecked requirements remain open.
+Published REST/GraphQL artifacts and executable consumer examples are documented in
+[public API contracts](docs/public-api-contracts.md).
 
 | Scope | Implemented | Remaining acceptance |
 |---|---|---|
-| REST | Product/customer APIs, owned orders, durable resource references, fulfillment and compensation | Versioned public contracts and complete recovery journeys |
-| GraphQL | Aggregation, batching, mutations, query limits and production policy | Full consumer contracts and deployed verification |
+| REST | Versioned OpenAPI 3.1 contracts, owned orders, durable references, fulfillment and compensation | Endpoint-wide security review and ingress quotas |
+| GraphQL | Compiled public consumers, aggregation, batching, mutations, query limits and deployed policy checks | Broader performance and release acceptance |
 | gRPC | Inventory/payment operations, streaming APIs and mTLS configuration | Streaming transport cases, replica behavior and certificate rotation |
 | Events/WebSocket | Outboxes, Kafka/Redis bridge, ownership, private notifications and unsubscribe cleanup | Replay/durability, replica recovery and load acceptance |
 | Payments/webhooks | Idempotency, provider refunds, reconciliation, signing, retries and DLQ management | Complete security, provider delivery and recovery acceptance |

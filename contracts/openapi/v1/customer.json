@@ -1,0 +1,1911 @@
+{
+  "components": {
+    "schemas": {
+      "AddressDto": {
+        "description": "A customer address",
+        "properties": {
+          "addressType": {
+            "description": "Address type",
+            "example": "SHIPPING",
+            "type": "string"
+          },
+          "city": {
+            "description": "City",
+            "example": "Oakland",
+            "type": "string"
+          },
+          "country": {
+            "description": "ISO 3166-1 alpha-2 country code",
+            "example": "US",
+            "type": "string"
+          },
+          "id": {
+            "description": "Server-generated unique identifier",
+            "format": "uuid",
+            "type": "string"
+          },
+          "isDefault": {
+            "description": "True if this is the default address for its type",
+            "type": "boolean"
+          },
+          "line1": {
+            "description": "Primary address line",
+            "example": "200 Shipping Ave",
+            "type": "string"
+          },
+          "line2": {
+            "description": "Secondary address line (optional)",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "postalCode": {
+            "description": "Postal code",
+            "example": "94607",
+            "type": "string"
+          },
+          "state": {
+            "description": "State/province (optional)",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CreateAddressRequest": {
+        "description": "Request body for creating or updating an address",
+        "properties": {
+          "addressType": {
+            "description": "Address type",
+            "example": "SHIPPING",
+            "minLength": 1,
+            "pattern": "^(BILLING|SHIPPING|BOTH)$",
+            "type": "string"
+          },
+          "city": {
+            "description": "City",
+            "example": "Oakland",
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "country": {
+            "description": "Country code",
+            "example": "US",
+            "minLength": 1,
+            "pattern": "^[A-Z]{2}$",
+            "type": "string"
+          },
+          "isDefault": {
+            "description": "Set as default for its type",
+            "type": "boolean"
+          },
+          "line1": {
+            "description": "Primary address line",
+            "example": "200 Shipping Ave",
+            "maxLength": 200,
+            "minLength": 0,
+            "type": "string"
+          },
+          "line2": {
+            "description": "Secondary address line",
+            "maxLength": 200,
+            "minLength": 0,
+            "type": "string"
+          },
+          "postalCode": {
+            "description": "Postal code",
+            "example": "94607",
+            "maxLength": 20,
+            "minLength": 0,
+            "type": "string"
+          },
+          "state": {
+            "description": "State/province",
+            "example": "CA",
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "addressType",
+          "city",
+          "country",
+          "line1",
+          "postalCode"
+        ],
+        "type": "object"
+      },
+      "CreateCustomerRequest": {
+        "description": "Request body for creating a customer",
+        "properties": {
+          "addresses": {
+            "description": "Initial addresses (optional)",
+            "items": {
+              "$ref": "#/components/schemas/CreateAddressRequest"
+            },
+            "type": "array"
+          },
+          "dateOfBirth": {
+            "description": "Date of birth (optional, must be in the past)",
+            "example": "1990-01-15",
+            "format": "date",
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address (will be normalized to lowercase)",
+            "example": "newcustomer@example.com",
+            "format": "email",
+            "maxLength": 254,
+            "minLength": 0,
+            "type": "string"
+          },
+          "firstName": {
+            "description": "Given name",
+            "example": "New",
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "lastName": {
+            "description": "Family name",
+            "example": "Customer",
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number (optional)",
+            "example": "+1-555-0199",
+            "maxLength": 40,
+            "minLength": 0,
+            "type": "string"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/CreatePreferencesRequest",
+            "description": "Initial preferences (optional)"
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName"
+        ],
+        "type": "object"
+      },
+      "CreatePreferencesRequest": {
+        "description": "Initial preferences for a new customer",
+        "properties": {
+          "currency": {
+            "description": "ISO 4217 currency code",
+            "example": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "type": "string"
+          },
+          "locale": {
+            "description": "BCP 47 language tag",
+            "example": "en-US",
+            "maxLength": 20,
+            "minLength": 0,
+            "type": "string"
+          },
+          "marketingOptIn": {
+            "description": "Marketing opt-in",
+            "type": "boolean"
+          },
+          "notificationEmail": {
+            "description": "Email notifications",
+            "type": "boolean"
+          },
+          "notificationSms": {
+            "description": "SMS notifications",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CustomerDto": {
+        "description": "A customer profile",
+        "properties": {
+          "addresses": {
+            "description": "Addresses (billing, shipping). May be empty.",
+            "items": {
+              "$ref": "#/components/schemas/AddressDto"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "description": "Creation timestamp (UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "description": "Date of birth (null if not provided)",
+            "example": "1990-05-15",
+            "format": "date",
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address (business identity, case-insensitive)",
+            "example": "alice@omp.local",
+            "type": "string"
+          },
+          "firstName": {
+            "description": "Given name",
+            "example": "Alice",
+            "type": "string"
+          },
+          "id": {
+            "description": "Server-generated unique identifier",
+            "format": "uuid",
+            "type": "string"
+          },
+          "keycloakSub": {
+            "description": "Keycloak subject. Null until the customer links to a user.",
+            "type": "string"
+          },
+          "lastName": {
+            "description": "Family name",
+            "example": "Customer",
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, as provided",
+            "example": "+1-555-0101",
+            "type": "string"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/CustomerPreferencesDto",
+            "description": "Preferences. Null if never set."
+          },
+          "status": {
+            "description": "Lifecycle status",
+            "example": "ACTIVE",
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "Last modification timestamp (UTC)",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomerPreferencesDto": {
+        "description": "Customer preferences",
+        "properties": {
+          "currency": {
+            "description": "ISO 4217 currency code",
+            "example": "USD",
+            "type": "string"
+          },
+          "locale": {
+            "description": "BCP 47 language tag",
+            "example": "en-US",
+            "type": "string"
+          },
+          "marketingOptIn": {
+            "description": "Marketing communications opt-in",
+            "type": "boolean"
+          },
+          "notificationEmail": {
+            "description": "Email notifications enabled",
+            "type": "boolean"
+          },
+          "notificationSms": {
+            "description": "SMS notifications enabled",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "FieldError": {
+        "description": "A field-level validation error",
+        "properties": {
+          "field": {
+            "description": "Field path",
+            "example": "sku",
+            "type": "string"
+          },
+          "message": {
+            "description": "Error message",
+            "example": "must be at least 4 characters",
+            "type": "string"
+          },
+          "rejectedValue": {
+            "description": "Rejected value",
+            "example": "x"
+          }
+        },
+        "type": "object"
+      },
+      "PageResponseCustomerDto": {
+        "description": "A page of results",
+        "properties": {
+          "content": {
+            "description": "Items on this page",
+            "items": {
+              "$ref": "#/components/schemas/CustomerDto"
+            },
+            "type": "array"
+          },
+          "first": {
+            "description": "True if this is the first page",
+            "type": "boolean"
+          },
+          "last": {
+            "description": "True if this is the last page",
+            "type": "boolean"
+          },
+          "page": {
+            "description": "Zero-based page index",
+            "example": 0,
+            "format": "int32",
+            "type": "integer"
+          },
+          "size": {
+            "description": "Page size",
+            "example": 20,
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalElements": {
+            "description": "Total items matching the query",
+            "example": 47,
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalPages": {
+            "description": "Total pages",
+            "example": 3,
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ProblemDetails": {
+        "description": "RFC 7807 problem details",
+        "properties": {
+          "detail": {
+            "description": "Explanation specific to this occurrence",
+            "example": "Product not found: 00000000-0000-0000-0000-000000000201",
+            "type": "string"
+          },
+          "errors": {
+            "description": "Field-level errors (for 400 responses)",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "type": "array"
+          },
+          "extensions": {
+            "additionalProperties": {},
+            "description": "Additional properties, as allowed by RFC 7807",
+            "type": "object"
+          },
+          "instance": {
+            "description": "URI reference for this specific occurrence",
+            "example": "/api/v1/products/00000000-0000-0000-0000-000000000201",
+            "type": "string"
+          },
+          "status": {
+            "description": "HTTP status code",
+            "example": 404,
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Short, human-readable summary",
+            "example": "Not Found",
+            "type": "string"
+          },
+          "traceId": {
+            "description": "Trace ID for correlation",
+            "example": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "type": "string"
+          },
+          "type": {
+            "description": "URI reference identifying the problem type",
+            "example": "about:blank",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCustomerRequest": {
+        "description": "Request body for updating a customer",
+        "properties": {
+          "dateOfBirth": {
+            "description": "Date of birth",
+            "format": "date",
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address",
+            "format": "email",
+            "maxLength": 254,
+            "minLength": 0,
+            "type": "string"
+          },
+          "firstName": {
+            "description": "Given name",
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "lastName": {
+            "description": "Family name",
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number",
+            "maxLength": 40,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName"
+        ],
+        "type": "object"
+      },
+      "UpdatePreferencesRequest": {
+        "description": "Set supplied preferences, preserving omitted/null fields. New preference records use en-US, USD, email on, marketing/SMS off.",
+        "properties": {
+          "currency": {
+            "pattern": "[A-Za-z]{3}",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "locale": {
+            "maxLength": 20,
+            "minLength": 0,
+            "pattern": ".*\\S.*",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "marketingOptIn": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "notificationEmail": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "notificationSms": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "Keycloak access token; customer_id identifies the customer owner.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "Order Management Platform",
+      "url": "https://github.com/vamegah/order-management-platform"
+    },
+    "description": "Verified customer ownership or administrator access for private profiles and addresses. Listing and writes require an administrator.",
+    "title": "Customer Service API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/customers": {
+      "get": {
+        "description": "Paginated listing with optional filters.",
+        "operationId": "Customer_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nameQuery",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "emailDomain",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseCustomerDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List customers (admin only)",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      },
+      "post": {
+        "operationId": "Customer_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a customer (admin only)",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/customers/batch": {
+      "get": {
+        "operationId": "Customer_batch",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read 1 to 100 customers in request order; non-admin callers may request only themselves",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin') or (#ids.size() == 1 and #ids[0].toString() == authentication.token.claims['customer_id'])"
+      }
+    },
+    "/api/v1/customers/email/{email}": {
+      "get": {
+        "operationId": "Customer_getByEmail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get a customer by email (admin only)",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/customers/me": {
+      "get": {
+        "description": "Returns the customer linked to the JWT's `sub` claim.",
+        "operationId": "Customer_me",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get the current authenticated customer",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/api/v1/customers/{customerId}/addresses": {
+      "get": {
+        "operationId": "Address_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AddressDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List a customer's addresses",
+        "tags": [
+          "Addresses"
+        ],
+        "x-method-authorization": "hasRole('admin') or #customerId.toString() == authentication.token.claims['customer_id']"
+      },
+      "post": {
+        "operationId": "Address_add",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressDto"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Add an address to a customer (admin only)",
+        "tags": [
+          "Addresses"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/customers/{customerId}/addresses/{addressId}": {
+      "delete": {
+        "operationId": "Address_remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "addressId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Remove an address (admin only)",
+        "tags": [
+          "Addresses"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      },
+      "put": {
+        "operationId": "Address_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "addressId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update an address (admin only)",
+        "tags": [
+          "Addresses"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/customers/{customerId}/preferences": {
+      "put": {
+        "operationId": "CustomerPreferences_set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPreferencesDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Set supplied customer preferences (administrator)",
+        "tags": [
+          "customer-preferences-controller"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/customers/{id}": {
+      "delete": {
+        "operationId": "Customer_deactivate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Deactivate a customer (admin only, soft delete)",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      },
+      "get": {
+        "operationId": "Customer_getById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get a customer by ID",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin') or #id.toString() == authentication.token.claims['customer_id']"
+      },
+      "put": {
+        "operationId": "Customer_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update a customer (admin only)",
+        "tags": [
+          "Customers"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/customers/{id}/link-keycloak": {
+      "post": {
+        "description": "Idempotent if already linked to the same sub.",
+        "operationId": "Customer_linkKeycloak",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Link the current JWT's sub to a customer",
+        "tags": [
+          "Customers"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Development through Traefik",
+      "url": "http://customer-service.localhost"
+    },
+    {
+      "description": "Current ingress origin",
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Customer profile operations",
+      "name": "Customers"
+    },
+    {
+      "description": "Customer address operations",
+      "name": "Addresses"
+    }
+  ],
+  "x-implemented-routes": [
+    "DELETE /api/v1/customers/{customerId}/addresses/{addressId}",
+    "DELETE /api/v1/customers/{id}",
+    "GET /api/v1/customers",
+    "GET /api/v1/customers/batch",
+    "GET /api/v1/customers/email/{email}",
+    "GET /api/v1/customers/me",
+    "GET /api/v1/customers/{customerId}/addresses",
+    "GET /api/v1/customers/{id}",
+    "POST /api/v1/customers",
+    "POST /api/v1/customers/{customerId}/addresses",
+    "POST /api/v1/customers/{id}/link-keycloak",
+    "PUT /api/v1/customers/{customerId}/addresses/{addressId}",
+    "PUT /api/v1/customers/{customerId}/preferences",
+    "PUT /api/v1/customers/{id}"
+  ]
+}

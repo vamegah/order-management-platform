@@ -2846,3 +2846,53 @@ pass the evidence integrity checker. These results supersede earlier continuatio
 notes in this report that described historical active-order and accepted-order
 expiry coordination as open. Local inventory/payment gRPC authentication logging no longer writes bearer credentials.
 The projected identity still passes the deployed lifecycle worker acceptance.
+
+## REST and GraphQL public API closeout (2026-11-14)
+
+Section 2 is complete. Six versioned OpenAPI 3.1 documents publish all 65 REST
+operations, with independently derived route inventories, authentication,
+parameters, response statuses, schemas and nullable values. The GraphQL v1 SDL
+and serialized scalar contracts are published alongside them. A standalone
+consumer compiles six REST clients and 21 GraphQL operations without importing
+producer classes.
+
+The required contract job rejects implementation drift and incompatible changes
+against the exact PR base, including replacement of head fixtures together with
+implementation changes. Twenty-eight compatibility regressions cover REST and
+GraphQL breaking/additive evolution; eighteen client tests cover transport,
+schema validation, redirection, credentials and scalar/nullability behavior.
+The required public API job independently builds the service images and runs
+all thirty deployed cases through Traefik with real Keycloak identities. Its
+JUnit guard rejects missing or skipped cases, and the protected quality gate
+requires this job.
+
+All thirty local deployed cases pass without failures, errors or skips. They
+cover authentication/ownership, pagination and errors, batch ordering,
+product/customer/order mutations, partial preference updates, placement-date
+filters, payment/refund retries, signed development callbacks, trusted
+REST-to-SOAP banking, measured DataLoader batch counts and both GraphQL profiles.
+Depth, complexity, request-size, persisted-query and identity-rate policies are
+executed against the real gateway. Canonical order reads verify cancellation
+retries without assuming that nullable mutation history is included.
+
+The consumer checks exposed and drove repairs to JSON content types on Feign
+mutations, missing preference writes, false/omitted preference semantics,
+placement filtering against placedAt, upstream FORBIDDEN translation, typed
+filter denials, webhook replay and stable problems, response metadata and
+explicitly nullable fields. Product categories now resolve their full GraphQL
+fields through a deduplicated request-scoped lookup. Fresh development realm
+imports use the customer seed's stable Alice subject; existing issuer data is
+not rewritten.
+
+Focused Java package builds pass. Gateway HTTP integration, static-analysis and
+coverage gates also pass; the final ownership-translation regression passes in
+both unit and deployed coverage. The complete reactor and image rebuilds remain
+required CI checks for every proposed merge. Setup, commands, version policy and
+supported behavior are in [public API contracts](public-api-contracts.md).
+Bank certificate rotation, complete SOAP resilience, broader payment-provider
+behavior and sections 3-7 remain separate backlog work. No later section is
+closed by this supporting deployment.
+
+Two additional provider contract cases connect the published Noop/Stripe header
+names to their actual signature verifiers, including modified-body and bearer-header
+rejection. Both pass.

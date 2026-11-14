@@ -42,6 +42,14 @@
          DEPENDENCIES
          ===================================================================== -->
     <dependencies>
+        <!-- Optional: only the services publishing HTTP contracts load these types. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-common</artifactId>
+            <version>${springdoc.version}</version>
+            <optional>true</optional>
+        </dependency>
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

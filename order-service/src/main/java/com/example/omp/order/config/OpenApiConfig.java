@@ -1,74 +1,23 @@
 package com.example.omp.order.config;
 
-import io.swagger.v3.oas.models.Components;
+import com.example.omp.shared.web.openapi.PublishedApiConfiguration;
+import com.example.omp.shared.web.openapi.PublishedApiSupport;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import io.swagger.v3.oas.models.servers.Server;
-import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
-/**
- * OpenAPI / Swagger configuration.
- *
- * <p>Springdoc auto-generates the spec from {@code @Operation} annotations on controller methods.
- * This class adds top-level metadata and the JWT security scheme so Swagger UI's "Authorize" button
- * works.
- */
-@Configuration
+@Configuration(proxyBeanMethods = false)
+@Import(PublishedApiConfiguration.class)
 public class OpenApiConfig {
-
-    @Value("${spring.application.name}")
-    private String applicationName;
-
     @Bean
-    public OpenAPI productServiceOpenApi() {
-        final String securitySchemeName = "bearerAuth";
+    public OpenAPI orderServiceOpenApi() {
+        var document =
+                PublishedApiSupport.definition(
+                        "Order Service API",
+                        "order-service.localhost",
+                        "Verified owner or administrator order access, durable checkout and lifecycle recovery. Pending work returns HTTP 202.");
 
-        return new OpenAPI()
-                .info(
-                        new Info()
-                                .title("Order Service API")
-                                .version("1.0.0")
-                                .description(
-                                        """
-                    REST API for order management.
-
-                    Order-service orchestrates product-service and customer-service
-                    to fulfill customer orders. Product details and the shipping
-                    address are SNAPSHOTTED at order time — later changes to the
-                    product or the customer's address don't affect existing orders.
-                    """)
-                                .contact(
-                                        new Contact()
-                                                .name("Order Management Platform")
-                                                .url(
-                                                        "https://github.com/example/order-management-platform"))
-                                .license(new License().name("Internal Reference Project")))
-                .servers(
-                        List.of(
-                                new Server()
-                                        .url("http://product-service.localhost")
-                                        .description("Local (dev)"),
-                                new Server()
-                                        .url("https://api.example.com")
-                                        .description("Production")))
-                .components(
-                        new Components()
-                                .addSecuritySchemes(
-                                        securitySchemeName,
-                                        new SecurityScheme()
-                                                .name(securitySchemeName)
-                                                .type(SecurityScheme.Type.HTTP)
-                                                .scheme("bearer")
-                                                .bearerFormat("JWT")
-                                                .description(
-                                                        "JWT issued by Keycloak. Obtain via the `postman` client.")))
-                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName));
+        return document;
     }
 }

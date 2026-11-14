@@ -18,7 +18,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest({AddressController.class, CustomerController.class})
+@WebMvcTest({
+    AddressController.class,
+    CustomerController.class,
+    CustomerPreferencesController.class
+})
 @Import({SecurityConfig.class, SharedWebAutoConfiguration.class, TestSecurityConfig.class})
 @ActiveProfiles("test")
 class CustomerSecurityBoundaryTest {
@@ -123,6 +127,58 @@ class CustomerSecurityBoundaryTest {
                                 .header("Access-Control-Request-Method", "GET"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void preferenceWritesRequireAdministratorEvenForTheVerifiedOwner() throws Exception {
+        for (String token : new String[] {"", TestSecurityConfig.linkedAliceToken()}) {
+            var request =
+                    put("/api/v1/customers/{id}/preferences", ALICE)
+                            .contentType("application/json")
+                            .content("{}");
+            if (!token.isBlank()) request.header("Authorization", "Bearer " + token);
+            mvc.perform(request)
+                    .andExpect(
+                            token.isBlank() ? status().isUnauthorized() : status().isForbidden());
+        }
+        verifyNoInteractions(customers);
+    }
+
+    @Test
+    void administratorPartialPreferencesPreserveAbsentFieldsAndExplicitFalse() throws Exception {
+        when(customers.updatePreferences(eq(ALICE), any()))
+                .thenReturn(
+                        new com.example.omp.customer.dto.CustomerPreferencesDto(
+                                "en-US", "USD", false, false, false));
+        mvc.perform(
+                        put("/api/v1/customers/{id}/preferences", ALICE)
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + TestSecurityConfig.adminToken())
+                                .contentType("application/json")
+                                .content("{\"notificationEmail\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notificationEmail").value(false));
+        verify(customers)
+                .updatePreferences(
+                        ALICE,
+                        new com.example.omp.customer.dto.UpdatePreferencesRequest(
+                                null, null, null, false, null));
+    }
+
+    @Test
+    void invalidPreferenceFieldsFailBeforeServiceMutation() throws Exception {
+        for (String body : new String[] {"{\"currency\":\"EURO\"}", "{\"locale\":\" \"}"}) {
+            mvc.perform(
+                            put("/api/v1/customers/{id}/preferences", ALICE)
+                                    .header(
+                                            "Authorization",
+                                            "Bearer " + TestSecurityConfig.adminToken())
+                                    .contentType("application/json")
+                                    .content(body))
+                    .andExpect(status().isBadRequest());
+        }
         verifyNoInteractions(customers);
     }
 }

@@ -29,26 +29,37 @@ public class ScalarConfig {
 
                                             @Override
                                             public Object parseValue(Object value) {
-                                                return switch (name) {
-                                                    case "Date" ->
-                                                            LocalDate.parse(value.toString());
-                                                    case "DateTime" ->
-                                                            OffsetDateTime.parse(value.toString())
-                                                                    .toInstant();
-                                                    default -> new BigDecimal(value.toString());
-                                                };
+                                                try {
+                                                    return switch (name) {
+                                                        case "Date" ->
+                                                                LocalDate.parse(value.toString());
+                                                        case "DateTime" ->
+                                                                OffsetDateTime.parse(
+                                                                                value.toString())
+                                                                        .toInstant();
+                                                        default -> new BigDecimal(value.toString());
+                                                    };
+                                                } catch (RuntimeException failure) {
+                                                    throw new CoercingParseValueException(
+                                                            "Invalid " + name);
+                                                }
                                             }
 
                                             @Override
                                             public Object parseLiteral(Object value) {
-                                                if (value instanceof StringValue text)
-                                                    return parseValue(text.getValue());
-                                                if (name.equals("Decimal")
-                                                        && value instanceof IntValue number)
-                                                    return parseValue(number.getValue());
-                                                if (name.equals("Decimal")
-                                                        && value instanceof FloatValue number)
-                                                    return parseValue(number.getValue());
+                                                try {
+                                                    if (value instanceof StringValue text)
+                                                        return parseValue(text.getValue());
+                                                    if (name.equals("Decimal")
+                                                            && value instanceof IntValue number)
+                                                        return parseValue(number.getValue());
+                                                    if (name.equals("Decimal")
+                                                            && value instanceof FloatValue number)
+                                                        return parseValue(number.getValue());
+                                                } catch (CoercingParseValueException failure) {
+                                                    throw new CoercingParseLiteralException(
+                                                            "Invalid " + name);
+                                                }
                                                 throw new CoercingParseLiteralException(
                                                         "Invalid " + name);
                                             }
