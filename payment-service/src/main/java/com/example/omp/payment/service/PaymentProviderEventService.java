@@ -32,16 +32,19 @@ public class PaymentProviderEventService {
     private final PaymentRepository paymentRepository;
     private final OutboxWriter outboxWriter;
     private final RefundStore refunds;
+    private final com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams;
 
     public PaymentProviderEventService(
             PaymentProviderEventRepository eventRepository,
             PaymentRepository paymentRepository,
             OutboxWriter outboxWriter,
-            RefundStore refunds) {
+            RefundStore refunds,
+            com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams) {
         this.eventRepository = eventRepository;
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
         this.refunds = refunds;
+        this.streams = streams;
     }
 
     public enum ProcessResult {
@@ -112,6 +115,10 @@ public class PaymentProviderEventService {
                             PaymentEventPayloads.PAYMENT_CONFIRMED,
                             payment.getId(),
                             PaymentEventPayloads.confirmed(payment));
+                    streams.publishEvent(
+                            payment,
+                            com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_PENDING,
+                            "provider confirmed");
                     return true;
                 }
                 return false;
@@ -134,6 +141,10 @@ public class PaymentProviderEventService {
                             PaymentEventPayloads.PAYMENT_FAILED,
                             payment.getId(),
                             PaymentEventPayloads.failed(payment));
+                    streams.publishEvent(
+                            payment,
+                            com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_PENDING,
+                            "provider failed");
                     return true;
                 }
                 return false;

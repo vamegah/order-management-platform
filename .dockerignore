@@ -25,6 +25,7 @@ temp
 **/secrets
 **/.secrets
 infrastructure/tls/ca
+infrastructure/tls/trust
 infrastructure/tls/order-service
 infrastructure/tls/inventory-service
 infrastructure/tls/payment-service

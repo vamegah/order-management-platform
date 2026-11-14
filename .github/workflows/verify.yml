@@ -29,13 +29,13 @@ jobs:
         run: bash scripts/tests/test_maven_wrapper.sh
       - name: Verify development certificate setup preserves existing identities
         run: bash scripts/tests/test_ci_setup.sh
-      - name: Enforce the supported gRPC stream deployment topology
+      - name: Enforce production gRPC transport and stream topology
         env:
           OMP_DOMAIN: acceptance.example.invalid
           ACME_EMAIL: acceptance@example.invalid
           TRAEFIK_ADMIN_BASICAUTH: unused-for-config-validation
         run: |
-          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --format json | python scripts/check_stream_topology.py
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --format json | python scripts/check_grpc_transport.py
       - name: Build and test reactor, including container integration tests
         run: bash mvnw --batch-mode --no-transfer-progress --fail-at-end clean verify
       - name: Reject missing, skipped or incomplete test and coverage evidence
@@ -221,6 +221,77 @@ jobs:
       - name: Remove only this run's isolated stack and volumes
         if: always()
         run: docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.recovery.yml -f docker-compose.recovery-projector.yml -f docker-compose.recovery-acceptance.yml down --volumes --remove-orphans
+
+  grpc-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      E2E_GRPC_CONTROLS: 'true'
+      E2E_GRPC_ISSUER_SUDO: 'true'
+      GRPC_TLS_ENABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare isolated issuer and production-profile workload identities
+        shell: bash
+        run: |
+          echo "COMPOSE_PROJECT_NAME=omp-grpc-acceptance-$(openssl rand -hex 6)" >> "$GITHUB_ENV"
+          issuer="$RUNNER_TEMP/grpc-issuer"
+          echo "E2E_GRPC_ISSUER_DIRECTORY=$issuer" >> "$GITHUB_ENV"
+          echo "GRPC_CA_CERT_FILE=$issuer/trust/ca.crt" >> "$GITHUB_ENV"
+          echo "GRPC_CLIENT_CERT_FILE=$issuer/order-service/tls.crt" >> "$GITHUB_ENV"
+          echo "GRPC_CLIENT_KEY_FILE=$issuer/order-service/tls.key" >> "$GITHUB_ENV"
+          bash scripts/setup-grpc-acceptance.sh --output "$issuer"
+          for service in order-service inventory-service payment-service; do
+            sudo chgrp 1000 "$issuer/$service/tls.key"
+            chmod 640 "$issuer/$service/tls.key"
+          done
+          echo '127.0.0.1 keycloak.localhost product-service.localhost customer-service.localhost order-service.localhost' | sudo tee -a /etc/hosts
+      - name: Build the production-profile gRPC services and checkout prerequisites
+        shell: bash
+        run: |
+          for service in product-service customer-service order-service inventory-service payment-service; do
+            docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml build "$service"
+          done
+      - name: Start the isolated production-profile acceptance stack
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.grpc-e2e.yml up -d --no-build --wait --wait-timeout 600
+          traefik kafka product-service customer-service order-service inventory-service payment-service
+      - name: Exercise every RPC, all streaming patterns, replacement and uninterrupted renewal
+        run: >-
+          bash mvnw --batch-mode --no-transfer-progress -pl integration-tests -am -Pgrpc-e2e verify
+      - name: Require complete executed gRPC acceptance evidence
+        run: |
+          python scripts/check_junit.py integration-tests/target/failsafe-reports/TEST-com.example.omp.integration.GrpcProductionIT.xml --minimum-tests 82
+          python scripts/check_verification.py --root integration-tests --include-grpc-e2e
+      - name: Collect gRPC workload diagnostics
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.grpc-e2e.yml logs --no-color > grpc-stack.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grpc-production-acceptance
+          path: |
+            integration-tests/target/failsafe-reports/**
+            integration-tests/target/grpc-acceptance-matrix.json
+            grpc-stack.log
+          if-no-files-found: error
+      - name: Remove the disposable gRPC acceptance deployment
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
+          -f docker-compose.grpc-e2e.yml down --volumes --remove-orphans
 
   public-api-e2e:
     runs-on: ubuntu-latest
@@ -610,7 +681,7 @@ jobs:
 
   quality-gate:
     if: always()
-    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
+    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -619,6 +690,7 @@ jobs:
           TEST_RESULT: ${{ needs.verify.result }}
           JOURNEY_RESULT: ${{ needs['packaged-payment-journey'].result }}
           EXTERNAL_RESULT: ${{ needs['external-e2e'].result }}
+          GRPC_RESULT: ${{ needs['grpc-e2e'].result }}
           PUBLIC_API_RESULT: ${{ needs['public-api-e2e'].result }}
           CLIENT_RESULT: ${{ needs['notification-client'].result }}
           STATIC_RESULT: ${{ needs['static-analysis'].result }}
@@ -628,7 +700,7 @@ jobs:
           IMAGE_RESULT: ${{ needs.images.result }}
           IDENTITY_RESULT: ${{ needs['workload-identity'].result }}
         run: |
-          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required verification job failed, was cancelled, or was skipped."
               exit 1

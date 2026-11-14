@@ -55,6 +55,10 @@ service InventoryService {
   // Called by order-service before placing an order.
   rpc CheckAvailability(CheckAvailabilityRequest) returns (CheckAvailabilityResponse);
 
+  // Bidirectional, ordered read-only queries with one in-flight reply per session.
+  // Send the next query after receiving its reply; half-close drains the final reply.
+  rpc CheckAvailabilityStream(stream CheckAvailabilityRequest) returns (stream CheckAvailabilityResponse);
+
   // ---------------------------------------------------------------------------
   // Reservations (unary)
   // ---------------------------------------------------------------------------
@@ -89,6 +93,7 @@ service InventoryService {
   //
   // Use case: an order with 20 lines that all need reserving can be sent
   // as one stream rather than 20 unary calls.
+  // At most 100 items, each at most 4096 serialized bytes including unknown fields.
   rpc BulkReserve(stream BulkReserveItem) returns (BulkReserveResponse);
 
   // ---------------------------------------------------------------------------

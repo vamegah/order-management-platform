@@ -184,11 +184,11 @@ clients, TLS tooling, production topology and deployed contract suites.
 
 - **Implement:** Derive an RPC inventory from descriptors and track positive,
   business-error, authorization, deadline and cancellation coverage per RPC.
-  Current protos provide unary, client-streaming and server-streaming APIs;
-  add an additive bidirectional stock-watch API with bounded watch/unwatch
-  commands, initial snapshots, request correlation and explicit overflow policy
-  to satisfy the remaining pattern. Apply manual flow control, message/queue
-  limits and cancellation cleanup to all streams.
+  Add the bidirectional `CheckAvailabilityStream` read API alongside existing
+  unary, client-streaming and server-streaming calls. Replies correlate by request
+  order. A one-request inbound window and one pending reply bound each session;
+  bulk requests additionally bound item count and serialized size. Apply
+  cancellation cleanup and bounded buffering to every streaming pattern.
 - **Close when:** Containerized JWT/mTLS tests cover every RPC and all four
   patterns. Slow readers, invalid messages, early cancellation and expired
   deadlines leave bounded memory and no leaked subscribers/tasks. Descriptor
@@ -199,7 +199,7 @@ clients, TLS tooling, production topology and deployed contract suites.
 - **Implement:** Complete the already selected supported topology: one inventory
   and one payment replica, enforced after all deployment overrides. Test
   process/container replacement, reconnect/resubscribe and canonical-state
-  reconciliation. Apply the same policy to the new bidirectional watcher.
+  reconciliation. Apply the same policy to the bidirectional query sessions.
   Notification replicas are tested independently in stage 4.
 - **Close when:** Forbidden scaling/overlap configurations fail CI; a subscriber
   reconnects after replacement and converges to authoritative state, including

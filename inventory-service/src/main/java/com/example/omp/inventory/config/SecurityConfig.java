@@ -40,7 +40,10 @@ public class SecurityConfig {
      */
     @Bean
     public JwtAuthenticationProvider jwtAuthenticationProvider(JwtDecoder jwtDecoder) {
-        return new JwtAuthenticationProvider(jwtDecoder);
+        var provider = new JwtAuthenticationProvider(jwtDecoder);
+        provider.setJwtAuthenticationConverter(
+                com.example.omp.shared.grpc.GrpcJwtAuthentication.converter());
+        return provider;
     }
 
     /**

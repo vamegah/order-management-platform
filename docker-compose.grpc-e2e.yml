@@ -1,0 +1,31 @@
+# Disposable production-profile gRPC acceptance; never apply to a live deployment.
+services:
+  traefik:
+    networks:
+      edge:
+        aliases:
+          - keycloak.localhost
+          - order-service.localhost
+          - product-service.localhost
+          - customer-service.localhost
+  order-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      GRPC_CERTIFICATE_RELOAD_INTERVAL: 1s
+    volumes:
+      - ${E2E_GRPC_ISSUER_DIRECTORY:?Set the isolated issuer directory}/order-service:/etc/tls/identity:ro
+      - ${E2E_GRPC_ISSUER_DIRECTORY}/trust:/etc/tls/trust:ro
+  inventory-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      GRPC_CERTIFICATE_RELOAD_INTERVAL: 1s
+    volumes:
+      - ${E2E_GRPC_ISSUER_DIRECTORY}/inventory-service:/etc/tls/identity:ro
+      - ${E2E_GRPC_ISSUER_DIRECTORY}/trust:/etc/tls/trust:ro
+  payment-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      GRPC_CERTIFICATE_RELOAD_INTERVAL: 1s
+    volumes:
+      - ${E2E_GRPC_ISSUER_DIRECTORY}/payment-service:/etc/tls/identity:ro
+      - ${E2E_GRPC_ISSUER_DIRECTORY}/trust:/etc/tls/trust:ro

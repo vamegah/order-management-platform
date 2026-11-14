@@ -163,3 +163,13 @@ every 12 months is manageable. Phase 7 will automate.
 - gRPC authentication guide: https://grpc.io/docs/guides/auth/
 - gRPC TLS configuration: https://grpc.io/docs/guides/tls/
 - OpenSSL cookbook: https://www.feistyduck.com/library/openssl-cookbook/
+## Operational update (2026-11-14)
+
+Service identities now renew automatically with validated in-process key/trust
+reload. Cached TLS sessions are invalidated on projection changes while existing
+HTTP/2 connections remain open. The production overlay mounts read-only identity
+and public-trust directories; CA signing keys stay on the issuer host. Leaf and
+overlapping CA rotation, old-root retirement and invalid-peer rejection are
+covered by deployed production-profile acceptance. The current procedure is in
+[gRPC production operation](../grpc-production.md); this replaces the earlier
+manual leaf-renewal procedure while retaining the gRPC-only transport scope.

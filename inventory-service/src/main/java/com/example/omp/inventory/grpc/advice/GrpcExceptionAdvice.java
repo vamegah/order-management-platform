@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
  * appropriate handler when a service method throws, then sends the returned {@link Status} to the
  * client.
  *
- * <p>The mapping is documented in {@code inventory.proto}'s header comment — clients rely on the
+ * <p>The mapping is documented in {@code inventory.proto}'s header comment â€” clients rely on the
  * codes being consistent.
  */
 @GrpcAdvice
@@ -33,6 +33,8 @@ public class GrpcExceptionAdvice {
         }
         if (failure instanceof org.springframework.security.access.AccessDeniedException)
             return Status.PERMISSION_DENIED.withDescription("Recovery scope required");
+        if (failure instanceof InsufficientStockException)
+            return Status.FAILED_PRECONDITION.withDescription("Insufficient available stock");
         if (failure instanceof InventoryNotFoundException)
             return Status.NOT_FOUND.withDescription("Inventory resource not found");
         if (failure instanceof org.springframework.dao.ConcurrencyFailureException)

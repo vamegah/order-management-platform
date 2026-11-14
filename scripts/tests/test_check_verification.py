@@ -114,6 +114,18 @@ class VerificationEvidenceTest(unittest.TestCase):
         self.assertTrue(any("skipped" in error for error in
                             check(self.root, include_lifecycle_e2e=True)[1]))
 
+    def test_grpc_acceptance_requires_each_selected_suite_and_rejects_skips(self):
+        self.valid_evidence()
+        self.source("GrpcProductionIT", '@Tag("grpc-e2e")')
+        self.assertEqual(check(self.root), (2, []))
+        self.assertTrue(any("GrpcProductionIT" in error for error in
+                            check(self.root, include_grpc_e2e=True)[1]))
+        self.report("failsafe", "GrpcProductionIT")
+        self.assertEqual(check(self.root, include_grpc_e2e=True), (3, []))
+        self.report("failsafe", "GrpcProductionIT", skipped=1)
+        self.assertTrue(any("skipped" in error for error in
+                            check(self.root, include_grpc_e2e=True)[1]))
+
     def test_zero_tests_and_wrong_phase_do_not_hide_missing_suite(self):
         self.valid_evidence()
         self.report("failsafe", "DatabaseIT", tests=0)

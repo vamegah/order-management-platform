@@ -147,6 +147,27 @@ class BulkOperationsHandlerTest {
         assertThat(output.getValues()).isEmpty();
     }
 
+    @Test
+    void boundsUnknownFieldPayloadsBeforeRetainingOrWritingItems() {
+        var unknown =
+                com.google.protobuf.UnknownFieldSet.newBuilder()
+                        .addField(
+                                1000,
+                                com.google.protobuf.UnknownFieldSet.Field.newBuilder()
+                                        .addLengthDelimited(
+                                                com.google.protobuf.ByteString.copyFrom(
+                                                        new byte[4096]))
+                                        .build())
+                        .build();
+        var output = StreamRecorder.<BulkReserveResponse>create();
+        var input = handler.bulkReserve(output);
+        input.onNext(item("SKU", order).toBuilder().setUnknownFields(unknown).build());
+        input.onCompleted();
+        assertThat(Status.fromThrowable(output.getError()).getCode())
+                .isEqualTo(Status.Code.RESOURCE_EXHAUSTED);
+        verifyNoInteractions(reservations);
+    }
+
     private BulkReserveItem item(String sku, String orderId) {
         return BulkReserveItem.newBuilder()
                 .setSku(sku)

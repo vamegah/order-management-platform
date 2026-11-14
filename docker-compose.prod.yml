@@ -790,9 +790,8 @@ services:
       - traefik.http.services.order-service.loadbalancer.server.port=8083
 
     volumes:
-      - /etc/omp/tls/order-service/tls.crt:/etc/tls/tls.crt:ro
-      - /etc/omp/tls/order-service/tls.key:/etc/tls/tls.key:ro
-      - /etc/omp/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+      - /etc/omp/tls/order-service:/etc/tls/identity:ro
+      - /etc/omp/tls/trust:/etc/tls/trust:ro
 
   graphql-gateway:
     environment:
@@ -879,9 +878,8 @@ services:
         order: stop-first
     # No Traefik labels — internal only.
     volumes:
-      - /etc/omp/tls/inventory-service/tls.crt:/etc/tls/tls.crt:ro
-      - /etc/omp/tls/inventory-service/tls.key:/etc/tls/tls.key:ro
-      - /etc/omp/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+      - /etc/omp/tls/inventory-service:/etc/tls/identity:ro
+      - /etc/omp/tls/trust:/etc/tls/trust:ro
 
   # ============================================================================
   # PAYMENT SERVICE — production overrides
@@ -934,9 +932,8 @@ services:
         order: stop-first
 
     volumes:
-      - /etc/omp/tls/payment-service/tls.crt:/etc/tls/tls.crt:ro
-      - /etc/omp/tls/payment-service/tls.key:/etc/tls/tls.key:ro
-      - /etc/omp/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+      - /etc/omp/tls/payment-service:/etc/tls/identity:ro
+      - /etc/omp/tls/trust:/etc/tls/trust:ro
 
   notification-service:
     environment:

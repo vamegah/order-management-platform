@@ -46,4 +46,9 @@ for service in order-service inventory-service payment-service; do
     bash "$ROOT/infrastructure/tls/generate-service-cert.sh" "$service" --output "$TLS_DIR" >/dev/null
   fi
 done
+mkdir -p -- "$TLS_DIR/trust"
+if [[ ! -e "$TLS_DIR/trust/ca.crt" ]]; then
+  cp -- "$TLS_DIR/ca/ca.crt" "$TLS_DIR/trust/ca.crt"
+fi
+openssl verify -CAfile "$TLS_DIR/trust/ca.crt" "$TLS_DIR/order-service/tls.crt" >/dev/null
 echo "Development identities ready; existing keys were preserved."

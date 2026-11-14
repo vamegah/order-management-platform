@@ -43,6 +43,17 @@ public class PaymentEventStreamHandler {
                     "Expected ServerCallStreamObserver, got " + responseObserver.getClass());
         }
 
+        try {
+            if (!request.getOrderId().isEmpty()) java.util.UUID.fromString(request.getOrderId());
+            if (!request.getCustomerId().isEmpty())
+                java.util.UUID.fromString(request.getCustomerId());
+        } catch (IllegalArgumentException invalid) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Invalid payment subscription")
+                            .asRuntimeException());
+            return;
+        }
         long id = idGen.incrementAndGet();
         Subscription sub =
                 new Subscription(
@@ -83,13 +94,34 @@ public class PaymentEventStreamHandler {
                         .setOccurredAtEpochMillis(Instant.now().toEpochMilli())
                         .build();
 
+        String order = payment.getOrderId().toString();
+        String customer = payment.getCustomerId().toString();
+        if (org.springframework.transaction.support.TransactionSynchronizationManager
+                .isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                    .registerSynchronization(
+                            new org.springframework.transaction.support
+                                    .TransactionSynchronization() {
+                                @Override
+                                public void afterCommit() {
+                                    deliver(event, order, customer);
+                                }
+                            });
+        } else {
+            deliver(event, order, customer);
+        }
+    }
+
+    private void deliver(PaymentEvent event, String order, String customer) {
         int delivered = 0;
         for (Subscription sub : subscribers.values()) {
-            if (sub.matches(payment)) {
+            if (sub.matches(order, customer)) {
                 try {
-                    if (sub.observer.isReady()) {
-                        sub.observer.onNext(event);
-                        delivered++;
+                    synchronized (sub) {
+                        if (!sub.observer.isCancelled() && sub.observer.isReady()) {
+                            sub.observer.onNext(event);
+                            delivered++;
+                        }
                     }
                 } catch (Exception e) {
                     log.warn(
@@ -104,8 +136,8 @@ public class PaymentEventStreamHandler {
         if (delivered > 0) {
             log.debug(
                     "Published payment event {} -> {} to {} subscribers",
-                    fromStatus,
-                    payment.getStatus(),
+                    event.getFromStatus(),
+                    event.getToStatus(),
                     delivered);
         }
     }
@@ -142,15 +174,15 @@ public class PaymentEventStreamHandler {
             this.observer = observer;
         }
 
-        boolean matches(Payment payment) {
+        boolean matches(String order, String customer) {
             // A subscription with no filters matches everything (subject to auth).
             if (orderId == null && customerId == null) {
                 return true;
             }
-            if (orderId != null && orderId.equals(payment.getOrderId().toString())) {
+            if (orderId != null && orderId.equals(order)) {
                 return true;
             }
-            return customerId != null && customerId.equals(payment.getCustomerId().toString());
+            return customerId != null && customerId.equals(customer);
         }
     }
 }

@@ -477,6 +477,7 @@ services:
       otel-collector:
         condition: service_started
     environment:
+      GRPC_CERTIFICATE_RELOAD_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: local
 
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omp?currentSchema=orders,public
@@ -524,9 +525,8 @@ services:
       - traefik.http.services.order-service.loadbalancer.server.port=8083
 
     volumes:
-      - ./infrastructure/tls/order-service/tls.crt:/etc/tls/tls.crt:ro
-      - ./infrastructure/tls/order-service/tls.key:/etc/tls/tls.key:ro
-      - ./infrastructure/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+      - ./infrastructure/tls/order-service:/etc/tls/identity:ro
+      - ./infrastructure/tls/trust:/etc/tls/trust:ro
 
 
   # ============================================================================
@@ -717,6 +717,7 @@ services:
       otel-collector:
         condition: service_started
     environment:
+      GRPC_CERTIFICATE_RELOAD_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: local
 
       # Postgres datasource — the `inventory` schema.
@@ -768,9 +769,8 @@ services:
         max-file: "3"
     # No Traefik labels — internal only.
     volumes:
-      - ./infrastructure/tls/inventory-service/tls.crt:/etc/tls/tls.crt:ro
-      - ./infrastructure/tls/inventory-service/tls.key:/etc/tls/tls.key:ro
-      - ./infrastructure/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+      - ./infrastructure/tls/inventory-service:/etc/tls/identity:ro
+      - ./infrastructure/tls/trust:/etc/tls/trust:ro
 
   # ============================================================================
   # PAYMENT SERVICE — gRPC-only service for payment intents and refunds
@@ -797,6 +797,7 @@ services:
       otel-collector:
         condition: service_started
     environment:
+      GRPC_CERTIFICATE_RELOAD_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: local
 
       # Postgres datasource — the `payments` schema.
@@ -852,9 +853,8 @@ services:
       - traefik.http.routers.payment-http.service=payment-http
       - traefik.http.services.payment-http.loadbalancer.server.port=8080
     volumes:
-      - ./infrastructure/tls/payment-service/tls.crt:/etc/tls/tls.crt:ro
-      - ./infrastructure/tls/payment-service/tls.key:/etc/tls/tls.key:ro
-      - ./infrastructure/tls/ca/ca.crt:/etc/tls/ca.crt:ro
+      - ./infrastructure/tls/payment-service:/etc/tls/identity:ro
+      - ./infrastructure/tls/trust:/etc/tls/trust:ro
 
 
   # ============================================================================

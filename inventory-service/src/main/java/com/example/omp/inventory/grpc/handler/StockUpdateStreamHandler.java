@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
  * <p><b>Backpressure:</b> if a subscriber is slow, the response observer's queue grows. {@link
  * ServerCallStreamObserver#isReady()} tells us whether the subscriber can accept more items. If not
  * ready, we skip the update for that subscriber (dropping intermediate states is acceptable for
- * stock updates — the client will see the next one).
+ * stock updates â€” the client will see the next one).
  */
 @Component
 public class StockUpdateStreamHandler {
@@ -83,6 +83,16 @@ public class StockUpdateStreamHandler {
                     "Expected ServerCallStreamObserver but got " + responseObserver.getClass());
         }
 
+        if (request.getSkusCount() > 100
+                || request.getSkusList().stream()
+                        .anyMatch(sku -> sku.isBlank() || sku.length() > 100)
+                || request.getWarehouseId().length() > 100) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Invalid stock subscription")
+                            .asRuntimeException());
+            return;
+        }
         long subscriptionId = subscriptionIdGen.incrementAndGet();
         Subscription subscription =
                 new Subscription(
@@ -109,7 +119,10 @@ public class StockUpdateStreamHandler {
         // Optionally send an initial snapshot for each subscribed SKU.
         // This is a common pattern: the client doesn't wait for the first
         // change to see the current state.
-        sendInitialSnapshot(subscription);
+        synchronized (subscription) {
+            if (!serverObserver.isCancelled()) sendInitialSnapshot(subscription);
+            else subscribers.remove(subscriptionId);
+        }
 
         // Do NOT call onCompleted() here. The stream stays open until the
         // client cancels or the server closes it.
@@ -125,17 +138,36 @@ public class StockUpdateStreamHandler {
      */
     public void publishUpdate(StockLevel stock, StockUpdateReason reason) {
         StockUpdate update = buildUpdate(stock, reason);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager
+                .isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                    .registerSynchronization(
+                            new org.springframework.transaction.support
+                                    .TransactionSynchronization() {
+                                @Override
+                                public void afterCommit() {
+                                    deliver(update);
+                                }
+                            });
+        } else {
+            deliver(update);
+        }
+    }
+
+    private void deliver(StockUpdate update) {
 
         int delivered = 0;
         for (Subscription sub : subscribers.values()) {
-            if (sub.matches(stock)) {
+            if (sub.matches(update)) {
                 try {
                     // Only send if the subscriber can accept more items.
                     // Skipping is acceptable: the next update will
                     // supersede it.
-                    if (sub.observer.isReady()) {
-                        sub.observer.onNext(update);
-                        delivered++;
+                    synchronized (sub) {
+                        if (!sub.observer.isCancelled() && sub.observer.isReady()) {
+                            sub.observer.onNext(update);
+                            delivered++;
+                        }
                     }
                 } catch (Exception e) {
                     // If sending fails, the subscriber is gone; remove it.
@@ -152,7 +184,7 @@ public class StockUpdateStreamHandler {
         if (delivered > 0) {
             log.debug(
                     "Published stock update for sku={} to {} subscribers",
-                    stock.getSku(),
+                    update.getSku(),
                     delivered);
         }
     }
@@ -209,7 +241,7 @@ public class StockUpdateStreamHandler {
             this.observer = observer;
         }
 
-        boolean matches(StockLevel stock) {
+        boolean matches(StockUpdate stock) {
             boolean skuMatch = skus.isEmpty() || skus.contains(stock.getSku());
             boolean whMatch = warehouseId.isEmpty() || warehouseId.equals(stock.getWarehouseId());
             return skuMatch && whMatch;

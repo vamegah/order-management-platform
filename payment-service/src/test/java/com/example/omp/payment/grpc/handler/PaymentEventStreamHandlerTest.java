@@ -123,6 +123,40 @@ class PaymentEventStreamHandlerTest {
         verify(broken, times(1)).onNext(any());
     }
 
+    @Test
+    void publisherRetainsTheCorrectPreviousStateAcrossSuccessivePartialRefunds() {
+        var streams = new PaymentEventStreamHandler();
+        var output = observer();
+        streams.streamEvents(StreamPaymentEventsRequest.getDefaultInstance(), output);
+        var publisher =
+                new com.example.omp.payment.events.PaymentEventPublisher(
+                        mock(com.example.omp.shared.events.outbox.OutboxWriter.class), streams);
+        var payment = payment();
+        payment.confirm("fixture-reference");
+        var first = mock(com.example.omp.payment.domain.Refund.class);
+        when(first.getAmount()).thenReturn(Money.usd("4"));
+        payment.applyRefund(first.getAmount());
+        publisher.publishRefund(payment, first);
+        var second = mock(com.example.omp.payment.domain.Refund.class);
+        when(second.getAmount()).thenReturn(Money.usd("6"));
+        payment.applyRefund(second.getAmount());
+        publisher.publishRefund(payment, second);
+        var events = org.mockito.ArgumentCaptor.forClass(PaymentEvent.class);
+        verify(output, times(2)).onNext(events.capture());
+        assertThat(events.getAllValues().get(0).getFromStatus())
+                .isEqualTo(com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_CONFIRMED);
+        assertThat(events.getAllValues().get(0).getToStatus())
+                .isEqualTo(
+                        com.example.omp.proto.payment.PaymentStatus
+                                .PAYMENT_STATUS_PARTIALLY_REFUNDED);
+        assertThat(events.getAllValues().get(1).getFromStatus())
+                .isEqualTo(
+                        com.example.omp.proto.payment.PaymentStatus
+                                .PAYMENT_STATUS_PARTIALLY_REFUNDED);
+        assertThat(events.getAllValues().get(1).getToStatus())
+                .isEqualTo(com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_REFUNDED);
+    }
+
     private Payment payment() {
         var payment = new Payment(UUID.randomUUID(), UUID.randomUUID(), Money.usd("10"));
         ReflectionTestUtils.setField(payment, "id", UUID.randomUUID());

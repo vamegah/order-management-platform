@@ -381,7 +381,10 @@ class RefundRetryTest {
                         receipts,
                         payments,
                         mock(com.example.omp.payment.outbox.OutboxWriter.class),
-                        store);
+                        store,
+                        org.mockito.Mockito.mock(
+                                com.example.omp.payment.grpc.handler.PaymentEventStreamHandler
+                                        .class));
         assertThat(processor.process("stripe", event))
                 .isEqualTo(PaymentProviderEventService.ProcessResult.ACCEPTED);
         assertThat(processor.process("stripe", event))
