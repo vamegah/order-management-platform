@@ -63,10 +63,12 @@ when converting an older PKCS1 file to PKCS8.
 
 The shared gRPC module polls every ten seconds (`GRPC_CERTIFICATE_RELOAD_INTERVAL`).
 It validates key correspondence, chain trust, validity and both client/server EKUs
-before installing credentials. A missing, invalid or partially replaced projection
+before atomically installing new server/client TLS contexts. A missing, invalid or partially replaced projection
 retains the last validated credentials; invalid initial material fails startup.
 Existing HTTP/2 connections and subscriptions stay open. Fresh handshakes use the
-new leaf and trust managers. Expired credentials still fail TLS validation.
+new leaf and trust state. New contexts have separate session caches, so a handshake
+finishing during renewal cannot restore old resumption state. Expired credentials
+still fail TLS validation.
 
 The production overlay reads `/etc/omp/tls` on its host. The issuer service must
 renew that same directory. Grant application GID 1000 read access to each leaf key

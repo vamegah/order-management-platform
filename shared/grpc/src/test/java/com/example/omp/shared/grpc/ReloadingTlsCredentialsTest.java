@@ -332,6 +332,49 @@ class ReloadingTlsCredentialsTest {
     }
 
     @Test
+    void replacesSessionCachesAndPreservesTheNettyContextContractAcrossReloads() throws Exception {
+        project("first");
+        try (var credentials = credentials(Duration.ofHours(1))) {
+            var client = credentials.clientContext();
+            var server = credentials.serverContext();
+            var oldClientCache = client.sessionContext();
+            var oldServerCache = server.sessionContext();
+            var allocator = io.grpc.netty.shaded.io.netty.buffer.UnpooledByteBufAllocator.DEFAULT;
+            java.util.concurrent.Executor executor = Runnable::run;
+            for (var context : List.of(client, server)) {
+                assertThat(context.cipherSuites()).isNotEmpty();
+                assertThat(context.applicationProtocolNegotiator().protocols()).contains("h2");
+                assertThat(context.sessionCacheSize()).isNotNegative();
+                assertThat(context.sessionTimeout()).isNotNegative();
+                assertThat(context.newEngine(allocator).getUseClientMode())
+                        .isEqualTo(context.isClient());
+                assertThat(context.newEngine(allocator, "localhost", 443).getUseClientMode())
+                        .isEqualTo(context.isClient());
+                assertThat(context.newHandler(allocator).engine().getUseClientMode())
+                        .isEqualTo(context.isClient());
+                assertThat(context.newHandler(allocator, executor).engine().getUseClientMode())
+                        .isEqualTo(context.isClient());
+                assertThat(
+                                context.newHandler(allocator, "localhost", 443)
+                                        .engine()
+                                        .getUseClientMode())
+                        .isEqualTo(context.isClient());
+                assertThat(
+                                context.newHandler(allocator, "localhost", 443, executor)
+                                        .engine()
+                                        .getUseClientMode())
+                        .isEqualTo(context.isClient());
+            }
+            project("second");
+            credentials.reload();
+            assertThat(credentials.clientContext()).isSameAs(client);
+            assertThat(credentials.serverContext()).isSameAs(server);
+            assertThat(client.sessionContext()).isNotSameAs(oldClientCache);
+            assertThat(server.sessionContext()).isNotSameAs(oldServerCache);
+        }
+    }
+
+    @Test
     void refusesInvalidStartupAndUnsafePollIntervals() throws Exception {
         assertThatThrownBy(() -> credentials(Duration.ZERO)).hasMessageContaining("interval");
         assertThatThrownBy(() -> credentials(Duration.ofHours(2))).hasMessageContaining("interval");

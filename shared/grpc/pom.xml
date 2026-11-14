@@ -18,9 +18,6 @@
             <groupId>io.grpc</groupId><artifactId>grpc-netty-shaded</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.grpc</groupId><artifactId>grpc-util</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>

@@ -5,8 +5,6 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslProvider;
-import io.grpc.util.AdvancedTlsX509KeyManager;
-import io.grpc.util.AdvancedTlsX509TrustManager;
 import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,14 +28,16 @@ import org.slf4j.LoggerFactory;
 /** Reload validated identities in place: existing HTTP/2 transports are never restarted. */
 public final class ReloadingTlsCredentials implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(ReloadingTlsCredentials.class);
-    private final AdvancedTlsX509KeyManager keys = new AdvancedTlsX509KeyManager();
-    private final AdvancedTlsX509TrustManager trust;
     private final Path certificate;
     private final Path privateKey;
     private final Path trustBundle;
     private final ScheduledExecutorService watcher;
-    private final java.util.List<javax.net.ssl.SSLSessionContext> sessionContexts =
-            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    private record Contexts(SslContext server, SslContext client) {}
+
+    private volatile Contexts contexts;
+    private final SslContext server = new ReloadingSslContext(false, () -> contexts.server());
+    private final SslContext client = new ReloadingSslContext(true, () -> contexts.client());
 
     @FunctionalInterface
     interface ProjectionReader {
@@ -69,7 +69,6 @@ public final class ReloadingTlsCredentials implements AutoCloseable {
         this.certificate = certificate;
         this.privateKey = privateKey;
         this.trustBundle = trustBundle;
-        trust = AdvancedTlsX509TrustManager.newBuilder().build();
         // Invalid initial material fails startup; subsequent partial/invalid projections retain
         // last good state.
         reload();
@@ -144,20 +143,20 @@ public final class ReloadingTlsCredentials implements AutoCloseable {
                     || !Arrays.equals(keyBytes, reader.read(privateKey))
                     || !Arrays.equals(caBytes, reader.read(trustBundle)))
                 throw new GeneralSecurityException("TLS projection changed during validation");
-            if (!Arrays.equals(trustDigest, nextTrust)) trust.updateTrustCredentials(roots);
-            if (!Arrays.equals(identityDigest, nextIdentity))
-                keys.updateIdentityCredentials(chain, key);
-            // Resumed TLS sessions otherwise bypass certificate selection and can retain an old
-            // identity.
-            // Invalidation removes resumption state without closing any established HTTP/2
-            // connection.
-            for (var sessions : sessionContexts) {
-                var ids = sessions.getIds();
-                while (ids.hasMoreElements()) {
-                    var session = sessions.getSession(ids.nextElement());
-                    if (session != null) session.invalidate();
-                }
-            }
+            // A context owns its session cache. A late handshake on the previous context
+            // cannot repopulate a cache used by future connections after this atomic swap.
+            var nextServer =
+                    GrpcSslContexts.configure(
+                                    SslContextBuilder.forServer(key, chain), SslProvider.JDK)
+                            .trustManager(roots)
+                            .clientAuth(ClientAuth.REQUIRE)
+                            .build();
+            var nextClient =
+                    GrpcSslContexts.configure(SslContextBuilder.forClient(), SslProvider.JDK)
+                            .keyManager(key, chain)
+                            .trustManager(roots)
+                            .build();
+            contexts = new Contexts(nextServer, nextClient);
             identityDigest = nextIdentity;
             trustDigest = nextTrust;
             LOG.info("Loaded validated gRPC TLS identity and trust projection");
@@ -192,32 +191,12 @@ public final class ReloadingTlsCredentials implements AutoCloseable {
         }
     }
 
-    public SslContext serverContext() throws Exception {
-        // JDK SSLEngine consults the reloadable managers at every handshake, rather than caching a
-        // leaf.
-        var context =
-                GrpcSslContexts.configure(SslContextBuilder.forServer(keys), SslProvider.JDK)
-                        .trustManager(trust)
-                        .clientAuth(ClientAuth.REQUIRE)
-                        .build();
-        sessionContexts.add(
-                ((io.grpc.netty.shaded.io.netty.handler.ssl.JdkSslContext) context)
-                        .context()
-                        .getServerSessionContext());
-        return context;
+    public SslContext serverContext() {
+        return server;
     }
 
-    public SslContext clientContext() throws Exception {
-        var context =
-                GrpcSslContexts.configure(SslContextBuilder.forClient(), SslProvider.JDK)
-                        .keyManager(keys)
-                        .trustManager(trust)
-                        .build();
-        sessionContexts.add(
-                ((io.grpc.netty.shaded.io.netty.handler.ssl.JdkSslContext) context)
-                        .context()
-                        .getClientSessionContext());
-        return context;
+    public SslContext clientContext() {
+        return client;
     }
 
     @Override
