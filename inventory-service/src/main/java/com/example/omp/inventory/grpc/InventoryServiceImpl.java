@@ -26,12 +26,12 @@ import org.slf4j.LoggerFactory;
 /**
  * gRPC implementation of {@link InventoryServiceGrpc.InventoryServiceImplBase}.
  *
- * <p>This class is the thin entry point for every RPC. It doesn't contain business logic — each
+ * <p>This class is the thin entry point for every RPC. It doesn't contain business logic â€” each
  * method translates the proto request and delegates to a specialized handler.
  *
  * <p><b>Discovery:</b> {@code @GrpcService} is a grpc-spring-boot-starter annotation. The starter
  * scans for classes with this annotation at startup and registers them with the gRPC server.
- * Nothing else is needed — no explicit wiring, no XML.
+ * Nothing else is needed â€” no explicit wiring, no XML.
  *
  * <p><b>Error handling:</b> handlers throw domain exceptions. The {@link
  * com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice} maps them to gRPC status codes. The
@@ -45,6 +45,15 @@ import org.slf4j.LoggerFactory;
  */
 @GrpcService
 public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceImplBase {
+
+    private final com.example.omp.inventory.grpc.handler.AvailabilityStreamHandler
+            availabilityStreams;
+
+    @Override
+    public StreamObserver<CheckAvailabilityRequest> checkAvailabilityStream(
+            StreamObserver<CheckAvailabilityResponse> observer) {
+        return availabilityStreams.open(observer);
+    }
 
     private static final Logger log = LoggerFactory.getLogger(InventoryServiceImpl.class);
 
@@ -74,6 +83,9 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             BulkOperationsHandler bulkOperationsHandler,
             StockUpdateStreamHandler streamHandler) {
         this.stockQueryHandler = stockQueryHandler;
+        this.availabilityStreams =
+                new com.example.omp.inventory.grpc.handler.AvailabilityStreamHandler(
+                        stockQueryHandler);
         this.reservationHandler = reservationHandler;
         this.bulkOperationsHandler = bulkOperationsHandler;
         this.streamHandler = streamHandler;
@@ -116,7 +128,7 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
     }
 
     // =========================================================================
-    // Unary — stock queries
+    // Unary â€” stock queries
     // =========================================================================
 
     /**
@@ -141,7 +153,9 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             // The exception advice converts domain exceptions to proper
             // status codes. This catch-all handles anything unexpected and
             // ensures the client receives a response instead of a hang.
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(e)
+                            .asRuntimeException());
         }
     }
 
@@ -160,12 +174,14 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(e)
+                            .asRuntimeException());
         }
     }
 
     // =========================================================================
-    // Unary — reservations
+    // Unary â€” reservations
     // =========================================================================
 
     /**
@@ -173,8 +189,8 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
      *
      * <p>Idempotent on {@code (orderId, sku)}: calling twice with the same values returns the
      * existing reservation rather than creating a duplicate. This is important because network
-     * retries are common in gRPC — a client that times out before receiving the response may retry,
-     * and the server must not double-reserve.
+     * retries are common in gRPC â€” a client that times out before receiving the response may
+     * retry, and the server must not double-reserve.
      */
     @Override
     public void reserveStock(
@@ -189,7 +205,9 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(e)
+                            .asRuntimeException());
         }
     }
 
@@ -206,7 +224,9 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(e)
+                            .asRuntimeException());
         }
     }
 
@@ -222,7 +242,9 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(e)
+                            .asRuntimeException());
         }
     }
 
@@ -236,12 +258,14 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    com.example.omp.inventory.grpc.advice.GrpcExceptionAdvice.toStatus(e)
+                            .asRuntimeException());
         }
     }
 
     // =========================================================================
-    // Client streaming — bulk operations
+    // Client streaming â€” bulk operations
     // =========================================================================
     //
     // CLIENT STREAMING PATTERN:
@@ -270,7 +294,7 @@ public class InventoryServiceImpl extends InventoryServiceGrpc.InventoryServiceI
     }
 
     // =========================================================================
-    // Server streaming — stock updates
+    // Server streaming â€” stock updates
     // =========================================================================
     //
     // SERVER STREAMING PATTERN:

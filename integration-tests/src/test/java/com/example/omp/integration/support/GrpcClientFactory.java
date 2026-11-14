@@ -40,6 +40,14 @@ public final class GrpcClientFactory {
                 .withDeadlineAfter(10, TimeUnit.SECONDS);
     }
 
+    public static io.grpc.Channel inventoryChannel(String token) {
+        return io.grpc.ClientInterceptors.intercept(getInventoryChannel(), authInterceptor(token));
+    }
+
+    public static io.grpc.Channel paymentChannel(String token) {
+        return io.grpc.ClientInterceptors.intercept(getPaymentChannel(), authInterceptor(token));
+    }
+
     private static synchronized ManagedChannel getInventoryChannel() {
         if (inventoryChannel == null) {
             String host = System.getenv().getOrDefault("INVENTORY_GRPC_HOST", "127.0.0.1");

@@ -1,0 +1,19 @@
+[Unit]
+Description=Renew and distribute Order Management Platform gRPC service identities
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/omp/scripts/rotate_grpc_certificates.py --tls-dir /etc/omp/tls --watch --interval-seconds 3600 --renew-before-days 7 --lifetime-days 30
+Restart=on-failure
+RestartSec=60s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateNetwork=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/omp/tls
+
+[Install]
+WantedBy=multi-user.target

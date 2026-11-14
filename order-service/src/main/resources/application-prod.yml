@@ -38,3 +38,7 @@ app:
     allowed-origins:
       - "https://web.${OMP_DOMAIN}"
       - "https://admin.${OMP_DOMAIN}"
+omp:
+  grpc:
+    tls:
+      reload-enabled: true

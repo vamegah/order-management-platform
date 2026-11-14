@@ -132,6 +132,10 @@ feign:
 # Batch 3.3's client interfaces.
 # ==============================================================================
 omp:
+  grpc:
+    tls:
+      reload-enabled: ${GRPC_CERTIFICATE_RELOAD_ENABLED:false}
+      poll-interval: ${GRPC_CERTIFICATE_RELOAD_INTERVAL:10s}
   clients:
     product-service:
       url: ${PRODUCT_SERVICE_URL:http://product-service:8081}
@@ -160,9 +164,9 @@ grpc:
       default-deadline: 3000ms
       security:
         client-auth-enabled: true
-        certificate-chain: file:${TLS_CERT_PATH:/etc/tls/tls.crt}
-        private-key: file:${TLS_KEY_PATH:/etc/tls/tls.key}
-        trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/ca.crt}
+        certificate-chain: file:${TLS_CERT_PATH:/etc/tls/identity/tls.crt}
+        private-key: file:${TLS_KEY_PATH:/etc/tls/identity/tls.key}
+        trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/trust/ca.crt}
         authority-override: inventory-service
     payment-service:
       address: ${PAYMENT_GRPC_URL:dns:///payment-service:9093}
@@ -170,9 +174,9 @@ grpc:
       default-deadline: 5000ms
       security:
         client-auth-enabled: true
-        certificate-chain: file:${TLS_CERT_PATH:/etc/tls/tls.crt}
-        private-key: file:${TLS_KEY_PATH:/etc/tls/tls.key}
-        trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/ca.crt}
+        certificate-chain: file:${TLS_CERT_PATH:/etc/tls/identity/tls.crt}
+        private-key: file:${TLS_KEY_PATH:/etc/tls/identity/tls.key}
+        trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/trust/ca.crt}
         authority-override: payment-service
 
 

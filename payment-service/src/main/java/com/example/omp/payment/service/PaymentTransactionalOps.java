@@ -27,14 +27,17 @@ public class PaymentTransactionalOps {
     private final PaymentRepository paymentRepository;
     private final OutboxWriter outboxWriter;
     private final PaymentCreationLock creationLock;
+    private final com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams;
 
     public PaymentTransactionalOps(
             PaymentRepository paymentRepository,
             OutboxWriter outboxWriter,
-            PaymentCreationLock creationLock) {
+            PaymentCreationLock creationLock,
+            com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams) {
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
         this.creationLock = creationLock;
+        this.streams = streams;
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -94,6 +97,10 @@ public class PaymentTransactionalOps {
                 PaymentEventPayloads.PAYMENT_INITIATED,
                 saved.getId(),
                 PaymentEventPayloads.initiated(saved));
+        streams.publishEvent(
+                saved,
+                com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_UNSPECIFIED,
+                "initiated");
 
         return saved;
     }
@@ -121,6 +128,10 @@ public class PaymentTransactionalOps {
                         PaymentEventPayloads.PAYMENT_CONFIRMED,
                         payment.getId(),
                         PaymentEventPayloads.confirmed(payment));
+                streams.publishEvent(
+                        payment,
+                        com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_PENDING,
+                        "confirmed");
             }
             case DECLINED -> {
                 payment.markFailed(result.declineCode(), result.declineMessage());
@@ -129,6 +140,10 @@ public class PaymentTransactionalOps {
                         PaymentEventPayloads.PAYMENT_FAILED,
                         payment.getId(),
                         PaymentEventPayloads.failed(payment));
+                streams.publishEvent(
+                        payment,
+                        com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_PENDING,
+                        "failed");
             }
             case REQUIRES_ACTION -> {
                 payment.setProviderReference(result.providerReference());
@@ -159,6 +174,10 @@ public class PaymentTransactionalOps {
                                 () -> new IllegalStateException("Payment not found: " + paymentId));
         payment.markRefunded();
         paymentRepository.save(payment);
+        streams.publishEvent(
+                payment,
+                com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_CONFIRMED,
+                "refunded");
         return payment;
     }
 

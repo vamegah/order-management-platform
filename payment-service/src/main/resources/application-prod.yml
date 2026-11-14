@@ -27,9 +27,17 @@ management:
 
 grpc:
   server:
+    security:
+      enabled: true
+      client-auth: REQUIRE
     enable-reflection: false   # no grpcurl in prod
 springdoc:
   api-docs:
     enabled: false
   swagger-ui:
     enabled: false
+
+omp:
+  grpc:
+    tls:
+      reload-enabled: true

@@ -34,8 +34,10 @@ slow consumers. An open connection alone does not establish that client state is
 current. Applications requiring a complete transition history need a durable
 consumer contract rather than treating these streams as an event log.
 
-The resolved production configuration and gate regressions are locally checked.
-An executed process-replacement/resubscription scenario remains required before
-closing the stream task in `TASKS.md`. Production infrastructure, secrets,
-certificate rotation and high availability require their separate acceptance;
-this constraint does not establish production readiness.
+The required `grpc-e2e` job now executes replacement and resubscription for both
+services, including mutations made while disconnected and canonical-state reads
+before subsequent event delivery. Bidirectional availability queries also reconnect
+after replacement. Production-profile certificate and CA rotation preserve active
+streams without a container restart. These checks enforce the supported single-replica
+contract; the streams remain best effort and require periodic reconciliation.
+See [production operation and verification](grpc-production.md).

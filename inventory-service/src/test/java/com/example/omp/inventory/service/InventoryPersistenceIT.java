@@ -72,6 +72,63 @@ class InventoryPersistenceIT {
     @Autowired InventoryEventPublisher eventPublisher;
     @Autowired PlatformTransactionManager transactionManager;
 
+    @Autowired com.example.omp.inventory.grpc.handler.StockUpdateStreamHandler streams;
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void grpcNotificationsDescribeOnlyCommittedStockAndNeverRolledBackWrites() {
+        var observer = org.mockito.Mockito.mock(io.grpc.stub.ServerCallStreamObserver.class);
+        org.mockito.Mockito.when(observer.isReady()).thenReturn(true);
+        var updates = new java.util.concurrent.CopyOnWriteArrayList<StockUpdate>();
+        org.mockito.Mockito.doAnswer(
+                        call -> {
+                            updates.add(call.getArgument(0));
+                            return null;
+                        })
+                .when(observer)
+                .onNext(org.mockito.ArgumentMatchers.any());
+        streams.streamUpdates(
+                StreamStockUpdatesRequest.newBuilder()
+                        .addSkus("GOOD")
+                        .setWarehouseId("WH-1")
+                        .build(),
+                observer);
+        updates.clear();
+        var transaction = new TransactionTemplate(transactionManager);
+        transaction.executeWithoutResult(
+                status -> {
+                    unary.reserve(
+                            ReserveStockRequest.newBuilder()
+                                    .setSku("GOOD")
+                                    .setWarehouseId("WH-1")
+                                    .setQuantity(2)
+                                    .setOrderId(UUID.randomUUID().toString())
+                                    .build());
+                    assertThat(updates).isEmpty();
+                    status.setRollbackOnly();
+                });
+        assertThat(updates).isEmpty();
+        assertThat(reserved("GOOD")).isZero();
+        transaction.executeWithoutResult(
+                status -> {
+                    unary.reserve(
+                            ReserveStockRequest.newBuilder()
+                                    .setSku("GOOD")
+                                    .setWarehouseId("WH-1")
+                                    .setQuantity(2)
+                                    .setOrderId(UUID.randomUUID().toString())
+                                    .build());
+                    assertThat(updates).isEmpty();
+                });
+        assertThat(updates).hasSize(1);
+        assertThat(updates.getFirst().getQuantityReserved()).isEqualTo(2);
+        assertThat(updates.getFirst().getReason())
+                .isEqualTo(StockUpdateReason.STOCK_UPDATE_REASON_RESERVED);
+        var cancelled = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        org.mockito.Mockito.verify(observer).setOnCancelHandler(cancelled.capture());
+        cancelled.getValue().run();
+    }
+
     @BeforeEach
     void reset() {
         jdbc.execute(

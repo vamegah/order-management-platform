@@ -92,9 +92,9 @@ grpc:
     enable-reflection: ${GRPC_REFLECTION_ENABLED:true}
     security:
       enabled: ${GRPC_MTLS_ENABLED:true}
-      certificate-chain: file:${TLS_CERT_PATH:/etc/tls/tls.crt}
-      private-key: file:${TLS_KEY_PATH:/etc/tls/tls.key}
-      trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/ca.crt}
+      certificate-chain: file:${TLS_CERT_PATH:/etc/tls/identity/tls.crt}
+      private-key: file:${TLS_KEY_PATH:/etc/tls/identity/tls.key}
+      trust-cert-collection: file:${TLS_CA_PATH:/etc/tls/trust/ca.crt}
       client-auth: REQUIRE
     # The server will register any bean annotated with @GrpcService.
 
@@ -169,3 +169,9 @@ logging:
     io.grpc: INFO
   pattern:
     console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+
+omp:
+  grpc:
+    tls:
+      reload-enabled: ${GRPC_CERTIFICATE_RELOAD_ENABLED:false}
+      poll-interval: ${GRPC_CERTIFICATE_RELOAD_INTERVAL:10s}

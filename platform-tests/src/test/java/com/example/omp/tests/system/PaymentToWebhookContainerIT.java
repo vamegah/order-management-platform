@@ -66,6 +66,8 @@ class PaymentToWebhookContainerIT {
                                             "confluentinc/cp-kafka:7.6.1"))
                             .withNetwork(network)
                             .withNetworkAliases("kafka")
+                            // Docker can briefly reject the injected startup script with ETXTBSY.
+                            .withStartupAttempts(3)
                             .withEnv("KAFKA_HEAP_OPTS", "-Xms128m -Xmx256m")
                             .withListener(() -> "kafka:19092");
             redis =

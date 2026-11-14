@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class BulkOperationsHandler {
     static final int MAX_ITEMS = 100;
+    static final int MAX_ITEM_BYTES = 4096;
     private final ReservationHandler reservations;
 
     public BulkOperationsHandler(ReservationHandler reservations) {
@@ -42,6 +43,15 @@ public class BulkOperationsHandler {
                                     .asRuntimeException());
                     return;
                 }
+                if (item.getSerializedSize() > MAX_ITEM_BYTES) {
+                    terminated.set(true);
+                    items.clear();
+                    response.onError(
+                            Status.RESOURCE_EXHAUSTED
+                                    .withDescription("Bulk item exceeds 4096 bytes")
+                                    .asRuntimeException());
+                    return;
+                }
                 items.add(item);
             }
 
@@ -62,6 +72,10 @@ public class BulkOperationsHandler {
                             throw Status.CANCELLED.asRuntimeException();
                         }
                         try {
+                            if (item.getSku().length() > 100
+                                    || item.getWarehouseId().length() > 100)
+                                throw new IllegalArgumentException(
+                                        "Reservation item exceeds field bounds");
                             // Cross the Spring proxy so stock, hold and outbox commit together.
                             result.addReservations(
                                     reservations.reserve(

@@ -315,6 +315,7 @@ clients/notifications/*-results.xml
 clients/notifications/client-sbom.json
 
 # Local development identities: publishing only their certificates breaks fresh setup
+/infrastructure/tls/trust/
 /infrastructure/tls/ca/
 /infrastructure/tls/order-service/
 /infrastructure/tls/inventory-service/

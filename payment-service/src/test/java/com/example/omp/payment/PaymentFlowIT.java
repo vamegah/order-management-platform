@@ -53,6 +53,124 @@ class PaymentFlowIT {
     @Autowired PaymentApplicationService paymentService;
     @Autowired PaymentRepository paymentRepository;
 
+    @Autowired com.example.omp.payment.events.PaymentEventPublisher publisher;
+    @Autowired com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "1501,confirmed,PAYMENT_STATUS_CONFIRMED",
+        "1500,declined,PAYMENT_STATUS_FAILED"
+    })
+    @SuppressWarnings("unchecked")
+    void restChargePublishesCommittedOutcomesToTheGrpcStream(
+            long amount, String result, com.example.omp.proto.payment.PaymentStatus expected) {
+        var observer =
+                (io.grpc.stub.ServerCallStreamObserver<com.example.omp.proto.payment.PaymentEvent>)
+                        org.mockito.Mockito.mock(io.grpc.stub.ServerCallStreamObserver.class);
+        org.mockito.Mockito.when(observer.isReady()).thenReturn(true);
+        var updates =
+                new java.util.concurrent.CopyOnWriteArrayList<
+                        com.example.omp.proto.payment.PaymentEvent>();
+        org.mockito.Mockito.doAnswer(
+                        call -> {
+                            updates.add(call.getArgument(0));
+                            return null;
+                        })
+                .when(observer)
+                .onNext(org.mockito.ArgumentMatchers.any());
+        var customer = UUID.randomUUID();
+        streams.streamEvents(
+                com.example.omp.proto.payment.StreamPaymentEventsRequest.newBuilder()
+                        .setCustomerId(customer.toString())
+                        .build(),
+                observer);
+        try {
+            var outcome =
+                    paymentService.charge(
+                            new PaymentApplicationService.ChargeCommand(
+                                    UUID.randomUUID(),
+                                    customer,
+                                    amount,
+                                    "USD",
+                                    "stream-" + UUID.randomUUID()));
+            assertThat(outcome.result()).isEqualTo(result);
+            assertThat(updates)
+                    .extracting(com.example.omp.proto.payment.PaymentEvent::getToStatus)
+                    .containsExactly(
+                            com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_PENDING,
+                            expected);
+            assertThat(updates)
+                    .allSatisfy(
+                            event ->
+                                    assertThat(event.getPaymentId())
+                                            .isEqualTo(outcome.paymentId().toString()));
+        } finally {
+            var cancelled = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+            org.mockito.Mockito.verify(observer).setOnCancelHandler(cancelled.capture());
+            cancelled.getValue().run();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void grpcNotificationsWaitForCommitAndDiscardRolledBackPaymentIntents() {
+        var observer =
+                (io.grpc.stub.ServerCallStreamObserver<com.example.omp.proto.payment.PaymentEvent>)
+                        org.mockito.Mockito.mock(io.grpc.stub.ServerCallStreamObserver.class);
+        org.mockito.Mockito.when(observer.isReady()).thenReturn(true);
+        var updates =
+                new java.util.concurrent.CopyOnWriteArrayList<
+                        com.example.omp.proto.payment.PaymentEvent>();
+        org.mockito.Mockito.doAnswer(
+                        call -> {
+                            updates.add(call.getArgument(0));
+                            return null;
+                        })
+                .when(observer)
+                .onNext(org.mockito.ArgumentMatchers.any());
+        var customer = UUID.randomUUID();
+        streams.streamEvents(
+                com.example.omp.proto.payment.StreamPaymentEventsRequest.newBuilder()
+                        .setCustomerId(customer.toString())
+                        .build(),
+                observer);
+        var transaction =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        var rolledBack =
+                new com.example.omp.payment.domain.Payment(
+                        UUID.randomUUID(), customer, com.example.omp.shared.domain.Money.usd("10"));
+        try {
+            transaction.executeWithoutResult(
+                    status -> {
+                        paymentRepository.saveAndFlush(rolledBack);
+                        publisher.publishIntentCreated(rolledBack);
+                        assertThat(updates).isEmpty();
+                        status.setRollbackOnly();
+                    });
+            assertThat(updates).isEmpty();
+            assertThat(paymentRepository.findById(rolledBack.getId())).isEmpty();
+            transaction.executeWithoutResult(
+                    status -> {
+                        var committed =
+                                paymentRepository.saveAndFlush(
+                                        new com.example.omp.payment.domain.Payment(
+                                                UUID.randomUUID(),
+                                                customer,
+                                                com.example.omp.shared.domain.Money.usd("10")));
+                        publisher.publishIntentCreated(committed);
+                        assertThat(updates).isEmpty();
+                    });
+            assertThat(updates).hasSize(1);
+            assertThat(updates.getFirst().getToStatus())
+                    .isEqualTo(com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_PENDING);
+        } finally {
+            var cancelled = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+            org.mockito.Mockito.verify(observer).setOnCancelHandler(cancelled.capture());
+            cancelled.getValue().run();
+        }
+    }
+
     @Test
     void charge_succeeds_and_persists_confirmed_payment() {
         var outcome =

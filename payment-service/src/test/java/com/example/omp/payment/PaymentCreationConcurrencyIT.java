@@ -95,7 +95,8 @@ class PaymentCreationConcurrencyIT {
 
         @Bean
         PaymentEventPublisher events(com.example.omp.shared.events.outbox.OutboxWriter writer) {
-            return new PaymentEventPublisher(writer);
+            return new PaymentEventPublisher(
+                    writer, new com.example.omp.payment.grpc.handler.PaymentEventStreamHandler());
         }
 
         @Bean
@@ -117,7 +118,11 @@ class PaymentCreationConcurrencyIT {
                 PaymentRepository repository,
                 com.example.omp.payment.outbox.OutboxWriter writer,
                 PaymentCreationLock lock) {
-            return new PaymentTransactionalOps(repository, writer, lock);
+            return new PaymentTransactionalOps(
+                    repository,
+                    writer,
+                    lock,
+                    new com.example.omp.payment.grpc.handler.PaymentEventStreamHandler());
         }
 
         @Bean
@@ -174,7 +179,12 @@ class PaymentCreationConcurrencyIT {
                 PaymentRepository payments,
                 com.example.omp.payment.outbox.OutboxWriter writer,
                 RefundStore refunds) {
-            return new PaymentProviderEventService(receipts, payments, writer, refunds);
+            return new PaymentProviderEventService(
+                    receipts,
+                    payments,
+                    writer,
+                    refunds,
+                    new com.example.omp.payment.grpc.handler.PaymentEventStreamHandler());
         }
     }
 
