@@ -39,11 +39,11 @@ public interface CustomerClient {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String sort);
 
-    @PostMapping("/api/v1/customers")
+    @PostMapping(value = "/api/v1/customers", consumes = "application/json")
     @CircuitBreaker(name = "customerClient")
     CustomerClientDto createCustomer(@RequestBody CreateCustomerRequest request);
 
-    @PutMapping("/api/v1/customers/{id}")
+    @PutMapping(value = "/api/v1/customers/{id}", consumes = "application/json")
     @CircuitBreaker(name = "customerClient")
     CustomerClientDto updateCustomer(
             @PathVariable("id") UUID id, @RequestBody UpdateCustomerRequest request);
@@ -52,12 +52,12 @@ public interface CustomerClient {
     @CircuitBreaker(name = "customerClient")
     void deactivateCustomer(@PathVariable("id") UUID id);
 
-    @PostMapping("/api/v1/customers/{id}/addresses")
+    @PostMapping(value = "/api/v1/customers/{id}/addresses", consumes = "application/json")
     @CircuitBreaker(name = "customerClient")
     AddressClientDto addAddress(
             @PathVariable("id") UUID customerId, @RequestBody CreateAddressRequest request);
 
-    @PutMapping("/api/v1/customers/{id}/preferences")
+    @PutMapping(value = "/api/v1/customers/{id}/preferences", consumes = "application/json")
     @CircuitBreaker(name = "customerClient")
     PreferencesClientDto setPreferences(
             @PathVariable("id") UUID customerId, @RequestBody PreferencesClientDto request);

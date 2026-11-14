@@ -327,3 +327,9 @@ clients/notifications/client-sbom.json
 !/.vscode/extensions.json
 !/.vscode/launch.json
 !/.vscode/tasks.json
+
+# Public API consumer build and verification output
+clients/public-api/build/
+clients/public-api/*-results.xml
+
+/infrastructure/tls/legacy-bank-service/

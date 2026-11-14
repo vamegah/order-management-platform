@@ -1,0 +1,1 @@
+query Customers($page: Int = 0, $size: Int = 2) { customers(page: $page, size: $size) { content { id email firstName status } page size totalElements totalPages first last } }

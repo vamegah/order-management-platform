@@ -29,3 +29,8 @@ omp:
     # In prod, restrict to the deployed web origins.
     allowed-origins:
       - "https://web.${OMP_DOMAIN}"
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

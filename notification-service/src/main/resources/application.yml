@@ -255,3 +255,10 @@ logging:
     org.springframework.messaging: INFO
   pattern:
     console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+
+springdoc:
+  api-docs:
+    version: OPENAPI_3_1
+    enabled: ${API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: false

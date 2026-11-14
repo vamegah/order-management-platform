@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class PaymentExceptionHandler {
 
     @ExceptionHandler(org.springframework.dao.ConcurrencyFailureException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<Map<String, String>> concurrentUpdate(
             org.springframework.dao.ConcurrencyFailureException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -19,11 +20,13 @@ public class PaymentExceptionHandler {
     }
 
     @ExceptionHandler(PaymentNotFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseEntity<Map<String, String>> notFound(PaymentNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
     }
 
     @ExceptionHandler(com.example.omp.payment.error.PaymentNotFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseEntity<Map<String, String>> refundPaymentNotFound(
             com.example.omp.payment.error.PaymentNotFoundException failure) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -31,6 +34,7 @@ public class PaymentExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<Map<String, String>> badRequest(MethodArgumentNotValidException e) {
         String msg =
                 e.getBindingResult().getFieldErrors().stream()
@@ -41,11 +45,13 @@ public class PaymentExceptionHandler {
     }
 
     @ExceptionHandler(IllegalStateException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<Map<String, String>> conflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<Map<String, String>> illegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     }

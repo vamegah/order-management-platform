@@ -20,10 +20,11 @@ import org.springframework.context.annotation.Configuration;
  * <p>Mapping:
  *
  * <ul>
- *   <li>404 → {@link ClientNotFoundException} (→ GraphQL {@code NOT_FOUND})
- *   <li>409 → {@link ClientConflictException} (→ GraphQL {@code CONFLICT})
- *   <li>400, 422 → {@link ClientValidationException} (→ GraphQL {@code VALIDATION_FAILED})
- *   <li>5xx or other → {@link DownstreamServiceException} (→ GraphQL {@code
+ *   <li>403 -> GraphQL FORBIDDEN without forwarding the upstream body
+ *   <li>404 â†’ {@link ClientNotFoundException} (â†’ GraphQL {@code NOT_FOUND})
+ *   <li>409 â†’ {@link ClientConflictException} (â†’ GraphQL {@code CONFLICT})
+ *   <li>400, 422 â†’ {@link ClientValidationException} (â†’ GraphQL {@code VALIDATION_FAILED})
+ *   <li>5xx or other â†’ {@link DownstreamServiceException} (â†’ GraphQL {@code
  *       DOWNSTREAM_SERVICE_ERROR})
  * </ul>
  *
@@ -55,6 +56,10 @@ public class FeignErrorDecoder {
 
             String message = buildMessage(service, status, body);
 
+            if (status == 403) {
+                return new org.springframework.security.access.AccessDeniedException(
+                        "Access denied");
+            }
             if (status == 404) {
                 return new ClientNotFoundException(message);
             }
@@ -64,7 +69,7 @@ public class FeignErrorDecoder {
             if (status == 400 || status == 422) {
                 return new ClientValidationException(message);
             }
-            // 5xx, timeouts, unexpected 4xx — treat as downstream failure
+            // 5xx, timeouts, unexpected 4xx â€” treat as downstream failure
             return new DownstreamServiceException(service, status, message);
         };
     }

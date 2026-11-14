@@ -31,3 +31,5 @@ infrastructure/tls/payment-service
 **/node_modules
 **/dist
 **/*.tgz
+
+infrastructure/tls/legacy-bank-service

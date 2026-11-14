@@ -29,12 +29,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> malformedJson(HttpServletRequest request) {
         return ResponseEntity.badRequest()
                 .body(factory.badRequest("Malformed JSON request", request));
     }
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ProblemDetails> forbidden(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(factory.forbidden("Access denied", request));
@@ -44,6 +46,7 @@ public class GlobalExceptionHandler {
         org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
         org.springframework.web.bind.MissingServletRequestParameterException.class
     })
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> invalidRequestParameter(
             Exception ex, HttpServletRequest request) {
         return ResponseEntity.badRequest()
@@ -63,6 +66,7 @@ public class GlobalExceptionHandler {
     // -------------------------------------------------------------------------
 
     @ExceptionHandler(ProductNotFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseEntity<ProblemDetails> handleProductNotFound(
             ProductNotFoundException ex, HttpServletRequest request) {
         log.debug("Product not found: {}", ex.getIdentifier());
@@ -76,6 +80,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(CategoryNotFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseEntity<ProblemDetails> handleCategoryNotFound(
             CategoryNotFoundException ex, HttpServletRequest request) {
         log.debug("Category not found: {}", ex.getIdentifier());
@@ -93,6 +98,7 @@ public class GlobalExceptionHandler {
     // -------------------------------------------------------------------------
 
     @ExceptionHandler(SkuAlreadyExistsException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ProblemDetails> handleSkuConflict(
             SkuAlreadyExistsException ex, HttpServletRequest request) {
         log.debug("SKU conflict: {}", ex.getSku());
@@ -105,6 +111,7 @@ public class GlobalExceptionHandler {
     // -------------------------------------------------------------------------
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
         log.debug("Validation failed: {}", ex.getMessage());
@@ -113,6 +120,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidProductDataException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> handleInvalidData(
             InvalidProductDataException ex, HttpServletRequest request) {
         log.debug("Invalid product data: {}", ex.getMessage());
@@ -121,6 +129,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidPaginationException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ProblemDetails> handleInvalidPagination(
             InvalidPaginationException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -135,6 +144,7 @@ public class GlobalExceptionHandler {
     // -------------------------------------------------------------------------
 
     @ExceptionHandler(Exception.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<ProblemDetails> handleGeneric(Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception processing {}", request.getRequestURI(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

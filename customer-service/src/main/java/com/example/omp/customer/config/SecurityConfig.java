@@ -100,6 +100,11 @@ public class SecurityConfig {
                                         // Everything else: authenticated
                                         .anyRequest()
                                         .authenticated())
+                .exceptionHandling(
+                        errors ->
+                                errors.accessDeniedHandler(
+                                        new com.example.omp.shared.web.error
+                                                .ProblemAccessDeniedHandler()))
 
                 // JWT validation (resource server)
                 .oauth2ResourceServer(

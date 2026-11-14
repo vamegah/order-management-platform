@@ -33,5 +33,21 @@ public class DataLoaderConfig {
                                 results.put(customer.id(), customer);
                             return Mono.just(results);
                         });
+        registry.forTypePair(
+                        String.class, com.example.omp.gateway.clients.dto.CategoryClientDto.class)
+                .withOptions(options -> options.setMaxBatchSize(100))
+                .registerMappedBatchLoader(
+                        (slugs, environment) -> {
+                            var results =
+                                    new HashMap<
+                                            String,
+                                            com.example.omp.gateway.clients.dto
+                                                    .CategoryClientDto>();
+                            for (var category : products.listCategories()) {
+                                if (slugs.contains(category.slug()))
+                                    results.put(category.slug(), category);
+                            }
+                            return Mono.just(results);
+                        });
     }
 }

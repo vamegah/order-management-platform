@@ -1,0 +1,1 @@
+mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { id orderNumber customerId status total { amount currency } shippingAddress { line1 city postalCode country } lines { id productId productSku quantity lineTotal } createdAt updatedAt } }

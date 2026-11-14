@@ -332,4 +332,28 @@ public class CustomerService {
 
         return CustomerMapper.toPreferencesDto(prefs);
     }
+
+    /** Applies partial preference updates while holding the aggregate row lock. */
+    @Transactional
+    public CustomerPreferencesDto updatePreferences(
+            UUID customerId, UpdatePreferencesRequest request) {
+        Customer customer =
+                customerRepository
+                        .findByIdForUpdate(customerId)
+                        .orElseThrow(() -> new CustomerNotFoundException(customerId));
+        CustomerPreferences preferences = customer.getPreferences();
+        if (preferences == null) {
+            preferences = CustomerPreferences.defaults();
+            customer.setPreferences(preferences);
+        }
+        if (request.locale() != null) preferences.setLocale(request.locale());
+        if (request.currency() != null) preferences.setCurrency(request.currency());
+        if (request.marketingOptIn() != null)
+            preferences.setMarketingOptIn(request.marketingOptIn());
+        if (request.notificationEmail() != null)
+            preferences.setNotificationEmail(request.notificationEmail());
+        if (request.notificationSms() != null)
+            preferences.setNotificationSms(request.notificationSms());
+        return CustomerMapper.toPreferencesDto(preferences);
+    }
 }

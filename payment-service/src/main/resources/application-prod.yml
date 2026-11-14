@@ -28,3 +28,8 @@ management:
 grpc:
   server:
     enable-reflection: false   # no grpcurl in prod
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

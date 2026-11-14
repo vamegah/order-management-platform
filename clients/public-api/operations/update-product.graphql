@@ -1,0 +1,1 @@
+mutation UpdateProduct($id: ID!, $input: UpdateProductInput!) { updateProduct(id: $id, input: $input) { id sku name status price { amount currency } images { id url altText sortOrder } } }

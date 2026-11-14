@@ -15,10 +15,12 @@ public record SubscriptionResponse(
         boolean enabled,
         Instant createdAt,
         Instant updatedAt,
-        Instant lastDeliveryAt,
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                Instant lastDeliveryAt,
         int failureCount,
-        Instant disabledAt,
-        String disabledReason) {
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"}) Instant disabledAt,
+        @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                String disabledReason) {
 
     public static SubscriptionResponse from(WebhookSubscription s) {
         return new SubscriptionResponse(

@@ -887,6 +887,14 @@ services:
   # PAYMENT SERVICE — production overrides
   # ============================================================================
   payment-service:
+    networks: [edge, app, data]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.payment-http.rule=Host(`api.${OMP_DOMAIN}`) && PathPrefix(`/api/v1/payments`)
+      - traefik.http.routers.payment-http.entrypoints=websecure
+      - traefik.http.routers.payment-http.tls.certresolver=le
+      - traefik.http.routers.payment-http.service=payment-http
+      - traefik.http.services.payment-http.loadbalancer.server.port=8080
     environment:
       SPRING_PROFILES_ACTIVE: prod
 
@@ -978,6 +986,19 @@ services:
   #   - Password from Docker secret
   #   - TLS terminated by Traefik (already)
   # ============================================================================
+  legacy-banking-adapter:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+      BANK_WS_URL: ${BANK_WS_URL:-https://legacy-bank-service:8443/ws}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.banking-adapter.rule=Host(`api.${OMP_DOMAIN}`) && PathPrefix(`/api/v1/banking`)
+      - traefik.http.routers.banking-adapter.entrypoints=websecure
+      - traefik.http.routers.banking-adapter.tls.certresolver=le
+      - traefik.http.services.banking-adapter.loadbalancer.server.port=8085
+
   keycloak:
     command:
       - start

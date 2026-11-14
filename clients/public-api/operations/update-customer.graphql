@@ -1,0 +1,1 @@
+mutation UpdateCustomer($id: ID!, $input: UpdateCustomerInput!) { updateCustomer(id: $id, input: $input) { id email firstName lastName status dateOfBirth } }

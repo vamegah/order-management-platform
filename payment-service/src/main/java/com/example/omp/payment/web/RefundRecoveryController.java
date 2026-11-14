@@ -22,6 +22,18 @@ public class RefundRecoveryController {
     }
 
     @PostMapping("/retry")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "Refund completed",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "202",
+            description = "Refund pending; Retry-After is returned",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "422",
+            description = "Refund failed",
+            useReturnTypeSchema = true)
     public ResponseEntity<RecoveryResponse> retry(
             @PathVariable UUID paymentId, @PathVariable UUID refundId) {
         Refund refund = recovery.retry(paymentId, refundId);
@@ -38,9 +50,12 @@ public class RefundRecoveryController {
             int attempts,
             @com.fasterxml.jackson.annotation.JsonFormat(
                             shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
+                    @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
                     Instant nextAttemptAt,
-            String lastError,
-            String attentionReason) {
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String lastError,
+            @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
+                    String attentionReason) {
         static RecoveryResponse from(Refund refund) {
             return new RecoveryResponse(
                     RefundController.RefundResponse.from(refund),

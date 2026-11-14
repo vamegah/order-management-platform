@@ -17,8 +17,8 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * Unit tests for {@link ProductQueryResolver}.
  *
- * <p>Uses the {@code @GraphQlTest} slice — loads the GraphQL infrastructure and this resolver only.
- * Downstream calls are stubbed via WireMock.
+ * <p>Uses the {@code @GraphQlTest} slice â€” loads the GraphQL infrastructure and this resolver
+ * only. Downstream calls are stubbed via WireMock.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -36,7 +36,7 @@ class ProductQueryResolverTest extends AbstractGraphQlTest {
     }
 
     // =========================================================================
-    // product(id) — happy path
+    // product(id) â€” happy path
     // =========================================================================
 
     @Test
@@ -80,7 +80,7 @@ class ProductQueryResolverTest extends AbstractGraphQlTest {
     }
 
     // =========================================================================
-    // product(id) — error paths
+    // product(id) â€” error paths
     // =========================================================================
 
     @Test
@@ -174,7 +174,7 @@ class ProductQueryResolverTest extends AbstractGraphQlTest {
     }
 
     // =========================================================================
-    // products — list
+    // products â€” list
     // =========================================================================
 
     @Test
@@ -259,5 +259,42 @@ class ProductQueryResolverTest extends AbstractGraphQlTest {
                 .path("categories[0].slug")
                 .entity(String.class)
                 .isEqualTo("electronics");
+    }
+
+    @Test
+    void embeddedCategoryResolvesItsFullSchemaWithOneDeduplicatedLookup() {
+        WireMockDownstreamConfig.stubProduct(
+                PRODUCT_ID, PRODUCT_SKU, "Pro Laptop", "2499.99", "USD");
+        productWireMock.stubFor(
+                com.github.tomakehurst.wiremock.client.WireMock.get(
+                                com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo(
+                                        "/api/v1/categories"))
+                        .willReturn(
+                                com.github.tomakehurst.wiremock.client.WireMock.aResponse()
+                                        .withHeader("Content-Type", "application/json")
+                                        .withBody(
+                                                "[{\"id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"Laptops\",\"slug\":\"laptops\",\"description\":\"Complete category\",\"sortOrder\":7,\"parent\":null}]")));
+        String query =
+                "query($id:ID!){first:product(id:$id){category{id description sortOrder parent{id}}} second:product(id:$id){category{sortOrder}}}";
+        graphQlTester
+                .document(query)
+                .variable("id", PRODUCT_ID.toString())
+                .execute()
+                .path("first.category.sortOrder")
+                .entity(Integer.class)
+                .isEqualTo(7)
+                .path("first.category.description")
+                .entity(String.class)
+                .isEqualTo("Complete category")
+                .path("first.category.parent")
+                .valueIsNull()
+                .path("second.category.sortOrder")
+                .entity(Integer.class)
+                .isEqualTo(7);
+        productWireMock.verify(
+                1,
+                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(
+                        com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo(
+                                "/api/v1/categories")));
     }
 }

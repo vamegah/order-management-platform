@@ -27,6 +27,8 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/payments/webhooks")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "providerSignature")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "noopSignature")
 public class StripeWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(StripeWebhookController.class);
@@ -49,9 +51,36 @@ public class StripeWebhookController {
      * provider is supported. For Phase 5 only "stripe" and "noop" exist; the mapping is dynamic.
      */
     @PostMapping("/{providerName}")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "Verified event accepted, duplicated or ignored",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "401",
+            description = "Provider signature rejected",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "404",
+            description = "Unknown provider",
+            useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Event processing failed; provider should retry",
+            useReturnTypeSchema = true)
     public ResponseEntity<Map<String, String>> receive(
             @PathVariable String providerName,
-            @RequestBody byte[] rawBody,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description =
+                                    "Original provider JSON bytes. The signature is verified before processing; clients must not reserialize signed payloads.",
+                            content =
+                                    @io.swagger.v3.oas.annotations.media.Content(
+                                            mediaType = "application/json",
+                                            schema =
+                                                    @io.swagger.v3.oas.annotations.media.Schema(
+                                                            type = "object")))
+                    @RequestBody
+                    byte[] rawBody,
             HttpServletRequest request) {
 
         if (!provider.providerName().equalsIgnoreCase(providerName)) {

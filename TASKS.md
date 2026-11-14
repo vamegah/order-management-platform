@@ -4,7 +4,7 @@ This backlog turns the current implementation into a buildable, deployable, and 
 
 Implementation evidence and current blockers are tracked in [the implementation report](docs/task-implementation-report.md). Unchecked items are not accepted as complete.
 
-The [implementation plan for sections 1-7](docs/task-implementation-plan.md) maps all 31 remaining items to ordered deliverables, dependencies and completion gates.
+The [implementation plan for sections 1-7](docs/task-implementation-plan.md) maps the remaining items to ordered deliverables, dependencies and completion gates.
 
 ## 0. Establish a Green, Reproducible Baseline
 
@@ -105,7 +105,7 @@ The [implementation plan for sections 1-7](docs/task-implementation-plan.md) map
 
 ## 2. Complete REST and GraphQL Public APIs
 
-- [ ] **Publish versioned OpenAPI contracts.** Store and validate OpenAPI 3.1 specifications for product, customer, order, webhook-management, and banking-facade APIs.
+- [x] **Publish versioned OpenAPI contracts.** Store and validate OpenAPI 3.1 specifications for product, customer, order, webhook-management, and banking-facade APIs.
   - Acceptance: CI detects implementation/spec drift; examples authenticate and run through Traefik.
 - [x] **Add batch read APIs for product and customer services.** Implement authorization, validation, bounded request sizes, and response ordering semantics.
   - Acceptance: GraphQL DataLoaders resolve N unique IDs in one request per service rather than N requests.
@@ -113,9 +113,11 @@ The [implementation plan for sections 1-7](docs/task-implementation-plan.md) map
   - Acceptance: abusive nested/expensive queries are rejected and normal aggregate queries continue to work.
 - [x] **Finalize GraphQL production policy.** Decide and implement persisted-query support, cache policy, introspection/GraphiQL production settings, and error redaction.
   - Acceptance: policy is documented and tested for development and production profiles.
-- [ ] **Add external API contract tests.** Test REST/OpenAPI and GraphQL contracts from consumer-facing clients, including authentication, pagination, errors, and backward compatibility.
+- [x] **Add external API contract tests.** Test REST/OpenAPI and GraphQL contracts from consumer-facing clients, including authentication, pagination, errors, and backward compatibility.
   - Acceptance: breaking changes are detected before merge.
-  - Continuation: product/customer real HTTP suites cover batch bounds/order, invalid credentials, configured sorting, browser-origin policy, customer ownership and profile/address mutation responses. Committed lifecycle tests cover image replacement, default-address concurrency/rollback, preferences and identity-link conflicts. Full cross-service/GraphQL compatibility acceptance remains open.
+  - Continuation: product/customer real HTTP suites cover batch bounds/order, invalid credentials, configured sorting, browser-origin policy, customer ownership and profile/address mutation responses. Committed lifecycle tests cover image replacement, default-address concurrency/rollback, preferences and identity-link conflicts. Cross-service/GraphQL compatibility acceptance is closed by the Section 2 closeout below.
+
+- Section 2 closeout (2026-11-14): all five items are complete. Six independently generated OpenAPI 3.1 publications cover all 65 REST operations, including payments and callbacks. The published GraphQL SDL/scalar formats compile a standalone consumer with 21 operations. All 30 deployed consumer cases pass through Traefik with real issuer identities and trusted banking TLS; 28 compatibility regressions and 18 client tests also pass. Required CI compares live implementations, the exact PR base and current/prior consumers. See [public API contracts and verification](docs/public-api-contracts.md). Later sections retain their own acceptance gates.
 
 ## 3. Productionize gRPC
 

@@ -9,8 +9,8 @@ Part of the [Order Management Platform](../README.md).
 Queries and mutations are implemented. Product/customer DataLoaders use bounded
 batch reads. [Execution limits and production policy](../docs/graphql-production-policy.md)
 define depth, weighted complexity, body size, identity rate, response deadlines,
-cache behavior, and the full-query-only policy. Subscriptions and order placed-date
-filtering remain unfinished; they are not production-supported features.
+cache behavior, and the full-query-only policy. Placement-date filtering is implemented end to end. The reserved Subscription
+declaration remains unsupported by the HTTP transport; live notifications use STOMP.
 
 Clean focused verification passes 59 unit/in-process and eleven real HTTP
 endpoint tests with WireMock downstreams, including authentication, customer
@@ -269,3 +269,5 @@ ADR-0001: Schema-per-service
 ADR-0002: Promtail for logs
 
 ADR-0003: Dev + prod overlay
+
+Published SDL, scalar formats, generated consumers and deployed compatibility checks are documented in [public API contracts](../docs/public-api-contracts.md).

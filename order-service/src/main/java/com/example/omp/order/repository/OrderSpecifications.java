@@ -47,13 +47,13 @@ public final class OrderSpecifications {
             if (filter.placedAfter() != null) {
                 predicates.add(
                         cb.greaterThanOrEqualTo(
-                                root.get("createdAt").as(Instant.class), filter.placedAfter()));
+                                root.get("placedAt").as(Instant.class), filter.placedAfter()));
             }
 
             if (filter.placedBefore() != null) {
                 predicates.add(
                         cb.lessThanOrEqualTo(
-                                root.get("createdAt").as(Instant.class), filter.placedBefore()));
+                                root.get("placedAt").as(Instant.class), filter.placedBefore()));
             }
 
             return predicates.isEmpty()

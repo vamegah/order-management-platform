@@ -59,6 +59,7 @@
 
   "users": [
     {
+      "id": "test-alice",
       "username": "alice",
       "enabled": true,
       "emailVerified": true,

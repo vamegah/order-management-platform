@@ -18,5 +18,5 @@ COPY --from=build --chown=app:app /extracted/spring-boot-loader/ ./
 COPY --from=build --chown=app:app /extracted/snapshot-dependencies/ ./
 COPY --from=build --chown=app:app /extracted/application/ ./
 USER app
-EXPOSE 9093 9094
+EXPOSE 8080 9093 9094
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "org.springframework.boot.loader.launch.JarLauncher"]

@@ -43,4 +43,10 @@ public class ProductQueryResolver {
                 size(size),
                 null);
     }
+
+    @SchemaMapping(typeName = "Product", field = "category")
+    public java.util.concurrent.CompletableFuture<CategoryClientDto> category(
+            ProductClientDto product, org.dataloader.DataLoader<String, CategoryClientDto> loader) {
+        return loader.load(product.category().slug());
+    }
 }

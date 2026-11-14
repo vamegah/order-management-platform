@@ -1,0 +1,1 @@
+query Catalog($page: Int = 0, $size: Int = 2) { products(page: $page, size: $size) { content { id sku name status price { amount currency } category { id name slug description sortOrder parent { id name slug } } } page size totalElements totalPages first last } categories { id name slug description sortOrder parent { id name slug } } }

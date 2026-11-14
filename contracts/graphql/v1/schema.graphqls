@@ -1,0 +1,708 @@
+# ==============================================================================
+# Order Management Platform â€” GraphQL Schema
+# ------------------------------------------------------------------------------
+# This schema is the public contract for the GraphQL gateway. It aggregates
+# three REST services:
+#   - product-service   â†’ Product, Category types
+#   - customer-service  â†’ Customer, Address, CustomerPreferences types
+#   - order-service     â†’ Order, OrderLine, OrderStatusHistory types
+#
+# CROSS-SERVICE FIELDS
+#   Some fields cross service boundaries:
+#     - Customer.orders            â†’ resolved by calling order-service
+#     - Order.customer             â†’ resolved by calling customer-service
+#     - Order.lines[].product      â†’ resolved by calling product-service
+#   These are the "value" of GraphQL â€” one query, multiple services.
+#
+# NULLABILITY
+#   Fields are non-null (!) unless absence is meaningful. `[Order!]!` means
+#   "a list (never null) of non-null Order values (may be empty)."
+#
+# CUSTOM SCALARS
+#   - Date     â€” ISO 8601 date (yyyy-MM-dd)
+#   - DateTime â€” ISO 8601 timestamp with UTC offset
+#   - Decimal  â€” Arbitrary-precision decimal, serialized as String
+#
+# ERROR MODEL
+#   GraphQL returns HTTP 200 even for business errors. Errors appear in the
+#   response's `errors` array, each with an `extensions.code`:
+#     - NOT_FOUND                (equivalent to HTTP 404)
+#     - CONFLICT                 (equivalent to HTTP 409)
+#     - VALIDATION_FAILED        (equivalent to HTTP 400)
+#     - FORBIDDEN                (equivalent to HTTP 403)
+#     - UNAUTHENTICATED          (equivalent to HTTP 401)
+#     - DOWNSTREAM_SERVICE_ERROR (equivalent to HTTP 502)
+# ==============================================================================
+
+# ==============================================================================
+# CUSTOM SCALARS
+# ==============================================================================
+
+"""
+An ISO 8601 date (yyyy-MM-dd). Timezone-independent.
+Example: "2025-01-15"
+"""
+scalar Date
+
+"""
+An ISO 8601 timestamp with UTC offset.
+Example: "2025-01-15T14:23:45.123Z"
+"""
+scalar DateTime
+
+"""
+An arbitrary-precision decimal, serialized as a String to preserve precision.
+Example: "2499.9900"
+Use Decimal for monetary amounts â€” GraphQL's Float loses precision.
+"""
+scalar Decimal
+
+# ==============================================================================
+# ENUMS
+# ==============================================================================
+
+enum CustomerStatus {
+  "Normal, fully operational."
+  ACTIVE
+  "Soft-deleted. Retained for historical order references."
+  INACTIVE
+  "Blocked. Cannot place orders."
+  SUSPENDED
+}
+
+enum AddressType {
+  "Used only as a billing address."
+  BILLING
+  "Used only as a shipping address."
+  SHIPPING
+  "Used as both billing and shipping."
+  BOTH
+}
+
+enum ProductStatus {
+  "Visible to customers."
+  ACTIVE
+  "Hidden. Draft or temporarily unavailable."
+  INACTIVE
+  "No longer sold. Kept for historical orders."
+  DISCONTINUED
+}
+
+enum OrderStatus {
+  "Cart-in-progress. Lines can be added or removed."
+  DRAFT
+  "Placed by the customer. Awaiting payment."
+  PLACED
+  "Payment confirmed. Awaiting fulfillment."
+  CONFIRMED
+
+  "Shipment requested; durable inventory commits are pending. Cancellation is fenced."
+  FULFILLING
+  CANCELLING
+  "Shipped. In transit."
+  SHIPPED
+  "Delivered. Terminal state."
+  DELIVERED
+  "Cancelled. Terminal state."
+  CANCELLED
+}
+
+# ==============================================================================
+# SHARED TYPES
+# ==============================================================================
+
+"""
+A monetary amount in a specific currency.
+"""
+type Money {
+  "Amount with 4 decimal places."
+  amount: Decimal!
+  "ISO 4217 currency code. Example: USD."
+  currency: String!
+}
+
+# ==============================================================================
+# CUSTOMER TYPES
+# ==============================================================================
+
+"""
+A customer profile. Aggregates data from customer-service. The `orders` field
+is cross-service (resolved by calling order-service).
+"""
+type Customer {
+  "Server-generated unique identifier."
+  id: ID!
+
+  "Email address. Case-insensitive unique."
+  email: String!
+
+  "Keycloak subject ID. Null until the customer links to a user."
+  keycloakSub: String
+
+  "Given name."
+  firstName: String!
+
+  "Family name."
+  lastName: String!
+
+  "Phone number, as provided."
+  phone: String
+
+  "Date of birth."
+  dateOfBirth: Date
+
+  "Lifecycle status."
+  status: CustomerStatus!
+
+  "Addresses (billing, shipping). May be empty."
+  addresses: [Address!]!
+
+  "Preferences. Null if never set."
+  preferences: CustomerPreferences
+
+  """
+  Orders placed by this customer. Cross-service field: resolved by calling
+  order-service with a filter on customerId.
+  """
+  orders(limit: Int = 20): [Order!]!
+
+  "Creation timestamp."
+  createdAt: DateTime!
+
+  "Last modification timestamp."
+  updatedAt: DateTime!
+}
+
+type Address {
+  "Server-generated unique identifier."
+  id: ID!
+
+  "Address type."
+  addressType: AddressType!
+
+  "Primary address line."
+  line1: String!
+
+  "Secondary address line."
+  line2: String
+
+  "City."
+  city: String!
+
+  "State or province."
+  state: String
+
+  "Postal code."
+  postalCode: String!
+
+  "ISO 3166-1 alpha-2 country code."
+  country: String!
+
+  "True if this is the default address for its type."
+  isDefault: Boolean!
+}
+
+type CustomerPreferences {
+  "BCP 47 language tag. Example: en-US."
+  locale: String!
+
+  "ISO 4217 currency code. Example: USD."
+  currency: String!
+
+  "Marketing communications opt-in."
+  marketingOptIn: Boolean!
+
+  "Email notifications enabled."
+  notificationEmail: Boolean!
+
+  "SMS notifications enabled."
+  notificationSms: Boolean!
+}
+
+"""
+A page of customers.
+"""
+type CustomerPage {
+  content: [Customer!]!
+  page: Int!
+  size: Int!
+  totalElements: Int!
+  totalPages: Int!
+  first: Boolean!
+  last: Boolean!
+}
+
+# ==============================================================================
+# PRODUCT TYPES
+# ==============================================================================
+
+"""
+A product in the catalog.
+"""
+type Product {
+  "Server-generated unique identifier."
+  id: ID!
+
+  "Stock Keeping Unit. Case-insensitive unique."
+  sku: String!
+
+  "Display name."
+  name: String!
+
+  "Longer description."
+  description: String
+
+  "Category, or null if uncategorized."
+  category: Category
+
+  "Price."
+  price: Money!
+
+  "Lifecycle status."
+  status: ProductStatus!
+
+  "Product images, ordered by sortOrder."
+  images: [ProductImage!]!
+
+  "Creation timestamp."
+  createdAt: DateTime!
+
+  "Last modification timestamp."
+  updatedAt: DateTime!
+}
+
+type Category {
+  "Server-generated unique identifier."
+  id: ID!
+
+  "Display name."
+  name: String!
+
+  "URL-friendly identifier."
+  slug: String!
+
+  "Optional description."
+  description: String
+
+  "Parent category, or null for roots."
+  parent: CategorySummary
+
+  "Sort order among siblings."
+  sortOrder: Int!
+}
+
+type CategorySummary {
+  id: ID!
+  name: String!
+  slug: String!
+}
+
+type ProductImage {
+  id: ID!
+  url: String!
+  altText: String
+  sortOrder: Int!
+}
+
+type ProductPage {
+  content: [Product!]!
+  page: Int!
+  size: Int!
+  totalElements: Int!
+  totalPages: Int!
+  first: Boolean!
+  last: Boolean!
+}
+
+# ==============================================================================
+# ORDER TYPES
+# ==============================================================================
+
+"""
+An order. Aggregates data from order-service. The `customer` field and each
+line's `product` field are cross-service.
+"""
+type Order {
+  "Server-generated unique identifier."
+  id: ID!
+
+  "Business identifier (ORD-YYYY-NNNNNNN)."
+  orderNumber: String!
+
+  "Customer ID. Use `customer` for the full object."
+  customerId: ID!
+
+  """
+  The customer who placed this order. Cross-service field: resolved by
+  calling customer-service.
+  """
+  customer: Customer!
+
+  "Email snapshot at order time."
+  customerEmail: String!
+
+  "Current status."
+  status: OrderStatus!
+
+  "Subtotal (sum of line totals)."
+  subtotal: Money!
+
+  "Tax amount."
+  tax: Money!
+
+  "Shipping amount."
+  shipping: Money!
+
+  "Total amount (subtotal + tax + shipping)."
+  total: Money!
+
+  "Shipping address snapshot."
+  shippingAddress: ShippingAddress!
+
+  "Order lines."
+  lines: [OrderLine!]!
+
+  """
+  Full status history. Ordered oldest-first. Null in summary queries.
+  """
+  statusHistory: [OrderStatusHistory!]
+
+  "When the order was placed. Null while DRAFT."
+  placedAt: DateTime
+
+  "Customer-provided notes."
+  notes: String
+
+  "Creation timestamp."
+  createdAt: DateTime!
+
+  "Last modification timestamp."
+  updatedAt: DateTime!
+}
+
+type OrderLine {
+  "Server-generated unique identifier."
+  id: ID!
+
+  "Product ID. Use `product` for the full object."
+  productId: ID!
+
+  """
+  The product this line references. Cross-service field: resolved by
+  calling product-service.
+  """
+  product: Product!
+
+  "Product SKU at order time."
+  productSku: String!
+
+  "Product name at order time."
+  productName: String!
+
+  "Unit price at order time."
+  unitPrice: Money!
+
+  "Quantity."
+  quantity: Int!
+
+  "Line total (unit price Ã— quantity)."
+  lineTotal: Decimal!
+}
+
+type ShippingAddress {
+  line1: String!
+  line2: String
+  city: String!
+  state: String
+  postalCode: String!
+  country: String!
+}
+
+type OrderStatusHistory {
+  "Previous status. Null for the initial entry."
+  fromStatus: OrderStatus
+
+  "New status."
+  toStatus: OrderStatus!
+
+  "Free-text reason."
+  reason: String
+
+  "Who triggered the transition (username or 'system')."
+  changedBy: String!
+
+  "When the transition happened."
+  changedAt: DateTime!
+}
+
+type OrderPage {
+  content: [Order!]!
+  page: Int!
+  size: Int!
+  totalElements: Int!
+  totalPages: Int!
+  first: Boolean!
+  last: Boolean!
+}
+
+# ==============================================================================
+# FILTER INPUTS
+# ==============================================================================
+
+input CustomerFilterInput {
+  "Filter by status."
+  status: CustomerStatus
+
+  "Search by name (first OR last, case-insensitive substring)."
+  nameQuery: String
+
+  "Filter by email domain (e.g., 'omp.local')."
+  emailDomain: String
+}
+
+input ProductFilterInput {
+  "Filter by category slug."
+  categorySlug: String
+
+  "Filter by category ID."
+  categoryId: ID
+
+  "Filter by status."
+  status: ProductStatus
+
+  "Search by name (case-insensitive substring)."
+  nameQuery: String
+}
+
+input OrderFilterInput {
+  "Filter by customer ID."
+  customerId: ID
+
+  "Filter by status."
+  status: OrderStatus
+
+  "Filter by order number."
+  orderNumber: String
+
+  "Only orders placed on or after this date."
+  placedAfter: DateTime
+
+  "Only orders placed on or before this date."
+  placedBefore: DateTime
+}
+
+# ==============================================================================
+# MUTATION INPUTS
+# ==============================================================================
+
+input CreateCustomerInput {
+  email: String!
+  firstName: String!
+  lastName: String!
+  phone: String
+  dateOfBirth: Date
+  addresses: [CreateAddressInput!]
+  preferences: CustomerPreferencesInput
+}
+
+input UpdateCustomerInput {
+  email: String!
+  firstName: String!
+  lastName: String!
+  phone: String
+  dateOfBirth: Date
+}
+
+input CreateAddressInput {
+  addressType: AddressType!
+  line1: String!
+  line2: String
+  city: String!
+  state: String
+  postalCode: String!
+  country: String!
+  isDefault: Boolean
+}
+
+input CustomerPreferencesInput {
+  locale: String
+  currency: String
+  marketingOptIn: Boolean
+  notificationEmail: Boolean
+  notificationSms: Boolean
+}
+
+input CreateProductInput {
+  sku: String!
+  name: String!
+  description: String
+  categoryId: ID!
+  price: MoneyInput!
+  images: [CreateProductImageInput!]
+}
+
+input UpdateProductInput {
+  name: String!
+  description: String
+  categoryId: ID!
+  price: MoneyInput!
+  images: [CreateProductImageInput!]
+}
+
+input MoneyInput {
+  amount: Decimal!
+  currency: String!
+}
+
+input CreateProductImageInput {
+  url: String!
+  altText: String
+}
+
+input CreateOrderInput {
+  customerId: ID!
+  shippingAddress: ShippingAddressInput!
+  lines: [CreateOrderLineInput!]!
+  notes: String
+}
+
+input ShippingAddressInput {
+  line1: String!
+  line2: String
+  city: String!
+  state: String
+  postalCode: String!
+  country: String!
+}
+
+input CreateOrderLineInput {
+  productId: ID!
+  quantity: Int!
+}
+
+# ==============================================================================
+# ROOT TYPES
+# ==============================================================================
+
+type Query {
+  # ---------------------------------------------------------------------------
+  # Customers
+  # ---------------------------------------------------------------------------
+
+  "Fetch a customer by ID."
+  customer(id: ID!): Customer
+
+  "Fetch a customer by email (case-insensitive)."
+  customerByEmail(email: String!): Customer
+
+  """
+  The customer linked to the current JWT's `sub` claim.
+  Equivalent to customer-service's GET /api/v1/customers/me.
+  """
+  me: Customer
+
+  "List customers (admin only)."
+  customers(filter: CustomerFilterInput, page: Int, size: Int): CustomerPage!
+
+  # ---------------------------------------------------------------------------
+  # Products
+  # ---------------------------------------------------------------------------
+
+  "Fetch a product by ID."
+  product(id: ID!): Product
+
+  "Fetch a product by SKU (case-insensitive)."
+  productBySku(sku: String!): Product
+
+  "List products with optional filters."
+  products(filter: ProductFilterInput, page: Int, size: Int): ProductPage!
+
+  "List all categories."
+  categories: [Category!]!
+
+  # ---------------------------------------------------------------------------
+  # Orders
+  # ---------------------------------------------------------------------------
+
+  "Fetch an order by ID."
+  order(id: ID!): Order
+
+  "Fetch an order by its business identifier (ORD-YYYY-NNNNNNN)."
+  orderByNumber(orderNumber: String!): Order
+
+  "List orders (admin only)."
+  orders(filter: OrderFilterInput, page: Int, size: Int): OrderPage!
+}
+
+type Mutation {
+  # ---------------------------------------------------------------------------
+  # Customers
+  # ---------------------------------------------------------------------------
+
+  "Create a customer (admin only)."
+  createCustomer(input: CreateCustomerInput!): Customer!
+
+  "Update a customer's mutable fields (admin only)."
+  updateCustomer(id: ID!, input: UpdateCustomerInput!): Customer!
+
+  "Deactivate a customer (admin only, soft delete)."
+  deactivateCustomer(id: ID!): Customer!
+
+  "Add an address to a customer (admin only)."
+  addCustomerAddress(customerId: ID!, input: CreateAddressInput!): Address!
+
+  "Set customer preferences (admin only)."
+  setCustomerPreferences(customerId: ID!, input: CustomerPreferencesInput!): CustomerPreferences!
+
+  # ---------------------------------------------------------------------------
+  # Products
+  # ---------------------------------------------------------------------------
+
+  "Create a product (admin only)."
+  createProduct(input: CreateProductInput!): Product!
+
+  "Update a product's mutable fields (admin only)."
+  updateProduct(id: ID!, input: UpdateProductInput!): Product!
+
+  "Deactivate a product (admin only, soft delete)."
+  deactivateProduct(id: ID!): Product!
+
+  # ---------------------------------------------------------------------------
+  # Orders
+  # ---------------------------------------------------------------------------
+
+  "Create a DRAFT order."
+  createOrder(input: CreateOrderInput!): Order!
+
+  "Place the order (DRAFT â†’ PLACED)."
+  placeOrder(id: ID!): Order!
+
+  "Confirm the order (PLACED â†’ CONFIRMED, admin only)."
+  confirmOrder(id: ID!, reason: String): Order!
+
+  "Request or retry shipment (CONFIRMED â†’ FULFILLING â†’ SHIPPED, admin only)."
+  shipOrder(id: ID!, reason: String): Order!
+
+  "Mark the order delivered (SHIPPED â†’ DELIVERED, admin only)."
+  deliverOrder(id: ID!, reason: String): Order!
+
+  "Cancel the order (owner or admin)."
+  cancelOrder(id: ID!, reason: String): Order!
+}
+
+# ==============================================================================
+# SUBSCRIPTIONS (declared; implemented in Phase 4)
+# ==============================================================================
+# Subscriptions provide real-time push over WebSocket. They are declared
+# here so clients can see what's coming, but attempting to subscribe before
+# Phase 4 returns a runtime error.
+# ==============================================================================
+
+type Subscription {
+  """
+  Emits whenever an order's status changes.
+  Reserved declaration; GraphQL HTTP subscriptions are not supported.
+  Live order notifications use the separate STOMP transport.
+  """
+  orderStatusChanged(orderId: ID!): Order!
+}

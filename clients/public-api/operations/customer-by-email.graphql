@@ -1,0 +1,1 @@
+query CustomerByEmail($email: String!) { customerByEmail(email: $email) { id email firstName status } }

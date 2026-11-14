@@ -12,6 +12,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 public record PreferencesClientDto(
         String locale,
         String currency,
-        boolean marketingOptIn,
-        boolean notificationEmail,
-        boolean notificationSms) {}
+        Boolean marketingOptIn,
+        Boolean notificationEmail,
+        Boolean notificationSms) {}

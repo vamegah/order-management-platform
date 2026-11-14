@@ -1,76 +1,23 @@
 package com.example.omp.product.config;
 
-import io.swagger.v3.oas.models.Components;
+import com.example.omp.shared.web.openapi.PublishedApiConfiguration;
+import com.example.omp.shared.web.openapi.PublishedApiSupport;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import io.swagger.v3.oas.models.servers.Server;
-import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
-/**
- * OpenAPI / Swagger configuration.
- *
- * <p>Springdoc auto-generates the spec from {@code @Operation} annotations on controller methods.
- * This class adds top-level metadata and the JWT security scheme so Swagger UI's "Authorize" button
- * works.
- */
-@Configuration
+@Configuration(proxyBeanMethods = false)
+@Import(PublishedApiConfiguration.class)
 public class OpenApiConfig {
-
-    @Value("${spring.application.name}")
-    private String applicationName;
-
     @Bean
     public OpenAPI productServiceOpenApi() {
-        final String securitySchemeName = "bearerAuth";
+        var document =
+                PublishedApiSupport.definition(
+                        "Product Service API",
+                        "product-service.localhost",
+                        "Authenticated catalog reads and administrator writes. Product lines remain queryable after soft deletion.");
 
-        return new OpenAPI()
-                .info(
-                        new Info()
-                                .title("Product Service API")
-                                .version("1.0.0")
-                                .description(
-                                        """
-                    REST API for the product catalog.
-
-                    **Authentication:** All endpoints except `/actuator/health` require
-                    a JWT issued by Keycloak. Click "Authorize" and paste a token from
-                    the `postman` client (see the Keycloak realm config).
-
-                    **Roles:** Read operations require any authenticated user. Write
-                    operations (POST, PUT, PATCH, DELETE) require the `admin` role.
-                    """)
-                                .contact(
-                                        new Contact()
-                                                .name("Order Management Platform")
-                                                .url(
-                                                        "https://github.com/example/order-management-platform"))
-                                .license(new License().name("Internal Reference Project")))
-                .servers(
-                        List.of(
-                                new Server()
-                                        .url("http://product-service.localhost")
-                                        .description("Local (dev)"),
-                                new Server()
-                                        .url("https://api.example.com")
-                                        .description("Production")))
-                .components(
-                        new Components()
-                                .addSecuritySchemes(
-                                        securitySchemeName,
-                                        new SecurityScheme()
-                                                .name(securitySchemeName)
-                                                .type(SecurityScheme.Type.HTTP)
-                                                .scheme("bearer")
-                                                .bearerFormat("JWT")
-                                                .description(
-                                                        "JWT issued by Keycloak. Obtain via the `postman` client.")))
-                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName));
+        return document;
     }
 }

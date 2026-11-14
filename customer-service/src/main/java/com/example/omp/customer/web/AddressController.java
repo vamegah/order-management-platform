@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -36,6 +37,7 @@ public class AddressController {
     }
 
     @PostMapping
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     @PreAuthorize("hasRole('admin')")
     @Operation(summary = "Add an address to a customer (admin only)")
     public ResponseEntity<AddressDto> add(
@@ -64,6 +66,7 @@ public class AddressController {
     @DeleteMapping("/{addressId}")
     @PreAuthorize("hasRole('admin')")
     @Operation(summary = "Remove an address (admin only)")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public ResponseEntity<Void> remove(
             @PathVariable UUID customerId, @PathVariable UUID addressId) {
         customerService.removeAddress(customerId, addressId);

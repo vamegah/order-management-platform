@@ -37,7 +37,11 @@ public class WebhookSecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
                         auth ->
-                                auth.requestMatchers("/api/v1/webhook-dlq/**")
+                                auth.requestMatchers(
+                                                org.springframework.http.HttpMethod.POST,
+                                                "/api/v1/webhook-deliveries/*/replay")
+                                        .hasRole("ADMIN")
+                                        .requestMatchers("/api/v1/webhook-dlq/**")
                                         .hasRole("ADMIN")
                                         .anyRequest()
                                         .authenticated())

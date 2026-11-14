@@ -822,6 +822,7 @@ services:
       GRPC_REFLECTION_ENABLED: "true"
       MANAGEMENT_PORT: "9094"
     networks:
+      - edge
       - app
       - data
     deploy:
@@ -844,7 +845,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # No Traefik labels.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.payment-http.rule=Host(`payment-service.localhost`)
+      - traefik.http.routers.payment-http.entrypoints=web
+      - traefik.http.routers.payment-http.service=payment-http
+      - traefik.http.services.payment-http.loadbalancer.server.port=8080
     volumes:
       - ./infrastructure/tls/payment-service/tls.crt:/etc/tls/tls.crt:ro
       - ./infrastructure/tls/payment-service/tls.key:/etc/tls/tls.key:ro
@@ -963,6 +969,7 @@ services:
       - traefik.http.services.banking-adapter.loadbalancer.server.port=8085
 
   legacy-bank-service:
+      image: omp/legacy-bank-service:1.0.0-SNAPSHOT
       build:
         context: .
         dockerfile: legacy-bank-service/Dockerfile

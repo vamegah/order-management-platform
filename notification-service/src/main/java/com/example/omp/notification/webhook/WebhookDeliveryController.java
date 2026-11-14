@@ -18,14 +18,17 @@ public class WebhookDeliveryController {
     private final WebhookDeliveryAttemptRepository attemptRepository;
     private final WebhookSubscriptionService subscriptionService;
     private final SubscriptionOwnerResolver ownerResolver;
+    private final com.example.omp.notification.webhook.dlq.DlqService dlqService;
 
     public WebhookDeliveryController(
             WebhookDeliveryAttemptRepository attemptRepository,
             WebhookSubscriptionService subscriptionService,
-            SubscriptionOwnerResolver ownerResolver) {
+            SubscriptionOwnerResolver ownerResolver,
+            com.example.omp.notification.webhook.dlq.DlqService dlqService) {
         this.attemptRepository = attemptRepository;
         this.subscriptionService = subscriptionService;
         this.ownerResolver = ownerResolver;
+        this.dlqService = dlqService;
     }
 
     /**
@@ -51,13 +54,21 @@ public class WebhookDeliveryController {
     }
 
     /**
-     * Replay a DLQ entry. Admin only — enforced in WebhookSecurityConfig (Response 4). Delegates to
-     * DlqService (Response 3).
+     * Queue a replay through the DLQ authority. Administrator access is enforced by both the HTTP
+     * matcher and method security; completion remains asynchronous.
      */
     @PostMapping("/{deliveryId}/replay")
-    public DeliveryAttemptResponse replay(
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "202",
+            description = "Replay queued",
+            useReturnTypeSchema = true)
+    public org.springframework.http.ResponseEntity<ReplayResponse> replay(
             @AuthenticationPrincipal Jwt jwt, @PathVariable UUID deliveryId) {
-        throw new UnsupportedOperationException(
-                "Replay wired in Response 3 (DlqService + DlqController)");
+        dlqService.replay(deliveryId, jwt.getSubject());
+        return org.springframework.http.ResponseEntity.accepted()
+                .body(new ReplayResponse(deliveryId, "queued"));
     }
+
+    public record ReplayResponse(UUID deliveryId, String status) {}
 }

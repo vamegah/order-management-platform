@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -97,6 +98,7 @@ public class CustomerController {
     // -------------------------------------------------------------------------
 
     @PostMapping
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     @PreAuthorize("hasRole('admin')")
     @Operation(summary = "Create a customer (admin only)")
     public ResponseEntity<CustomerDto> create(
@@ -118,6 +120,7 @@ public class CustomerController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('admin')")
     @Operation(summary = "Deactivate a customer (admin only, soft delete)")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public ResponseEntity<Void> deactivate(@PathVariable UUID id) {
         customerService.deactivate(id);
         return ResponseEntity.noContent().build();

@@ -193,6 +193,7 @@ logging:
 # ==============================================================================
 springdoc:
   api-docs:
+    version: OPENAPI_3_1
     path: /v3/api-docs
     enabled: true
   swagger-ui:
