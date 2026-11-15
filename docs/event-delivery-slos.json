@@ -6,11 +6,14 @@
     "slowReaders": 10,
     "sustainedSeconds": 60,
     "eventsPerSecond": 2,
-    "referenceRunner": "4 vCPU / 7 GiB Linux Docker; local hardware recorded with each report",
+    "referenceRunner": "4 vCPU / 15.33 GiB available to Docker on the reference Linux CI host; actual local/CI hardware is recorded with each report",
     "slowReaderPauseMs": 12000,
     "notificationHeapMiB": 256,
     "notificationMemoryLimitMiB": 1024,
-    "notificationCpuLimit": 2
+    "notificationCpuLimit": 2,
+    "positivePrivateClients": 2,
+    "slowReaderMessages": 512,
+    "slowReaderPayloadChars": 60000
   },
   "objectives": {
     "steadyDeliveryRatio": 1.0,

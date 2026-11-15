@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { setDefaultResultOrder } from 'node:dns';
 setDefaultResultOrder('ipv4first');
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
@@ -91,12 +91,12 @@ async function create() {
   assert.equal(response.status,201,'Create independently owned order');return response.json();
 }
 async function connect(url,destination,{who='alice',slow=false,onMessage=()=>{},short=false}={}) {
-  const record={connected:false,connections:0,received:new Set(),duplicates:0,socket:null,closed:0};
+  const record={connected:false,connections:0,received:new Set(),duplicates:0,socket:null,closed:0,closeCodes:{},heartbeatTimeouts:0};
   const identity=await credentials(who,short);
-  record.client=new Client({webSocketFactory:()=>{record.socket=new WebSocket(url);return record.socket;},connectHeaders:{Authorization:'Bearer '+identity.accessToken},reconnectDelay:slow||short?0:500+Math.floor(Math.random()*1500),connectionTimeout:30000,heartbeatIncoming:10000,heartbeatOutgoing:10000,debug:()=>{}});
+  record.client=new Client({webSocketFactory:()=>{record.socket=new WebSocket(url,{perMessageDeflate:!slow});return record.socket;},connectHeaders:{Authorization:'Bearer '+identity.accessToken},reconnectDelay:slow||short?0:500+Math.floor(Math.random()*1500),connectionTimeout:30000,heartbeatIncoming:slow?0:10000,heartbeatOutgoing:10000,debug:text=>{if(text.startsWith("did not receive server activity"))record.heartbeatTimeouts++;}});
   record.client.beforeConnect=async()=>{record.client.connectHeaders={Authorization:'Bearer '+(await credentials(who,short)).accessToken};};
   record.client.onConnect=()=>{record.connected=true;record.connections++;record.client.subscribe(destination,frame=>onMessage(JSON.parse(frame.body),record));if(slow)setTimeout(()=>record.socket?._socket?.pause(),100);};
-  record.client.onWebSocketClose=()=>{record.connected=false;record.closed++;};
+  record.client.onWebSocketClose=event=>{record.connected=false;record.closed++;record.closeCodes[event.code]=(record.closeCodes[event.code]??0)+1;};
   record.client.onStompError=()=>{record.connected=false;record.rejected=true;};
   clients.push(record);record.client.activate();
   try{await until(()=>record.connected||record.rejected,45000);}catch{throw new Error('Client connection failed after '+record.connections+' handshakes and '+record.closed+' closes');}
@@ -186,11 +186,11 @@ try {
     return {quarantinedConsumers:records.length,concurrentReplayStatuses:[200,409],unauthorizedReplayStatus:403,canonicalStateUnchanged:true};
   });
   slowOrder=await create();
-  const latency=[],published=new Map();
+  const latency=[],published=new Map(),privateOwners=[];
   await phase('1000 clients across two replicas and private isolation',async()=>{
     assert.equal(await subscriptions(),0,'No subscriptions can remain from earlier recovery phases');
     tokenCache.delete('alicefalse');await credentials('alice');
-    const count=slo.topology.healthyClients;
+    const count=slo.topology.healthyClients;assert.ok(count>=1000,"At least 1000 healthy clients are required");
     for(let offset=0;offset<count;offset+=25) {
       await Promise.all(Array.from({length:Math.min(25,count-offset)},(_,i)=>connect(brokers[(offset+i)%2],'/topic/orders/'+order.id,{onMessage:(hint,c)=>{
         const id=hint.data.eventId;if(!published.has(id))return;
@@ -199,10 +199,11 @@ try {
       if((offset+25)%100===0)console.log("Connected "+(offset+25)+" healthy clients");
     }
     for(let i=0;i<slo.topology.foreignPrivateClients;i++) await connect(brokers[i%2],'/user/queue/notifications',{who:'bob',onMessage:()=>{report.unauthorizedDeliveries++;}});
-    await until(async()=>await subscriptions()>=count+slo.topology.foreignPrivateClients);
-    assert.ok(clients.filter(c=>c.connected).length>=1000);return {healthyClients:count,replicas:2};
+    for(let i=0;i<slo.topology.positivePrivateClients;i++)privateOwners.push(await connect(brokers[i%2],'/user/queue/notifications',{onMessage:(hint,c)=>{const id=hint.data.eventId;if(published.has(id))c.received.add(id);}}));
+    await until(async()=>await subscriptions()>=count+slo.topology.foreignPrivateClients+privateOwners.length);
+    assert.ok(clients.filter(c=>c.connected).length>=count);return {healthyClients:count,replicas:2};
   });
-  const healthy=clients.slice(0,1000);
+  const healthy=clients.slice(0,slo.topology.healthyClients);
   await phase('sustained throughput latency gaps and duplicates',async()=>{
     const source=producer();const warmup=randomUUID();source.emit(order.id,event(order.id,warmup));
     await until(()=>Number(sql(`SELECT count(*) FROM notifications.domain_event_inbox WHERE consumer_id='live' AND event_id='${warmup}'`))===1);
@@ -210,11 +211,11 @@ try {
     for(let i=0;i<slo.topology.sustainedSeconds*slo.topology.eventsPerSecond;i++) {
       const id=randomUUID();published.set(id,Date.now());source.emit(order.id,event(order.id,id));await wait(1000/slo.topology.eventsPerSecond);
     }
-    await source.end();let allReceived=true;try{await until(()=>healthy.every(c=>c.received.size===published.size),15000);}catch(error){if(error.message!=='Acceptance condition timed out')throw error;allReceived=false;}
+    await source.end();let allReceived=true;try{await until(()=>[...healthy,...privateOwners].every(c=>c.received.size===published.size),15000);}catch(error){if(error.message!=='Acceptance condition timed out')throw error;allReceived=false;}
     latency.sort((a,b)=>a-b);const p95=latency[Math.floor(latency.length*.95)],p99=latency[Math.floor(latency.length*.99)];
     const duplicates=healthy.reduce((n,c)=>n+c.duplicates,0),expected=healthy.length*published.size,received=healthy.reduce((n,c)=>n+c.received.size,0);
-    report.steady={events:published.size,expected,received,gaps:expected-received,duplicates,p95Ms:p95,p99Ms:p99,allReceived,minPerClient:Math.min(...healthy.map(c=>c.received.size)),maxPerClient:Math.max(...healthy.map(c=>c.received.size)),socketCloses:healthy.reduce((n,c)=>n+c.closed,0)};
-    assert.equal(received,expected);assert.equal(report.unauthorizedDeliveries,0);
+    report.steady={events:published.size,expected,received,gaps:expected-received,duplicates,p95Ms:p95,p99Ms:p99,allReceived,minPerClient:Math.min(...healthy.map(c=>c.received.size)),maxPerClient:Math.max(...healthy.map(c=>c.received.size)),socketCloses:healthy.reduce((n,c)=>n+c.closed,0),heartbeatTimeouts:healthy.reduce((n,c)=>n+c.heartbeatTimeouts,0),privateReceived:privateOwners.reduce((n,c)=>n+c.received.size,0)};
+    assert.equal(received,expected);assert.equal(report.steady.privateReceived,privateOwners.length*published.size);assert.equal(report.unauthorizedDeliveries,0);
     assert.ok(p95<=slo.objectives.steadyP95LatencyMs,'p95 latency '+p95+'ms exceeds objective');assert.ok(p99<=slo.objectives.steadyP99LatencyMs,'p99 latency '+p99+'ms exceeds objective');
     assert.ok(duplicates/expected<=slo.objectives.steadyDuplicateRatioMax);
     report.resources.push(JSON.parse(run(['info','--format','{"cpus":{{.NCPU}},"memoryBytes":{{.MemTotal}}}'])));
@@ -246,19 +247,20 @@ try {
     tokenCache.delete("alicefalse");await credentials("alice");
     for(let i=0;i<slo.topology.slowReaders;i++)slow.push(await connect(brokers[i%2],'/topic/orders/'+slowOrder.id,{slow:true}));
     await until(async()=>await subscriptions()>=before+slow.length);
-    const source=producer();for(let i=0;i<320;i++)source.emit(slowOrder.id,event(slowOrder.id,randomUUID(),'S'.repeat(32000)));await source.end();
+    const source=producer();for(let i=0;i<slo.topology.slowReaderMessages;i++)source.emit(slowOrder.id,event(slowOrder.id,randomUUID(),randomBytes(slo.topology.slowReaderPayloadChars*3/4).toString('base64')));await source.end();
     await wait(slo.topology.slowReaderPauseMs);
     for(const c of slow)c.socket?._socket?.resume();
     await until(()=>slow.some(c=>c.closed>0),30000);
     const after=replicaState();
     for(let i=0;i<after.length;i++){assert.equal(after[i].restarts,processes[i].restarts,'Slow readers cannot restart a replica');assert.equal(after[i].oomKilled,false);}
     await Promise.all(slow.map(c=>c.client.deactivate({force:true})));
-    return {slowReaders:slow.length,disconnectionObserved:true,replicas:replicaState()};
+    assert.ok(slow.every(c=>c.heartbeatTimeouts===0),'Slow readers must not be closed by their client heartbeat monitor');
+    return {slowReaders:slow.length,messages:slo.topology.slowReaderMessages,payloadChars:slo.topology.slowReaderPayloadChars,compression:false,disconnectionObserved:true,replicas:replicaState()};
   });
   await phase('reconnect storm converges without authorization changes',async()=>{
     const start=Date.now();for(const c of healthy){c.expectedConnections=c.connections+1;c.client.forceDisconnect();}
     await until(()=>healthy.every(c=>c.connected&&c.connections>=c.expectedConnections),slo.objectives.reconnectConvergenceMs);
-    await until(async()=>await subscriptions()>=1012);
+    await until(async()=>await subscriptions()>=healthy.length+slo.topology.foreignPrivateClients+slo.topology.positivePrivateClients+2);
     return {clients:healthy.length,reconnectedMs:Date.now()-start};
   });
   await phase('Redis disruption replica replacement and canonical convergence',async()=>{

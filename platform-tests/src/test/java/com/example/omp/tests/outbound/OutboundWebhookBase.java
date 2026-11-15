@@ -80,10 +80,20 @@ abstract class OutboundWebhookBase {
     @AfterEach
     void baseTearDown() {
         try {
-            org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(50)).untilAsserted(()->{
-                com.example.omp.testsupport.KafkaTestHelper.awaitWebhookConsumersCaughtUp(SharedContainers.kafkaBootstrap(),"platform-tests");
-                org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications.notification_dispatch WHERE state='PENDING'",Long.class)).isZero();
-            });
+            org.awaitility.Awaitility.await()
+                    .atMost(java.time.Duration.ofSeconds(50))
+                    .untilAsserted(
+                            () -> {
+                                com.example.omp.testsupport.KafkaTestHelper
+                                        .awaitWebhookConsumersCaughtUp(
+                                                SharedContainers.kafkaBootstrap(),
+                                                "platform-tests");
+                                org.assertj.core.api.Assertions.assertThat(
+                                                jdbc.queryForObject(
+                                                        "SELECT count(*) FROM notifications.notification_dispatch WHERE state='PENDING'",
+                                                        Long.class))
+                                        .isZero();
+                            });
         } finally {
             if (subscriber != null) {
                 subscriber.close();
@@ -110,23 +120,50 @@ abstract class OutboundWebhookBase {
 
     protected void publishEvent(String topic, String eventId, String eventType, String dataJson) {
         try {
-            var mapper=com.example.omp.shared.events.EventSerde.buildObjectMapper();
-            var data=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(dataJson);
-            String primary=topic.startsWith("orders.")?"orderId":topic.startsWith("payments.")?"paymentId":"reservationId";
-            for(String name:List.of(primary,"orderId")) {
-                if(data.has(name)) {
-                    String raw=data.path(name).asText();
-                    try {UUID.fromString(raw);}catch(IllegalArgumentException invalid){data.put(name,UUID.nameUUIDFromBytes(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());}
+            var mapper = com.example.omp.shared.events.EventSerde.buildObjectMapper();
+            var data = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(dataJson);
+            String primary =
+                    topic.startsWith("orders.")
+                            ? "orderId"
+                            : topic.startsWith("payments.") ? "paymentId" : "reservationId";
+            for (String name : List.of(primary, "orderId")) {
+                if (data.has(name)) {
+                    String raw = data.path(name).asText();
+                    try {
+                        UUID.fromString(raw);
+                    } catch (IllegalArgumentException invalid) {
+                        data.put(
+                                name,
+                                UUID.nameUUIDFromBytes(
+                                                raw.getBytes(
+                                                        java.nio.charset.StandardCharsets.UTF_8))
+                                        .toString());
+                    }
                 }
             }
-            if(!data.has(primary))data.put(primary,UUID.nameUUIDFromBytes((topic+dataJson).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());
-            data.put("customerId","00000000-0000-0000-0000-000000000101");
-            var envelope=mapper.createObjectNode();envelope.put("eventId",eventId);envelope.put("eventType",eventType);
-            envelope.put("aggregateId",data.path(primary).asText());envelope.put("occurredAt","2026-01-01T00:00:00Z");envelope.put("schemaVersion",1);envelope.set("data",data);
-            String payload=mapper.writeValueAsString(envelope);
-            com.example.omp.shared.events.EventContract.validate(payload,topic);
-            kafkaTemplate.send(topic,data.path(primary).asText(),payload).get(10,TimeUnit.SECONDS);
-        } catch(Exception e) {throw new IllegalStateException("Test event was not acknowledged",e);}
+            if (!data.has(primary))
+                data.put(
+                        primary,
+                        UUID.nameUUIDFromBytes(
+                                        (topic + dataJson)
+                                                .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                                .toString());
+            data.put("customerId", "00000000-0000-0000-0000-000000000101");
+            var envelope = mapper.createObjectNode();
+            envelope.put("eventId", eventId);
+            envelope.put("eventType", eventType);
+            envelope.put("aggregateId", data.path(primary).asText());
+            envelope.put("occurredAt", "2026-01-01T00:00:00Z");
+            envelope.put("schemaVersion", 1);
+            envelope.set("data", data);
+            String payload = mapper.writeValueAsString(envelope);
+            com.example.omp.shared.events.EventContract.validate(payload, topic);
+            kafkaTemplate
+                    .send(topic, data.path(primary).asText(), payload)
+                    .get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException("Test event was not acknowledged", e);
+        }
     }
 
     protected List<WebhookDeliveryAttempt> attemptsFor(UUID subscriptionId) {

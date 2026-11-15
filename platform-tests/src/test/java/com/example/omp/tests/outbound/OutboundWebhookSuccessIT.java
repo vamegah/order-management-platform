@@ -163,12 +163,9 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
         WebhookSubscription sub = createSubscription("order.placed");
         subscriber.enqueueResponse(200, "{\"received\":true}");
 
-        String attemptEventId=java.util.UUID.randomUUID().toString();
+        String attemptEventId = java.util.UUID.randomUUID().toString();
         publishEvent(
-                "orders.events.order",
-                attemptEventId,
-                "order.placed",
-                "{\"orderId\":\"o-42\"}");
+                "orders.events.order", attemptEventId, "order.placed", "{\"orderId\":\"o-42\"}");
 
         await().atMost(Duration.ofSeconds(30))
                 .untilAsserted(
