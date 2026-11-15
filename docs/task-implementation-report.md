@@ -1,23 +1,18 @@
 # TASKS.md implementation report
 
-Updated: 2026-11-09 (America/Chicago). Feature and release acceptance remain incomplete.
+Updated: 2026-11-15 (America/Chicago). Sections 1-4 are implemented; later feature
+and release acceptance remain open. Sections 5-7 retain seventeen unchecked items.
 
-The accepted main baseline is `7986d3e`, the approved warehouse-provenance merge
-of [PR #21](https://github.com/vamegah/order-management-platform/pull/21).
-Its [complete main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42755330384)
-passes all twenty jobs, 1,303 reactor cases and 28 deployed service/client cases.
-The [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42751851607)
-also passes. Exact source, reports and merge/protection records are retained in
-`coverage/reservation-warehouse-ci-evidence.zip` and
-`coverage/reservation-warehouse-main-ci-evidence.zip`, with JSON hashes.
-
-The completed-task review closes proto evolution (3.3) and WSDL drift protection
-(6.5). Sections 1-7 now retain 31 open items. The
-[implementation plan](task-implementation-plan.md) defines their delivery order
-and completion criteria; [TASKS.md](../TASKS.md) records acceptance. Earlier
-sections below are historical checkpoints, including superseded failure,
-environment and open-item counts. Use the latest dated evidence for each scope.
-Production security, performance, recovery and release requirements remain open.
+The accepted main baseline is `a8f3e51`, the production gRPC merge of
+[PR #24](https://github.com/vamegah/order-management-platform/pull/24).
+Section 4 is implemented in [PR #25](https://github.com/vamegah/order-management-platform/pull/25), with source-bound
+[nine-phase realtime acceptance](https://github.com/vamegah/order-management-platform/actions/runs/43682258012/job/132715295117)
+and fourteen passing exact-base unit-coverage comparisons at `53c5572`.
+The [implementation plan](task-implementation-plan.md) defines delivery order;
+[TASKS.md](../TASKS.md) records completion. Earlier sections below retain historical
+checkpoints, including superseded failures, environment limits and open counts.
+Use the latest dated evidence for each scope. Merge and release acceptance remain
+subject to their separately authorized scope.
 
 ## Implemented changes
 
@@ -2932,3 +2927,60 @@ remains at 100%, inventory rises to 89.571899% and payment to 74.529933%.
 [verified workflow](https://github.com/vamegah/order-management-platform/actions/runs/43639186455). Source-bound CI artifacts and their hashes are retained
 in `coverage/grpc-production-ci-evidence/metadata.json`. The supported procedure is
 in [gRPC production operation](grpc-production.md).
+
+
+## Durable events and secure WebSocket closeout (2026-11-15)
+
+Section 4's six implementation items are complete in [PR #25](https://github.com/vamegah/order-management-platform/pull/25).
+Version-one contracts preserve prior flat consumers while validating identities,
+versions, topic category and payload correlation. Published schemas and fixtures
+have an immutable compatibility baseline and exact-base CI checks.
+
+All emitting order/inventory/payment paths use source transactional outboxes.
+Publication waits for broker acknowledgment and retains unresolved work. Ordered
+claims fence pending/failed aggregate predecessors; source replay is transactional
+and audited. Notification consumers atomically insert an inbox identity and all
+matching dispatch work before offset commit. Retry, webhook/DLQ handoff and replay
+also use the durable queue. Poison records receive bounded retry and protected
+quarantine; database failure preserves their source offset. Administrator recovery
+validates corrections, excludes payloads from diagnostics, records audit metadata
+and fences concurrent actions with 200/409 outcomes.
+
+WebSockets enforce real order/payment ownership, signed customer/private routing,
+bounded token-scoped positive proofs and lookup coalescing. Session tickets prevent
+late ownership replies from restoring removed subscriptions. Original JWT lifetime
+is at most five minutes; idle expiry closes actual sockets and outbound delivery
+checks expiry independently. HTTP workers, channel queues, sockets, subscriptions
+and send buffers have explicit bounds. The supported TypeScript package remains
+required, including credential refresh and canonical state recovery.
+
+At `53c5572`, all nine cases in [the required realtime job](https://github.com/vamegah/order-management-platform/actions/runs/43682258012/job/132715295117) pass:
+120 events over 60 seconds produce all 120,000 expected deliveries, zero gaps,
+zero duplicates, p95 1.647 s and p99 1.753 s. Two positive private listeners receive
+240 matching hints; ten foreign private listeners receive none. All four foreign
+order/payment subscriptions and foreign recovery actions are denied. Idle token
+expiry and package credential refresh execute against the real issuer. Slow
+readers receive fresh random uncompressed payloads; at least one disconnects with
+no replica restart/OOM and no client-heartbeat false positive. The 1,000-client
+reconnect completes in 4.894 s; all 1,000 canonical reads converge after Redis
+interruption/replica replacement in 13.975 s after readiness. Cleanup leaves no
+subscriptions and unauthorized delivery remains zero.
+
+The host reports four vCPUs and 16,759,439,360 Docker-visible bytes of RAM. Each
+notification replica is limited to two CPUs/1 GiB, with a 256 MiB G1 heap and bounded
+native reservations; the post-window memory samples are 725.9/727.4 MiB. These are
+reference measurements, not a capacity guarantee for smaller hosts. Initial local
+512 MiB configurations paged and failed; compressible slow-reader padding did not
+apply pressure and was replaced before acceptance. All seven reduced-client local
+functional cases also pass, including cleanup. That diagnostic run does not
+replace the required 1,000-client measurement.
+
+All fourteen unit-coverage comparisons pass over 1,199 head unit cases. The
+contract/tooling checks pass 34/69 cases; static analysis, dependency policy,
+packaged payment journey, public API/gRPC deployment and ten image checks also
+pass. The PR retains the complete reactor, external recovery and quality gates
+for final-revision verification. No later section is closed by this work.
+Artifacts, raw measurements, JUnit and hashes are retained under
+`coverage/events-section4-ci/43682258012`, including the event acceptance and
+unit-coverage comparison archives. The [runbook](events-and-websockets.md) defines
+retention, replay, SLO reproduction and the limits of transient hints.

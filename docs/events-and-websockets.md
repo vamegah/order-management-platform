@@ -89,3 +89,33 @@ Use a fresh disposable project and the routing/key-permission preparation in the
 The slow-reader fixture disables its own incoming-heartbeat watchdog; closure must come from server/network backpressure. Fresh random payloads avoid compression/context reuse hiding the intended pressure. Positive private listeners on both replicas receive every steady event while foreign private listeners receive none.
 
 The required `events-e2e` job retains measured JSON, JUnit, topology/resource diagnostics, and service logs under `coverage/events-acceptance`. Its quality-gate dependency rejects missing, skipped, incomplete, or failed phases. This reference SLO applies to the declared topology/hardware and is not a general production capacity claim. Keep the existing supported TypeScript client tests and deployed convergence tests in addition to the load harness.
+
+
+## Measured reference acceptance
+
+The [required nine-phase job](https://github.com/vamegah/order-management-platform/actions/runs/43682258012/job/132715295117) passes at `53c5572` (PR merge source
+`8d93fc93cd1a501beb18dd3c17ba5893d1207cc0`). All cases and subscription cleanup
+complete with zero unauthorized deliveries. The host reports four vCPUs and
+16,759,439,360 Docker-visible bytes of RAM; each notification replica uses the
+declared two-CPU/1-GiB limit and a 256-MiB G1 heap.
+
+| Measurement | Result | Objective |
+| --- | --- | --- |
+| Healthy clients / replicas | 1,000 / 2 | At least 1,000 / 2 |
+| Steady workload | 120 events in 60 s; 120,000 deliveries | 2 events/s, complete delivery |
+| Gaps / duplicates | 0 / 0 | 0 / at most 1% duplicates |
+| p95 / p99 end-to-end latency | 1.647 / 1.753 s | At most 3 / 5 s |
+| Positive / foreign private delivery | 240 expected / 0 foreign | All owned hints / no foreign hints |
+| Reconnect convergence | 4.894 s for 1,000 clients | At most 60 s |
+| Post-readiness canonical convergence | 13.975 s for 1,000 clients | At most 60 s |
+| Slow readers | Disconnection observed; no replica restart/OOM | Bounded buffers and disconnection |
+| Post-window replica memory samples | 725.9 / 727.4 MiB | 1 GiB limit per replica |
+
+The reported delivery rate is approximately 1,901 deliveries/s including drain
+and sampling overhead. Initial smaller local configurations and the original
+compressible padding failed to establish the SLO; their results are retained as
+diagnostics. The local seven-case reduced-client probe validates recovery behavior
+and does not replace this reference measurement. Source-bound JSON, JUnit, service
+logs, archives and hashes are retained under
+`coverage/events-section4-ci/43682258012` and the CI artifact
+`events-realtime-acceptance`.

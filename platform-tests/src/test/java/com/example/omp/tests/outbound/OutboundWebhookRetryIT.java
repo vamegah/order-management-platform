@@ -86,9 +86,19 @@ class OutboundWebhookRetryIT extends OutboundWebhookBase {
         String deliveryId2 = subscriber.header(1, "X-Webhook-Delivery-Id");
         assertThat(deliveryId1).isEqualTo(deliveryId2);
 
-        List<WebhookDeliveryAttempt> all = attemptsFor(sub.getId());
-        assertThat(all).hasSize(2);
-        assertThat(all.stream().map(WebhookDeliveryAttempt::getDeliveryId).distinct()).hasSize(1);
+        // The subscriber observes the HTTP request before the listener's database commit.
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(
+                        () -> {
+                            List<WebhookDeliveryAttempt> all = attemptsFor(sub.getId());
+                            assertThat(all).hasSize(2);
+                            assertThat(all.stream().map(WebhookDeliveryAttempt::getDeliveryId))
+                                    .containsOnly(java.util.UUID.fromString(deliveryId1));
+                            assertThat(all.stream().map(WebhookDeliveryAttempt::getStatus))
+                                    .containsExactlyInAnyOrder(
+                                            DeliveryStatus.FAILED_RETRYABLE,
+                                            DeliveryStatus.SUCCESS);
+                        });
     }
 
     @Test
