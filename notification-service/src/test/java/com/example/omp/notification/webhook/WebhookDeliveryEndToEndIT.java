@@ -108,6 +108,7 @@ class WebhookDeliveryEndToEndIT extends AbstractNotificationTest {
         subscriptions.save(sub);
         responseStatus.set(410);
         String eventId = UUID.randomUUID().toString();
+        String paymentId = UUID.randomUUID().toString();
         String payload =
                 objectMapper.writeValueAsString(
                         Map.of(
@@ -120,9 +121,15 @@ class WebhookDeliveryEndToEndIT extends AbstractNotificationTest {
                                 "schemaVersion",
                                 1,
                                 "aggregateId",
-                                UUID.randomUUID().toString(),
+                                paymentId,
                                 "data",
-                                Map.of("paymentId", UUID.randomUUID().toString())));
+                                Map.of(
+                                        "paymentId",
+                                        paymentId,
+                                        "customerId",
+                                        TestTokens.ALICE_CUSTOMER_ID.toString(),
+                                        "status",
+                                        "CONFIRMED")));
         kafkaTemplate.send("payments.events.payment", eventId, payload).get(10, SECONDS);
         await().atMost(30, SECONDS)
                 .untilAsserted(
@@ -232,6 +239,7 @@ class WebhookDeliveryEndToEndIT extends AbstractNotificationTest {
 
         // 2. Publish a domain event to the payments topic.
         String eventId = UUID.randomUUID().toString();
+        String paymentId = UUID.randomUUID().toString();
         String payload =
                 objectMapper.writeValueAsString(
                         Map.of(
@@ -240,13 +248,19 @@ class WebhookDeliveryEndToEndIT extends AbstractNotificationTest {
                                 "eventType",
                                 "payment.confirmed",
                                 "aggregateId",
-                                UUID.randomUUID().toString(),
+                                paymentId,
                                 "occurredAt",
                                 "2026-01-01T00:00:00Z",
                                 "schemaVersion",
                                 1,
                                 "data",
-                                Map.of("paymentId", UUID.randomUUID().toString())));
+                                Map.of(
+                                        "paymentId",
+                                        paymentId,
+                                        "customerId",
+                                        TestTokens.ALICE_CUSTOMER_ID.toString(),
+                                        "status",
+                                        "CONFIRMED")));
         var metadata =
                 kafkaTemplate
                         .send("payments.events.payment", eventId, payload)

@@ -25,6 +25,7 @@ class StompAuthChannelInterceptorTest {
     @Test
     void connectBindsVerifiedIdentityAndStoresTokenForRelay() {
         UUID customer = UUID.randomUUID();
+        Instant issued = Instant.now();
         var jwt =
                 Jwt.withTokenValue("token")
                         .header("alg", "none")
@@ -32,7 +33,8 @@ class StompAuthChannelInterceptorTest {
                         .claim("preferred_username", "mutable-name")
                         .claim("customer_id", customer.toString())
                         .claim("realm_access", Map.of("roles", List.of("customer")))
-                        .expiresAt(Instant.now().plusSeconds(600))
+                        .issuedAt(issued)
+                        .expiresAt(issued.plusSeconds(300))
                         .build();
         when(decoder.decode("token")).thenReturn(jwt);
         var accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
@@ -74,16 +76,53 @@ class StompAuthChannelInterceptorTest {
 
     @Test
     void invalidCustomerClaimIsRejected() {
+        Instant issued = Instant.now();
         when(decoder.decode("token"))
                 .thenReturn(
                         Jwt.withTokenValue("token")
                                 .header("alg", "none")
                                 .subject("subject")
                                 .claim("customer_id", "invalid")
+                                .issuedAt(issued)
+                                .expiresAt(issued.plusSeconds(300))
                                 .build());
         var accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
         accessor.setNativeHeader("Authorization", "Bearer token");
         assertThatThrownBy(() -> send(accessor)).isInstanceOf(BadCredentialsException.class);
         assertThat(accessor.getUser()).isNull();
+    }
+
+    @Test
+    void missingExpiredAndLongLivedCredentialsCannotOpenASession() {
+        for (Instant expiry :
+                java.util.Arrays.asList(
+                        null, Instant.now().minusSeconds(1), Instant.now().plusSeconds(3600))) {
+            var builder = Jwt.withTokenValue("token").header("alg", "none").subject("subject");
+            if (expiry != null) builder.expiresAt(expiry);
+            when(decoder.decode("token")).thenReturn(builder.build());
+            var headers = StompHeaderAccessor.create(StompCommand.CONNECT);
+            headers.setNativeHeader("Authorization", "Bearer token");
+            assertThatThrownBy(() -> send(headers)).isInstanceOf(BadCredentialsException.class);
+            assertThat(headers.getUser()).isNull();
+        }
+    }
+
+    @Test
+    void anOldLongLivedTokenIsRejectedEvenDuringItsLastMinute() {
+        Instant now = Instant.now();
+        when(decoder.decode("old"))
+                .thenReturn(
+                        Jwt.withTokenValue("old")
+                                .header("alg", "none")
+                                .subject("subject")
+                                .issuedAt(now.minusSeconds(3600))
+                                .expiresAt(now.plusSeconds(60))
+                                .build());
+        var headers = StompHeaderAccessor.create(StompCommand.CONNECT);
+        headers.setNativeHeader("Authorization", "Bearer old");
+        assertThatThrownBy(() -> send(headers))
+                .isInstanceOf(BadCredentialsException.class)
+                .hasMessageContaining("original lifetime");
+        assertThat(headers.getUser()).isNull();
     }
 }

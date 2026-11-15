@@ -32,6 +32,7 @@ Strict compilation and seventeen real WebSocket/STOMP transport cases cover retr
 refresh, cancellation, missing-event reconciliation, identity changes, bounded
 buffers and redacted errors. The separate deployed package test requires the actual
 platform. Java external suites additionally verify real JWTs, mTLS, ownership reads,
-Kafka/Redis delivery and unsubscribe cleanup. Multi-replica replacement, durable
-replay, scheduled server-side expiry closure and load acceptance remain separate
-backlog work; none is inferred from reconnect support.
+Kafka/Redis delivery and unsubscribe cleanup. The required event/realtime acceptance job additionally exercises two notification replicas,
+producer/replica replacement, durable quarantine and replay, scheduled idle expiry,
+slow readers and 1,000 healthy clients. Its declared objectives and measured evidence are
+separate from reconnect support; see [event and WebSocket operations](events-and-websockets.md).

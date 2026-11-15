@@ -14,15 +14,14 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties.AckMode;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.util.backoff.FixedBackOff;
 
 /**
  * Default Kafka consumer container factory for domain-event consumers (OrderEventConsumer,
  * PaymentEventConsumer, InventoryEventConsumer).
  *
- * <p>Uses MANUAL_IMMEDIATE ack mode (consumers call ack.acknowledge() after successful Redis
- * publish) and a bounded retry + log-and-skip error handler so a single bad record never blocks a
- * partition indefinitely.
+ * <p>Uses MANUAL_IMMEDIATE ack mode (consumers call ack.acknowledge() after durable database
+ * handling) and bounded retries followed by durable quarantine so a single bad record never blocks
+ * a partition indefinitely.
  *
  * <p>The webhook pipeline has its own factories in WebhookKafkaConfig.
  */
@@ -62,24 +61,15 @@ public class KafkaConsumerConfig {
      * Named "kafkaListenerContainerFactory" — the default name Spring Kafka resolves when no
      * containerFactory is specified on @KafkaListener.
      *
-     * <p>Error handling: 3 retries at 1-second intervals. On final failure the record is logged and
-     * the offset is committed so the partition is not blocked. Malformed/poison events are skipped
-     * after retries are exhausted.
+     * <p>Error handling: 3 retries at 1-second intervals. On final failure the record is
+     * quarantined before its offset can commit. A quarantine storage failure preserves the input
+     * for retry.
      */
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
+            com.example.omp.notification.durable.EventQuarantine quarantine) {
 
-        DefaultErrorHandler errorHandler =
-                new DefaultErrorHandler(
-                        (record, exception) ->
-                                log.error(
-                                        "Kafka record processing failed permanently after retries:"
-                                                + " topic={} partition={} offset={} error={}",
-                                        record.topic(),
-                                        record.partition(),
-                                        record.offset(),
-                                        exception.getMessage()),
-                        new FixedBackOff(1_000L, 3));
+        DefaultErrorHandler errorHandler = quarantine.handler("live", true);
 
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();

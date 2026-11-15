@@ -26,6 +26,7 @@ CREATE TABLE outbox_event (
     -- Primary key. UUID so we never have a hot sequence and can generate IDs
     -- at the application side before the insert.
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    sequence_id     bigserial NOT NULL UNIQUE,
 
     -- The aggregate identifier (order ID, reservation ID, payment ID).
     -- Used as the Kafka partition key so events for one aggregate stay ordered.

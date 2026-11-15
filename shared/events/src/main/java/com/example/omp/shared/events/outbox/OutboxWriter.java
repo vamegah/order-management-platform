@@ -101,7 +101,11 @@ public class OutboxWriter {
 
     private String serialize(BaseEvent event) {
         try {
-            return objectMapper.writeValueAsString(event);
+            com.fasterxml.jackson.databind.node.ObjectNode wire = objectMapper.valueToTree(event);
+            var data = wire.deepCopy();
+            wire.put("aggregateId", event.aggregateId());
+            wire.set("data", data);
+            return objectMapper.writeValueAsString(wire);
         } catch (JsonProcessingException e) {
             throw new OutboxException("Failed to serialize event " + event.eventType(), e);
         }
@@ -115,13 +119,13 @@ public class OutboxWriter {
      */
     private String aggregateType(BaseEvent event) {
         String type = event.eventType();
-        if (type.startsWith("ORDER_")) {
+        if (type.startsWith("ORDER_") || type.startsWith("order.")) {
             return "ORDER";
         }
-        if (type.startsWith("RESERVATION_")) {
+        if (type.startsWith("RESERVATION_") || type.startsWith("inventory.")) {
             return "RESERVATION";
         }
-        if (type.startsWith("PAYMENT_")) {
+        if (type.startsWith("PAYMENT_") || type.startsWith("payment.")) {
             return "PAYMENT";
         }
         return "UNKNOWN";

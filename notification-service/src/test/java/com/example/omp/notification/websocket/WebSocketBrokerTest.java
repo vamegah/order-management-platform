@@ -36,6 +36,8 @@ import org.springframework.web.socket.sockjs.client.*;
         classes = WebSocketBrokerTest.Config.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.config.name=websocket-test", "omp.outbox.enabled=false"})
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class WebSocketBrokerTest {
     static final UUID CUSTOMER = UUID.randomUUID();
 
@@ -49,6 +51,7 @@ class WebSocketBrokerTest {
                 DataRedisAutoConfiguration.class,
                 DataRedisRepositoriesAutoConfiguration.class
             })
+    @org.springframework.scheduling.annotation.EnableScheduling
     @EnableConfigurationProperties(NotificationProperties.class)
     @Import({
         WebSocketConfig.class,
@@ -59,6 +62,7 @@ class WebSocketBrokerTest {
         OwnershipVerifier.class,
         EventDispatcherImpl.class,
         DestinationResolver.class,
+        WebSocketSessions.class,
         SessionEventListener.class
     })
     static class Config {
@@ -79,14 +83,17 @@ class WebSocketBrokerTest {
 
         @Bean
         JwtDecoder decoder() {
-            return token ->
-                    Jwt.withTokenValue(token)
-                            .header("alg", "none")
-                            .subject("stable-subject")
-                            .claim("preferred_username", "display-name")
-                            .claim("customer_id", CUSTOMER.toString())
-                            .expiresAt(Instant.now().plusSeconds(300))
-                            .build();
+            return token -> {
+                Instant issued = Instant.now();
+                return Jwt.withTokenValue(token)
+                        .header("alg", "none")
+                        .subject("stable-subject")
+                        .claim("preferred_username", "display-name")
+                        .claim("customer_id", CUSTOMER.toString())
+                        .issuedAt(issued)
+                        .expiresAt(issued.plusSeconds(token.equals("short") ? 4 : 300))
+                        .build();
+            };
         }
     }
 
@@ -159,5 +166,25 @@ class WebSocketBrokerTest {
         subscription.unsubscribe();
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(registry.totalSubscriptions()).isZero());
+    }
+
+    @Test
+    void idleSockJsSessionIsActuallyClosedWhenItsTokenExpires() throws Exception {
+        client =
+                new WebSocketStompClient(
+                        new SockJsClient(
+                                List.of(new WebSocketTransport(new StandardWebSocketClient()))));
+        var headers = new StompHeaders();
+        headers.add("Authorization", "Bearer short");
+        session =
+                client.connectAsync(
+                                "ws://localhost:" + port + "/ws",
+                                new org.springframework.web.socket.WebSocketHttpHeaders(),
+                                headers,
+                                new StompSessionHandlerAdapter() {})
+                        .get(10, TimeUnit.SECONDS);
+        assertThat(session.isConnected()).isTrue();
+        await().atMost(Duration.ofSeconds(9)).until(() -> !session.isConnected());
+        assertThat(registry.totalSubscriptions()).isZero();
     }
 }

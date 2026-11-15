@@ -1,0 +1,17 @@
+{
+  "eventId": "00000000-0000-0000-0000-000000000501",
+  "eventType": "ORDER_CREATED",
+  "aggregateId": "00000000-0000-0000-0000-000000000301",
+  "occurredAt": "2026-11-14T00:00:00Z",
+  "schemaVersion": 1,
+  "data": {
+    "orderId": "00000000-0000-0000-0000-000000000301",
+    "status": "DRAFT",
+    "customerId": "00000000-0000-0000-0000-000000000101",
+    "orderNumber": "ORD-CONTRACT"
+  },
+  "orderId": "00000000-0000-0000-0000-000000000301",
+  "status": "DRAFT",
+  "customerId": "00000000-0000-0000-0000-000000000101",
+  "orderNumber": "ORD-CONTRACT"
+}

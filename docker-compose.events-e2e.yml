@@ -1,0 +1,42 @@
+# Disposable, opt-in two-replica acceptance. Fixed host bindings are loopback only.
+services:
+  notification-service:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    ports:
+      - "127.0.0.1:18084:8084"
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_DATA_REDIS: INFO
+      LOGGING_LEVEL_COM_EXAMPLE_OMP_NOTIFICATION: INFO
+  notification-service-2:
+    extends:
+      file: docker-compose.yml
+      service: notification-service
+    image: omp/notification-service:1.0.0-SNAPSHOT
+    environment:
+      WEBHOOK_KAFKA_REPLICATION_FACTOR: "1"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_DATA_REDIS: INFO
+      LOGGING_LEVEL_COM_EXAMPLE_OMP_NOTIFICATION: INFO
+    ports:
+      - "127.0.0.1:18087:8084"
+      - "127.0.0.1:18088:8085"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    labels: !reset []
+    healthcheck:
+      start_period: 180s
+      retries: 20
+      interval: 10s
+      timeout: 5s

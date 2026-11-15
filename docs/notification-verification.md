@@ -44,15 +44,19 @@ explicitly uses one. Run with Docker available:
   payloads do not mark an entry replayed. Their network/repository collaborators
   are test doubles.
 
-Webhook listeners commit each record after successful processing. Fan-out and
-retry publication wait up to ten seconds for Kafka acknowledgment; broker
-failures propagate to the consuming listener. DLQ database failures likewise
-propagate instead of being swallowed. Invalid-event quarantine, persistent
-retry scheduling, concurrent deduplication, atomic database/broker handoff,
-payload enrichment, subscriber URL protection and deployed recovery remain
-separate backlog work. This verification does not establish those properties.
+Domain listeners now commit after transactional inbox/dispatch handling. Initial
+webhook fan-out, delayed retry and operator replay use the same database handoff;
+the drainer owns broker acknowledgment. Poison domain/delivery records are durably
+quarantined, with administrator-only inspection/replay and concurrent replay fencing.
+The new PostgreSQL/Kafka regressions exercise rollback, duplicate/conflicting event
+identities, failed quarantine storage, aggregate ordering and HTTP authorization.
+Actual SockJS tests verify idle expiry and registration cannot outlive disconnect
+or unsubscribe. See [the current contract and recovery procedure](events-and-websockets.md).
+The separate required `events-e2e` job measures real issuer/producer failures and
+multi-replica delivery against the declared 1,000-client objectives. Payload
+enrichment and subscriber URL protection remain Section 5 work.
 
-The existing 80% notification instruction gate is preserved. Exact executed
+The existing 80% notification instruction gate is preserved. Earlier counts below describe their dated source checkpoints; current source-bound counts are in the implementation report. Exact executed
 counts, coverage results and evidence are recorded in the
 [implementation report](task-implementation-report.md). Full-reactor, platform,
 e2e and release acceptance remain open until their own checks pass.

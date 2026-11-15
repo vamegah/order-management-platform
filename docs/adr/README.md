@@ -25,3 +25,5 @@ Current refinements are documented in [order cleanup](../order-cleanup.md),
 [WebSocket behavior](../../notification-service/README.md) and
 [contract evolution](../contract-evolution.md). Automatic rotation, durable
 real-time replay and multi-replica acceptance remain open requirements.
+
+- [ADR-0013: Durable notification handoffs and bounded sessions](0013-durable-notification-handoffs.md)

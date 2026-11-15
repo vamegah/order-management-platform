@@ -34,7 +34,8 @@ class DlqServiceTest {
     void replayDoesNotMarkEntryWhenBrokerRejectsPublication() throws Exception {
         var entry = new WebhookDlqEntry();
         entry.setPayload(mapper.writeValueAsString(message));
-        when(repository.findByDeliveryId(message.deliveryId())).thenReturn(Optional.of(entry));
+        when(repository.findLockedByDeliveryId(message.deliveryId()))
+                .thenReturn(Optional.of(entry));
         doThrow(new IllegalStateException("broker unavailable"))
                 .when(publisher)
                 .publish(anyString(), any());
@@ -49,7 +50,8 @@ class DlqServiceTest {
     void corruptReplayPayloadDoesNotPublishOrMarkEntry() {
         var entry = new WebhookDlqEntry();
         entry.setPayload("not-json");
-        when(repository.findByDeliveryId(message.deliveryId())).thenReturn(Optional.of(entry));
+        when(repository.findLockedByDeliveryId(message.deliveryId()))
+                .thenReturn(Optional.of(entry));
         assertThatThrownBy(() -> service.replay(message.deliveryId(), "admin"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Corrupt DLQ payload");

@@ -41,7 +41,7 @@ public class TestSecurityConfig {
                 .claim("customer_id", subject.toString())
                 .claim("realm_access", Map.of("roles", roles))
                 .issuedAt(now)
-                .expiresAt(now.plusSeconds(3600))
+                .expiresAt(now.plusSeconds(300))
                 .build();
     }
 }

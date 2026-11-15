@@ -41,6 +41,7 @@ import org.springframework.kafka.annotation.EnableKafka;
     com.example.omp.shared.events.DomainEventReader.class,
     com.example.omp.shared.events.EventRegistry.class
 })
+@org.springframework.scheduling.annotation.EnableScheduling
 @EnableKafka
 @ConfigurationPropertiesScan
 @EnableFeignClients

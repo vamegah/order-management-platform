@@ -33,7 +33,7 @@ class OutboundWebhookRetryExhaustionIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-exhaust-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-exhaust\"}");
 

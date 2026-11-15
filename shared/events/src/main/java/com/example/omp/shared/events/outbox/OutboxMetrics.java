@@ -45,6 +45,20 @@ public class OutboxMetrics {
                 .description("Current number of FAILED outbox rows")
                 .register(registry);
 
+        Gauge.builder(
+                        "outbox.oldest.pending.seconds",
+                        repository,
+                        repo -> {
+                            var oldest = repo.oldestUnpublished();
+                            return oldest == null
+                                    ? 0
+                                    : Math.max(
+                                            0,
+                                            java.time.Duration.between(
+                                                            oldest, java.time.Instant.now())
+                                                    .toSeconds());
+                        })
+                .register(registry);
         publishedCounter =
                 Counter.builder("outbox.published.total")
                         .description("Total outbox events successfully published to Kafka")

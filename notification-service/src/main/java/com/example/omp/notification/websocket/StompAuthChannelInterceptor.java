@@ -100,6 +100,22 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             throw new BadCredentialsException("Invalid JWT");
         }
 
+        if (jwt.getExpiresAt() == null || !java.time.Instant.now().isBefore(jwt.getExpiresAt()))
+            throw new BadCredentialsException("Unexpired JWT required");
+        if (jwt.getExpiresAt().isAfter(java.time.Instant.now().plusSeconds(300)))
+            throw new BadCredentialsException(
+                    "WebSocket credentials must expire within five minutes");
+        if (jwt.getIssuedAt() == null
+                || jwt.getIssuedAt().isAfter(java.time.Instant.now())
+                || !jwt.getIssuedAt().isBefore(jwt.getExpiresAt())
+                || java.time.Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())
+                                .compareTo(java.time.Duration.ofSeconds(300))
+                        > 0)
+            throw new BadCredentialsException(
+                    "WebSocket credentials require an original lifetime of at most five minutes");
+        if (accessor.getSessionAttributes() != null
+                && accessor.getSessionAttributes().containsKey("jwt"))
+            throw new BadCredentialsException("Reconnect to refresh credentials");
         JwtPrincipal principal = toPrincipal(jwt);
         accessor.setUser(principal);
 

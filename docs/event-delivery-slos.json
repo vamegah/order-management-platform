@@ -1,0 +1,30 @@
+{
+  "topology": {
+    "notificationReplicas": 2,
+    "healthyClients": 1000,
+    "foreignPrivateClients": 10,
+    "slowReaders": 10,
+    "sustainedSeconds": 60,
+    "eventsPerSecond": 2,
+    "referenceRunner": "4 vCPU / 15.33 GiB available to Docker on the reference Linux CI host; actual local/CI hardware is recorded with each report",
+    "slowReaderPauseMs": 12000,
+    "notificationHeapMiB": 256,
+    "notificationMemoryLimitMiB": 1024,
+    "notificationCpuLimit": 2,
+    "positivePrivateClients": 2,
+    "slowReaderMessages": 512,
+    "slowReaderPayloadChars": 60000
+  },
+  "objectives": {
+    "steadyDeliveryRatio": 1.0,
+    "steadyP95LatencyMs": 3000,
+    "steadyP99LatencyMs": 5000,
+    "steadyDuplicateRatioMax": 0.01,
+    "unauthorizedDeliveries": 0,
+    "reconnectConvergenceMs": 60000,
+    "replacementConvergenceAfterHealthyMs": 60000,
+    "slowReaderPolicy": "At least one intentionally paused reader is disconnected; socket buffers and worker queues remain bounded."
+  },
+  "semantics": "Kafka business events and database handoffs are durable at least once. Redis/STOMP notifications are transient hints. Recovery requires canonical API reads.",
+  "requiredPhases": 9
+}

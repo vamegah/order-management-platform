@@ -24,6 +24,10 @@ class WebhookDeliveryWorkerTest {
     final DlqService dlq = mock(DlqService.class);
     final WebhookMetrics metrics = mock(WebhookMetrics.class);
     final ObjectMapper mapper = new ObjectMapper();
+    final org.springframework.jdbc.core.JdbcTemplate jdbc =
+            mock(org.springframework.jdbc.core.JdbcTemplate.class);
+    final com.example.omp.notification.webhook.matcher.WebhookDeliveryPublisher publisher =
+            mock(com.example.omp.notification.webhook.matcher.WebhookDeliveryPublisher.class);
     final WebhookDeliveryWorker worker =
             new WebhookDeliveryWorker(
                     lookup,
@@ -34,13 +38,17 @@ class WebhookDeliveryWorkerTest {
                     breaker,
                     dlq,
                     mapper,
-                    metrics);
+                    metrics,
+                    jdbc,
+                    publisher);
     final WebhookSubscription sub = new WebhookSubscription();
     final UUID deliveryId = UUID.randomUUID();
     WebhookDeliveryAttempt recorded;
 
     @BeforeEach
     void subscription() {
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), any(Object.class)))
+                .thenReturn(true);
         sub.setId(UUID.randomUUID());
         sub.setTargetUrl("https://subscriber.example/hook");
         sub.setSecret("abcdefghijklmnopqrstuvwxyz0123456789");

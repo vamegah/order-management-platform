@@ -92,7 +92,7 @@ class OutboxBehaviorTest {
         drainer.drain();
         assertThat(first.getStatus()).isEqualTo(OutboxStatus.FAILED);
         assertThat(first.getAttempts()).isEqualTo(2);
-        assertThat(first.getLastError()).contains("TimeoutException");
+        assertThat(first.getLastError()).isEqualTo("BROKER_PUBLISH_FAILURE");
         verify(metrics, times(2)).incrementError();
         verify(metrics).incrementPublished();
     }

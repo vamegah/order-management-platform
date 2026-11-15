@@ -31,7 +31,7 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
         WebhookSubscription sub = createSubscription("payment.confirmed");
         subscriber.enqueueResponse(200, "ok");
 
-        String eventId = "evt-success-" + java.util.UUID.randomUUID();
+        String eventId = java.util.UUID.randomUUID().toString();
         publishEvent(
                 "payments.events.payment",
                 eventId,
@@ -92,7 +92,7 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-fanout-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-fan\"}");
 
@@ -115,7 +115,7 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-nomatch-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-nomatch\"}");
 
@@ -133,7 +133,7 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
         WebhookSubscription sub = createSubscription("payment.confirmed");
         subscriber.enqueueResponse(200);
 
-        String eventId = "evt-dedup-" + java.util.UUID.randomUUID();
+        String eventId = java.util.UUID.randomUUID().toString();
         publishEvent(
                 "payments.events.payment",
                 eventId,
@@ -163,11 +163,9 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
         WebhookSubscription sub = createSubscription("order.placed");
         subscriber.enqueueResponse(200, "{\"received\":true}");
 
+        String attemptEventId = java.util.UUID.randomUUID().toString();
         publishEvent(
-                "orders.events.order",
-                "evt-attempt-" + java.util.UUID.randomUUID(),
-                "order.placed",
-                "{\"orderId\":\"o-42\"}");
+                "orders.events.order", attemptEventId, "order.placed", "{\"orderId\":\"o-42\"}");
 
         await().atMost(Duration.ofSeconds(30))
                 .untilAsserted(
@@ -179,7 +177,7 @@ class OutboundWebhookSuccessIT extends OutboundWebhookBase {
                             assertThat(a.getPayload()).isNotBlank();
                             assertThat(a.getSignature()).startsWith("sha256=");
                             assertThat(a.getResponseBody()).isEqualTo("{\"received\":true}");
-                            assertThat(a.getEventId()).startsWith("evt-attempt-");
+                            assertThat(a.getEventId()).isEqualTo(attemptEventId);
                             assertThat(a.getEventType()).isEqualTo("order.placed");
                         });
     }

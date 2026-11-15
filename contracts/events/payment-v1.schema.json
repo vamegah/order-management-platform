@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.omp.example/events/payment/v1",
+  "title": "payment payload v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "paymentId",
+    "customerId"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "customerId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Z][A-Z_]*$"
+    },
+    "amount": {
+      "type": "string"
+    },
+    "amountMinor": {
+      "type": "integer"
+    },
+    "currency": {
+      "type": "string"
+    }
+  }
+}

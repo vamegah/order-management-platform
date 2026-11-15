@@ -40,14 +40,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final NotificationProperties properties;
     private final StompAuthChannelInterceptor authInterceptor;
     private final SubscriptionInterceptor subscriptionInterceptor;
+    private final com.example.omp.notification.websocket.WebSocketSessions sessions;
 
     public WebSocketConfig(
             NotificationProperties properties,
             StompAuthChannelInterceptor authInterceptor,
-            SubscriptionInterceptor subscriptionInterceptor) {
+            SubscriptionInterceptor subscriptionInterceptor,
+            com.example.omp.notification.websocket.WebSocketSessions sessions) {
         this.properties = properties;
         this.authInterceptor = authInterceptor;
         this.subscriptionInterceptor = subscriptionInterceptor;
+        this.sessions = sessions;
     }
 
     /**
@@ -88,14 +91,45 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // Order matters: auth must run before subscription handling.
+        registration.taskExecutor().corePoolSize(4).maxPoolSize(8).queueCapacity(2048);
         registration.interceptors(authInterceptor, subscriptionInterceptor);
     }
 
     @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.taskExecutor().corePoolSize(4).maxPoolSize(8).queueCapacity(4096);
+        registration.interceptors(sessions);
+    }
+
+    @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.addDecoratorFactory(
+                handler ->
+                        new org.springframework.web.socket.handler.WebSocketHandlerDecorator(
+                                handler) {
+                            @Override
+                            public void afterConnectionEstablished(
+                                    org.springframework.web.socket.WebSocketSession session)
+                                    throws Exception {
+                                sessions.opened(session);
+                                if (session.isOpen()) super.afterConnectionEstablished(session);
+                            }
+
+                            @Override
+                            public void afterConnectionClosed(
+                                    org.springframework.web.socket.WebSocketSession session,
+                                    org.springframework.web.socket.CloseStatus status)
+                                    throws Exception {
+                                try {
+                                    super.afterConnectionClosed(session, status);
+                                } finally {
+                                    sessions.closed(session.getId());
+                                }
+                            }
+                        });
         registration
                 // Max size of a single STOMP message (client → server).
-                .setMessageSizeLimit(64 * 1024)
+                .setMessageSizeLimit(properties.getMaxMessageSizeBytes())
                 // Max size of the outbound buffer per session. When exceeded,
                 // Spring closes the session with a policy violation. The client
                 // reconnects and re-syncs.

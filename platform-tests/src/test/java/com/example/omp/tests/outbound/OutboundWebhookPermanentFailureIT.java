@@ -27,7 +27,7 @@ class OutboundWebhookPermanentFailureIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-404-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-404\"}");
 
@@ -65,7 +65,7 @@ class OutboundWebhookPermanentFailureIT extends OutboundWebhookBase {
 
         publishEvent(
                 "orders.events.order",
-                "evt-400-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "order.placed",
                 "{\"orderId\":\"o-400\"}");
 
@@ -87,7 +87,7 @@ class OutboundWebhookPermanentFailureIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-401-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-401\"}");
 
@@ -114,7 +114,7 @@ class OutboundWebhookPermanentFailureIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-403-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-403\"}");
 
@@ -131,7 +131,7 @@ class OutboundWebhookPermanentFailureIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-tls-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-tls\"}");
 

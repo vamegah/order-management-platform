@@ -1,7 +1,7 @@
 # ==============================================================================
 # Notification Service — base configuration
 # ==============================================================================
-# A WebSocket + Kafka service. No persistence.
+# Durable Kafka ingestion, webhook state and dispatch handoffs use PostgreSQL.
 #
 # Server:
 #   - Port 8084: HTTP server for WebSocket upgrade and any REST endpoints.
@@ -53,7 +53,7 @@ spring:
       consumer:
         # Already set in Batch 8.2; verifying they're present.
         group-id: notification-service
-        auto-offset-reset: latest   # overridden to earliest in prod
+        auto-offset-reset: earliest # Durable inboxes make retained-event redelivery safe.
         enable-auto-commit: false
         max-poll-records: 100
         key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -117,6 +117,11 @@ spring:
 server:
   port: ${SERVER_PORT:8084}
   shutdown: graceful
+  tomcat:
+    threads:
+      max: 32
+      min-spare: 4
+    accept-count: 128
 
 # ---------------------------------------------------------------------------
 # Webhook subsystem (new in Batch 9.3)
@@ -262,3 +267,8 @@ springdoc:
     enabled: ${API_DOCS_ENABLED:true}
   swagger-ui:
     enabled: false
+
+# Caller identity is forwarded; failed or timed-out ownership checks deny subscriptions.
+spring.cloud.openfeign.client.config.default:
+  connectTimeout: 2000
+  readTimeout: 3000

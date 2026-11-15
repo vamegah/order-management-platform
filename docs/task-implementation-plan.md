@@ -1,10 +1,10 @@
 # Implementation plan for TASKS.md sections 1-7
 
 > **Status:** In progress; implementation and acceptance remain tracked in TASKS.md
-> **Last reviewed:** 2026-11-14
+> **Last reviewed:** 2026-11-15
 
 Deliver the remaining unchecked items in [TASKS.md](../TASKS.md), following its
-section order. Sections 1, 2 and 3 are complete; preserve all accepted behavior and
+section order. Sections 1, 2, 3 and 4 are complete; preserve all accepted behavior and
 regression coverage. Items 3.3 and 6.5 are retained below as accepted
 records after the completed-task review. The IDs below identify existing backlog
 items, not additional completion requirements. Section 8 documentation and final release
@@ -12,27 +12,14 @@ acceptance remain a separate final milestone.
 
 ## Starting point
 
-The accepted main baseline is `7986d3e`, the approved warehouse-provenance merge
-of [PR #21](https://github.com/vamegah/order-management-platform/pull/21).
-Its [PR workflow](https://github.com/vamegah/order-management-platform/actions/runs/42751851607)
-and [main workflow](https://github.com/vamegah/order-management-platform/actions/runs/42755330384)
-pass all twenty jobs, 1,303 reactor and 28 deployed service/client cases.
-Exact-source evidence is retained in `coverage/reservation-warehouse-ci-evidence.zip`
-and `coverage/reservation-warehouse-main-ci-evidence.zip`, with JSON hashes.
-New checkouts preserve original warehouse intent; missing-reference repair checks
-known snapshots, including across real service restarts. Historical active
-ownership/provenance, conflicting pointers and final constraints stay open.
-
-The completed-task review closes proto evolution (3.3) and WSDL drift protection
-(6.5): their compatibility regressions, clean client generation, exact-base PR
-checks and required protected CI all pass. Their original acceptance scope is
-preserved below. Later open items retain their completion gates.
-Publication and merge actions follow the existing scoped approval agreement.
-
-Use the latest source-bound CI evidence and the dated continuations in the
-[implementation report](task-implementation-report.md). Its early summaries and
-some TASKS.md continuation notes describe superseded checkpoints. Audit evidence
-before rebuilding working features or reopening accepted fixes.
+The accepted main baseline is `a8f3e51`, the production gRPC merge of
+[PR #24](https://github.com/vamegah/order-management-platform/pull/24).
+Sections 1-3 preserve their accepted regression evidence. Section 4 is implemented
+in [PR #25](https://github.com/vamegah/order-management-platform/pull/25); its [nine-phase realtime acceptance](https://github.com/vamegah/order-management-platform/actions/runs/43682258012/job/132715295117)
+and all fourteen exact-base unit-coverage comparisons pass at `53c5572`.
+Publication, merging and main verification follow the user's authorized scope.
+The dated [implementation report](task-implementation-report.md) retains earlier
+checkpoints; its historical open-item counts do not replace TASKS.md.
 
 ## Delivery order and completion gates
 
@@ -41,7 +28,7 @@ before rebuilding working features or reopening accepted fixes.
 | 1. Core lifecycle | 0 | Durable references, compensation, coordinated expiry and safe transitions | Real deployed failures recover with conserved inventory and correct payment outcomes |
 | 2. Public APIs | 0 | Published OpenAPI and external REST/GraphQL compatibility tests | Contract drift, authorization, pagination and errors checked in required CI |
 | 3. gRPC | 0 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
-| 4. Events and WebSockets | 5 | Versioned events, complete outbox coverage, quarantine/replay and secure real-time delivery | Crash/replay/ownership tests and measured 1,000-client run |
+| 4. Events and WebSockets | 0 | Versioned events, complete outbox coverage, quarantine/replay and secure real-time delivery | Crash/replay/ownership tests and measured 1,000-client run |
 | 5. Payments and webhooks | 6 | Real simulator integration, tokenized payments/SCA, asynchronous refunds and secure delivery | Provider outcome, signature, SSRF, recovery and load scenarios pass |
 | 6. SOAP | 4 | Deployed secured banking flow, stable faults and safe resilience | Trusted-TLS journey, duplicate-transfer prevention and contract gates pass |
 | 7. Operations and release | 7 | Coordinated quotas, security review, telemetry, recovery drills and signed releases | Executed operational evidence and reproducible promotion/rollback |
@@ -58,10 +45,11 @@ documentation. Prefer batches that close a backlog item or a named prerequisite
 with a fixed remaining scope. Test-only changes are appropriate when the existing
 behavior already satisfies the item and executed evidence is the missing piece.
 
-An item closes when its original acceptance criteria are demonstrated, required
-CI passes for the reviewed revision, the approved merge passes main verification,
-and TASKS.md links to that evidence. A partial milestone leaves the parent open
-with a specific remaining requirement. Preserve coverage policies and reject
+An implementation item closes when its original acceptance criteria are demonstrated,
+required CI passes for the reviewed revision and TASKS.md links to that evidence.
+Track merge/main verification and release approval separately; merge only when
+authorized. A partial milestone leaves the parent open with a specific remaining
+requirement. Preserve coverage policies and reject
 missing/skipped required suites. Record unresolved external dependencies
 explicitly rather than substituting mocked evidence for deployed acceptance.
 
@@ -237,6 +225,14 @@ Section 3 acceptance passes all 82 deployed cases and every required CI job at
 The descriptor-derived matrix covers nineteen RPCs and all required scenarios.
 
 ## 4. Make events and WebSockets durable and secure
+
+**Implemented (2026-11-15):** All six TASKS.md items are complete. Required
+[nine-phase acceptance](https://github.com/vamegah/order-management-platform/actions/runs/43682258012/job/132715295117)
+verifies producer crash/replay, poison recovery, ownership/private isolation,
+expiry/refresh, bounded slow readers, 1,000-client fan-out and convergence.
+The reference run delivers 120,000 hints without gaps/duplicates; p95/p99 are
+1.647/1.753 seconds, within the declared 3/5-second limits. See
+[event operation](events-and-websockets.md) for the measured hardware and bounds.
 
 Primary areas: `shared/events`, every event producer/consumer,
 `notification-service`, Kafka/Redis topology, `clients/notifications` and load tools.

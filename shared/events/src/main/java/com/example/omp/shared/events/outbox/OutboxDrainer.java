@@ -105,16 +105,14 @@ public class OutboxDrainer {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             metrics.incrementError();
 
-            event.recordAttemptFailure(
-                    e.getClass().getSimpleName() + ": " + e.getMessage(),
-                    properties.getMaxAttempts());
+            event.recordAttemptFailure("BROKER_PUBLISH_FAILURE", properties.getMaxAttempts());
 
             log.warn(
                     "Outbox publish failed: id={} eventType={} attempts={} error={}",
                     event.getId(),
                     event.getEventType(),
                     event.getAttempts(),
-                    e.getMessage());
+                    "BROKER_PUBLISH_FAILURE");
         }
     }
 

@@ -60,7 +60,7 @@ public class SubscriptionMatcher {
                             match.eventType(),
                             1,
                             null);
-            publisher.publish(message);
+            publisher.enqueue(message);
             metrics.recordMatched(eventType);
         }
 

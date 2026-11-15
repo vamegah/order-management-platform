@@ -12,11 +12,34 @@ import org.springframework.messaging.support.MessageBuilder;
 class SubscriptionInterceptorTest {
     private final SubscriptionRegistry registry = new SubscriptionRegistry();
     private final OwnershipVerifier ownership = mock(OwnershipVerifier.class);
+    private final WebSocketSessions sessions =
+            new WebSocketSessions(
+                    registry, new com.example.omp.notification.config.NotificationProperties());
     private final SubscriptionInterceptor interceptor =
-            new SubscriptionInterceptor(registry, ownership);
+            new SubscriptionInterceptor(ownership, sessions);
     private final JwtPrincipal principal =
             new JwtPrincipal("subject", "name", null, Set.of("customer"));
     private final String payment = UUID.randomUUID().toString();
+
+    @org.junit.jupiter.api.BeforeEach
+    void openAuthenticatedSessions() throws Exception {
+        for (String id : List.of("one", "two")) {
+            var socket = mock(org.springframework.web.socket.WebSocketSession.class);
+            when(socket.getId()).thenReturn(id);
+            when(socket.isOpen()).thenReturn(true);
+            sessions.opened(socket);
+            var headers = StompHeaderAccessor.create(StompCommand.CONNECT);
+            headers.setSessionId(id);
+            headers.setSessionAttributes(
+                    new HashMap<>(
+                            Map.of("jwtExpiresAt", java.time.Instant.now().plusSeconds(300))));
+            sessions.connected(
+                    new org.springframework.web.socket.messaging.SessionConnectEvent(
+                            this,
+                            MessageBuilder.createMessage(
+                                    new byte[0], headers.getMessageHeaders())));
+        }
+    }
 
     private StompHeaderAccessor frame(
             StompCommand command, String session, String id, String destination) {
@@ -122,5 +145,48 @@ class SubscriptionInterceptorTest {
                                                 "other",
                                                 "/user/victim/queue/notifications")))
                 .isInstanceOf(SubscriptionUnauthorizedException.class);
+    }
+
+    @Test
+    void ownershipLookupCannotResurrectASubscriptionAfterDisconnect() {
+        doAnswer(
+                        invocation -> {
+                            sessions.closed("one");
+                            return null;
+                        })
+                .when(ownership)
+                .verifyPaymentOwnership(payment, principal);
+        assertThatThrownBy(
+                        () ->
+                                send(
+                                        frame(
+                                                StompCommand.SUBSCRIBE,
+                                                "one",
+                                                "a",
+                                                "/topic/payments/" + payment)))
+                .isInstanceOf(SubscriptionUnauthorizedException.class);
+        assertThat(registry.totalSubscriptions()).isZero();
+        assertThat(JwtThreadLocalHolder.get()).isNull();
+    }
+
+    @Test
+    void unsubscribeCancelsAnOwnershipLookupThatHasNotRegisteredYet() {
+        doAnswer(
+                        invocation -> {
+                            sessions.unsubscribe("one", "a");
+                            return null;
+                        })
+                .when(ownership)
+                .verifyPaymentOwnership(payment, principal);
+        assertThatThrownBy(
+                        () ->
+                                send(
+                                        frame(
+                                                StompCommand.SUBSCRIBE,
+                                                "one",
+                                                "a",
+                                                "/topic/payments/" + payment)))
+                .isInstanceOf(SubscriptionUnauthorizedException.class);
+        assertThat(registry.totalSubscriptions()).isZero();
     }
 }

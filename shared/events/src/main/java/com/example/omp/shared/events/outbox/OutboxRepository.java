@@ -14,8 +14,8 @@ import org.springframework.stereotype.Repository;
  *
  * <p>The drainer uses {@link #claimPendingBatch(int)} to atomically claim a batch of PENDING rows
  * using Postgres's {@code SELECT ... FOR UPDATE SKIP LOCKED}. This is the standard
- * concurrent-worker pattern: two drainers running simultaneously will claim disjoint batches, no
- * double-publish.
+ * concurrent-worker pattern: active drainers claim disjoint rows. A crash after acknowledgment can
+ * still cause at-least-once redelivery.
  *
  * <p>The cleanup job uses {@link #deletePublishedOlderThan(Instant)} to remove published rows past
  * their retention window.
@@ -36,11 +36,16 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
     @Query(
             value =
                     """
-                    SELECT * FROM outbox_event
-                    WHERE status = 'PENDING'
-                    ORDER BY created_at ASC
+                    SELECT e.* FROM outbox_event e
+                    WHERE e.status = 'PENDING'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM outbox_event prior
+                        WHERE prior.topic=e.topic AND prior.aggregate_id=e.aggregate_id
+                          AND prior.sequence_id < e.sequence_id AND prior.status IN ('PENDING','FAILED')
+                      )
+                    ORDER BY e.sequence_id
                     LIMIT :limit
-                    FOR UPDATE SKIP LOCKED
+                    FOR UPDATE OF e SKIP LOCKED
                     """,
             nativeQuery = true)
     List<OutboxEvent> claimPendingBatch(@Param("limit") int limit);
@@ -64,4 +69,7 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
     @Modifying
     @Query("DELETE FROM OutboxEvent o WHERE o.status = 'PUBLISHED' AND o.publishedAt < :cutoff")
     int deletePublishedOlderThan(@Param("cutoff") Instant cutoff);
+
+    @Query("SELECT MIN(o.createdAt) FROM OutboxEvent o WHERE o.status IN ('PENDING', 'FAILED')")
+    java.time.Instant oldestUnpublished();
 }

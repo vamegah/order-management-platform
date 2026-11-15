@@ -254,6 +254,43 @@
       "webOrigins": ["*"],
       "defaultClientScopes": ["basic", "web-origins", "profile", "roles", "email", "orders"],
       "optionalClientScopes": ["offline_access"]
+    },
+    {
+      "clientId": "notification-short-lived-acceptance",
+      "name": "Disposable notification expiry acceptance",
+      "description": "OAuth2 client for manual API testing via Postman",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "8"
+      },
+      "redirectUris": [
+        "https://oauth.pstmn.io/v1/callback",
+        "http://localhost:*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "profile",
+        "roles",
+        "email",
+        "orders"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
     }
   ],
 

@@ -29,7 +29,7 @@ class OutboundWebhookDlqReplayIT extends OutboundWebhookBase {
         // First attempt: 404 -> permanent failure -> DLQ.
         subscriber.enqueueResponse(404, "not found");
 
-        String eventId = "evt-replay-" + java.util.UUID.randomUUID();
+        String eventId = java.util.UUID.randomUUID().toString();
         publishEvent(
                 "payments.events.payment",
                 eventId,
@@ -76,7 +76,7 @@ class OutboundWebhookDlqReplayIT extends OutboundWebhookBase {
 
         publishEvent(
                 "orders.events.order",
-                "evt-replay-dup-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "order.placed",
                 "{\"orderId\":\"o-r\"}");
 

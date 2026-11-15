@@ -37,14 +37,17 @@ public class RedisEventSubscriber implements MessageListener {
     private final EventDeserializationSupport deserializer;
     private final EventDispatcher dispatcher;
     private final MeterRegistry metrics;
+    private final com.example.omp.notification.subscription.OwnershipVerifier ownership;
 
     public RedisEventSubscriber(
             EventDeserializationSupport deserializer,
             EventDispatcher dispatcher,
-            MeterRegistry metrics) {
+            MeterRegistry metrics,
+            com.example.omp.notification.subscription.OwnershipVerifier ownership) {
         this.deserializer = deserializer;
         this.dispatcher = dispatcher;
         this.metrics = metrics;
+        this.ownership = ownership;
     }
 
     @Override
@@ -60,6 +63,7 @@ public class RedisEventSubscriber implements MessageListener {
                 log.debug("Ignoring unknown or empty event on channel {}", channel);
                 return;
             }
+            ownership.invalidate(event);
             dispatcher.dispatch(event);
         } catch (Exception e) {
             log.error(
