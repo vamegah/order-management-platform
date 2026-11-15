@@ -507,7 +507,8 @@ class GrpcProductionIT {
     @Test
     @Order(11)
     void streamsReconnectAndReconcileAfterRealContainerReplacement() throws Exception {
-        var stock = stockStream();
+        // Keep consuming during replacement: paused inbound messages can defer transport closure.
+        var stock = stockStream(false);
         stock.next();
         var bidi = new GrpcProbe<CheckAvailabilityRequest, CheckAvailabilityResponse>();
         var queries =
@@ -559,7 +560,7 @@ class GrpcProductionIT {
                                 .setReservationId(missed.getId())
                                 .build());
         var payment = payment();
-        var events = paymentStream(payment.getOrderId());
+        var events = paymentStream(payment.getOrderId(), false);
         awaitPaymentRegistration(events, payment);
         String payments = deployment.container("payment-service");
         deployment.replace("payment-service");
@@ -1077,7 +1078,11 @@ class GrpcProductionIT {
     }
 
     static GrpcProbe<StreamStockUpdatesRequest, StockUpdate> stockStream() {
-        var probe = new GrpcProbe<StreamStockUpdatesRequest, StockUpdate>(true);
+        return stockStream(true);
+    }
+
+    static GrpcProbe<StreamStockUpdatesRequest, StockUpdate> stockStream(boolean manual) {
+        var probe = new GrpcProbe<StreamStockUpdatesRequest, StockUpdate>(manual);
         InventoryServiceGrpc.newStub(GrpcClientFactory.inventoryChannel(AuthSupport.adminToken()))
                 .withDeadlineAfter(5, TimeUnit.MINUTES)
                 .streamStockUpdates(
@@ -1090,7 +1095,12 @@ class GrpcProductionIT {
     }
 
     static GrpcProbe<StreamPaymentEventsRequest, PaymentEvent> paymentStream(String order) {
-        var probe = new GrpcProbe<StreamPaymentEventsRequest, PaymentEvent>(true);
+        return paymentStream(order, true);
+    }
+
+    static GrpcProbe<StreamPaymentEventsRequest, PaymentEvent> paymentStream(
+            String order, boolean manual) {
+        var probe = new GrpcProbe<StreamPaymentEventsRequest, PaymentEvent>(manual);
         PaymentServiceGrpc.newStub(GrpcClientFactory.paymentChannel(AuthSupport.adminToken()))
                 .withDeadlineAfter(5, TimeUnit.MINUTES)
                 .streamPaymentEvents(
