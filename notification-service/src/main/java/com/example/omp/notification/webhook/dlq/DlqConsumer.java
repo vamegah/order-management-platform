@@ -42,6 +42,7 @@ public class DlqConsumer {
     public void onDlq(String messageJson) {
         try {
             DeliveryMessage message = objectMapper.readValue(messageJson, DeliveryMessage.class);
+            message.validate();
             if (repository.findByDeliveryId(message.deliveryId()).isPresent()) {
                 log.debug(
                         "DLQ entry for delivery {} already present; skipping",
@@ -51,7 +52,7 @@ public class DlqConsumer {
             // Reason/finalStatus default for direct DLQ publishes.
             dlqService.persist(message, "published_directly_to_dlq", "FAILED_PERMANENT");
         } catch (JsonProcessingException e) {
-            log.error("Failed to process DLQ message: {}", messageJson, e);
+            throw new com.example.omp.shared.events.EventContract.InvalidEventException();
         }
     }
 }

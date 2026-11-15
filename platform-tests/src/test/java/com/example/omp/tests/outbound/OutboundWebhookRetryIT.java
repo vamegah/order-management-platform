@@ -27,7 +27,7 @@ class OutboundWebhookRetryIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-retry-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-retry\"}");
 
@@ -76,7 +76,7 @@ class OutboundWebhookRetryIT extends OutboundWebhookBase {
         subscriber.enqueueResponse(500);
         subscriber.enqueueResponse(200);
 
-        String eventId = "evt-same-delivery-" + java.util.UUID.randomUUID();
+        String eventId = java.util.UUID.randomUUID().toString();
         publishEvent("orders.events.order", eventId, "order.placed", "{\"orderId\":\"o-1\"}");
 
         await().atMost(Duration.ofSeconds(30))
@@ -99,7 +99,7 @@ class OutboundWebhookRetryIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-attempt-number-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-an\"}");
 
@@ -121,7 +121,7 @@ class OutboundWebhookRetryIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-conn-refused-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-cr\"}");
 

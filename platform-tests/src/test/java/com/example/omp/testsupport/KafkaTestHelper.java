@@ -59,6 +59,7 @@ public final class KafkaTestHelper {
                         com.example.omp.notification.webhook.config.WebhookKafkaTopics.RETRY_5);
         Map<String, List<String>> groups =
                 Map.of(
+                        groupPrefix, sources,
                         groupPrefix + "-outbound-webhook", sources,
                         groupPrefix + "-webhook-delivery", deliveries,
                         groupPrefix + "-webhook-dlq",

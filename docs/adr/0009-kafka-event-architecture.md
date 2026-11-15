@@ -1,3 +1,5 @@
+> Current continuation (2026-11-14): transactional notification inbox/dispatch, durable quarantine/replay, bounded expiry and measured multi-replica acceptance supersede the early prototype delivery details below. See [ADR-0013](0013-durable-notification-handoffs.md) and [operations](../events-and-websockets.md).
+
 
 ---
 

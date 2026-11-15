@@ -37,6 +37,8 @@ public class WebhookDeliveryWorker {
     private final DlqService dlqService;
     private final ObjectMapper objectMapper;
     private final WebhookMetrics metrics;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final com.example.omp.notification.webhook.matcher.WebhookDeliveryPublisher publisher;
 
     public WebhookDeliveryWorker(
             WebhookSubscriptionServiceLookup subscriptionLookup,
@@ -47,7 +49,9 @@ public class WebhookDeliveryWorker {
             CircuitBreakerService circuitBreaker,
             DlqService dlqService,
             ObjectMapper objectMapper,
-            WebhookMetrics metrics) {
+            WebhookMetrics metrics,
+            org.springframework.jdbc.core.JdbcTemplate jdbc,
+            com.example.omp.notification.webhook.matcher.WebhookDeliveryPublisher publisher) {
         this.subscriptionLookup = subscriptionLookup;
         this.attemptRepository = attemptRepository;
         this.signer = signer;
@@ -57,6 +61,8 @@ public class WebhookDeliveryWorker {
         this.dlqService = dlqService;
         this.objectMapper = objectMapper;
         this.metrics = metrics;
+        this.jdbc = jdbc;
+        this.publisher = publisher;
     }
 
     @KafkaListener(
@@ -70,23 +76,31 @@ public class WebhookDeliveryWorker {
             },
             groupId = "${spring.kafka.consumer.group-id}-webhook-delivery",
             containerFactory = "webhookDeliveryKafkaListenerContainerFactory")
+    @org.springframework.transaction.annotation.Transactional
     public void onDelivery(String messageJson) {
         DeliveryMessage message;
         try {
             message = objectMapper.readValue(messageJson, DeliveryMessage.class);
+            message.validate();
         } catch (Exception e) {
-            log.error("Unparseable delivery message, dropping: {}", messageJson, e);
-            return;
+            throw new com.example.omp.shared.events.EventContract.InvalidEventException();
         }
 
         // Honor scheduled delay (retry topics carry a scheduledAtMillis).
         if (message.scheduledAtMillis() != null) {
             long waitMs = message.scheduledAtMillis() - System.currentTimeMillis();
             if (waitMs > 0) {
-                sleep(waitMs);
+                publisher.publish(message);
+                return;
             }
         }
 
+        if (!Boolean.TRUE.equals(
+                jdbc.queryForObject(
+                        "SELECT pg_try_advisory_xact_lock(hashtextextended(?, 0))",
+                        Boolean.class,
+                        message.deliveryId().toString())))
+            throw new IllegalStateException("Delivery is already in progress");
         try {
             processDelivery(message);
         } catch (Exception e) {
@@ -269,14 +283,5 @@ public class WebhookDeliveryWorker {
         return r.httpStatus() != null
                 ? "Retries exhausted (last HTTP " + r.httpStatus() + ")"
                 : "Retries exhausted: " + r.errorMessage();
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting for retry window", e);
-        }
     }
 }

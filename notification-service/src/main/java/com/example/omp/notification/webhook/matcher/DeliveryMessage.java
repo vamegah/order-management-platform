@@ -15,4 +15,22 @@ public record DeliveryMessage(
         String eventId,
         String eventType,
         int attemptNumber,
-        Long scheduledAtMillis) {}
+        Long scheduledAtMillis) {
+    public void validate() {
+        if (deliveryId == null
+                || subscriptionId == null
+                || eventId == null
+                || eventId.isBlank()
+                || eventId.length() > 255
+                || eventType == null
+                || eventType.isBlank()
+                || eventType.length() > 100
+                || attemptNumber < 1
+                || attemptNumber > 6
+                || (scheduledAtMillis != null
+                        && scheduledAtMillis
+                                > System.currentTimeMillis()
+                                        + java.time.Duration.ofHours(30).toMillis()))
+            throw new com.example.omp.shared.events.EventContract.InvalidEventException();
+    }
+}

@@ -1,43 +1,50 @@
 package com.example.omp.notification.webhook.matcher;
 
+import com.example.omp.notification.durable.DispatchQueue;
 import com.example.omp.notification.webhook.config.WebhookKafkaTopics;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import org.springframework.kafka.core.KafkaTemplate;
+import java.time.Instant;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
+/** All initial, retry and operator-replay handoffs participate in the database transaction. */
 @Component
 public class WebhookDeliveryPublisher {
+    private final DispatchQueue queue;
+    private final ObjectMapper mapper;
 
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final ObjectMapper objectMapper;
+    public WebhookDeliveryPublisher(DispatchQueue queue, ObjectMapper mapper) {
+        this.queue = queue;
+        this.mapper = mapper;
+    }
 
-    public WebhookDeliveryPublisher(
-            KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
-        this.kafkaTemplate = kafkaTemplate;
-        this.objectMapper = objectMapper;
+    public void enqueue(DeliveryMessage message) {
+        publish(message);
     }
 
     public void publish(DeliveryMessage message) {
         publish(WebhookKafkaTopics.DELIVERIES, message);
     }
 
+    @Transactional
     public void publish(String topic, DeliveryMessage message) {
+        message.validate();
         try {
-            String key = message.deliveryId().toString();
-            String payload = objectMapper.writeValueAsString(message);
-            // The consuming listener must not commit its input before Kafka acknowledges fan-out.
-            kafkaTemplate.send(topic, key, payload).get(10, TimeUnit.SECONDS);
+            Instant due =
+                    message.scheduledAtMillis() == null
+                            ? Instant.now()
+                            : Instant.ofEpochMilli(message.scheduledAtMillis());
+            queue.enqueue(
+                    UUID.randomUUID().toString(),
+                    "KAFKA",
+                    topic,
+                    message.deliveryId().toString(),
+                    mapper.writeValueAsString(message),
+                    due);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize DeliveryMessage", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while publishing webhook delivery", e);
-        } catch (ExecutionException | TimeoutException e) {
-            throw new IllegalStateException("Kafka did not acknowledge webhook delivery", e);
+            throw new IllegalStateException("Invalid delivery handoff", e);
         }
     }
 }

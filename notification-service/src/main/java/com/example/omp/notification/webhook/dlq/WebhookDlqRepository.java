@@ -12,6 +12,13 @@ public interface WebhookDlqRepository extends JpaRepository<WebhookDlqEntry, UUI
 
     Optional<WebhookDlqEntry> findByDeliveryId(UUID deliveryId);
 
+    @org.springframework.data.jpa.repository.Lock(
+            jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT entry FROM WebhookDlqEntry entry WHERE entry.deliveryId=:deliveryId")
+    Optional<WebhookDlqEntry> findLockedByDeliveryId(
+            @org.springframework.data.repository.query.Param("deliveryId") UUID deliveryId);
+
     Page<WebhookDlqEntry> findAllByOrderByReceivedAtDesc(Pageable pageable);
 
     Page<WebhookDlqEntry> findByReplayedAtIsNullOrderByReceivedAtDesc(Pageable pageable);

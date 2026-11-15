@@ -1,0 +1,21 @@
+{
+  "eventId": "00000000-0000-0000-0000-000000000503",
+  "eventType": "RESERVATION_CREATED",
+  "aggregateId": "00000000-0000-0000-0000-000000000701",
+  "occurredAt": "2026-11-14T00:00:00Z",
+  "schemaVersion": 1,
+  "data": {
+    "reservationId": "00000000-0000-0000-0000-000000000701",
+    "status": "ACTIVE",
+    "sku": "SKU-CONTRACT",
+    "warehouseId": "WH-1",
+    "quantity": 1,
+    "orderId": "00000000-0000-0000-0000-000000000301"
+  },
+  "reservationId": "00000000-0000-0000-0000-000000000701",
+  "status": "ACTIVE",
+  "sku": "SKU-CONTRACT",
+  "warehouseId": "WH-1",
+  "quantity": 1,
+  "orderId": "00000000-0000-0000-0000-000000000301"
+}

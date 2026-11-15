@@ -44,6 +44,7 @@ public class DlqService {
 
     @Transactional
     public void persist(DeliveryMessage message, String reason, String finalStatus) {
+        if (repository.findByDeliveryId(message.deliveryId()).isPresent()) return;
         try {
             WebhookDlqEntry entry = new WebhookDlqEntry();
             entry.setDeliveryId(message.deliveryId());
@@ -75,7 +76,7 @@ public class DlqService {
     public void replay(UUID deliveryId, String replayedBy) {
         WebhookDlqEntry entry =
                 repository
-                        .findByDeliveryId(deliveryId)
+                        .findLockedByDeliveryId(deliveryId)
                         .orElseThrow(() -> new WebhookExceptions.DlqEntryNotFound(deliveryId));
 
         if (entry.getReplayedAt() != null) {

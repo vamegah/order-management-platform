@@ -106,7 +106,11 @@ public class SecurityConfig {
                                                 role ->
                                                         (GrantedAuthority)
                                                                 new SimpleGrantedAuthority(
-                                                                        "ROLE_" + role))
+                                                                        "ROLE_"
+                                                                                + role.toUpperCase(
+                                                                                        java.util
+                                                                                                .Locale
+                                                                                                .ROOT)))
                                         .collect(Collectors.toSet()));
             }
             return authorities;

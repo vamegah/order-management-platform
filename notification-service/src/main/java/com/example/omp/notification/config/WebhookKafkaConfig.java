@@ -100,11 +100,13 @@ public class WebhookKafkaConfig {
      */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String>
-            webhookEventKafkaListenerContainerFactory() {
+            webhookEventKafkaListenerContainerFactory(
+                    com.example.omp.notification.durable.EventQuarantine quarantine) {
 
         var factory = new ConcurrentKafkaListenerContainerFactory<String, String>();
         factory.setConsumerFactory(consumerFactory("outbound-webhook"));
         factory.setConcurrency(eventConcurrency);
+        factory.setCommonErrorHandler(quarantine.handler("webhook", false));
         factory.getContainerProperties()
                 .setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
         return factory;
@@ -119,14 +121,16 @@ public class WebhookKafkaConfig {
      */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String>
-            webhookDeliveryKafkaListenerContainerFactory() {
+            webhookDeliveryKafkaListenerContainerFactory(
+                    com.example.omp.notification.durable.EventQuarantine quarantine) {
 
         Map<String, Object> props = baseConsumerProps("webhook-delivery");
-        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 26 * 60 * 60 * 1000);
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300_000);
 
         var factory = new ConcurrentKafkaListenerContainerFactory<String, String>();
         factory.setConsumerFactory(new DefaultKafkaConsumerFactory<>(props));
         factory.setConcurrency(deliveryConcurrency);
+        factory.setCommonErrorHandler(quarantine.handler("delivery", false));
         factory.getContainerProperties()
                 .setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
         return factory;
@@ -134,11 +138,13 @@ public class WebhookKafkaConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String>
-            webhookDlqKafkaListenerContainerFactory() {
+            webhookDlqKafkaListenerContainerFactory(
+                    com.example.omp.notification.durable.EventQuarantine quarantine) {
 
         var factory = new ConcurrentKafkaListenerContainerFactory<String, String>();
         factory.setConsumerFactory(consumerFactory("webhook-dlq"));
         factory.setConcurrency(dlqConcurrency);
+        factory.setCommonErrorHandler(quarantine.handler("delivery-dlq", false));
         factory.getContainerProperties()
                 .setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
         return factory;

@@ -4,73 +4,71 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.example.omp.notification.webhook.config.WebhookKafkaTopics;
+import com.example.omp.notification.durable.DispatchQueue;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 
 class WebhookDeliveryPublisherTest {
-    @SuppressWarnings("unchecked")
-    final KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
-
+    final DispatchQueue queue = mock(DispatchQueue.class);
     final ObjectMapper mapper = new ObjectMapper();
-    final WebhookDeliveryPublisher publisher = new WebhookDeliveryPublisher(kafka, mapper);
+    final WebhookDeliveryPublisher publisher = new WebhookDeliveryPublisher(queue, mapper);
     final DeliveryMessage message =
             new DeliveryMessage(
-                    UUID.randomUUID(), UUID.randomUUID(), "event-1", "payment.confirmed", 1, null);
+                    UUID.randomUUID(), UUID.randomUUID(), "event", "PAYMENT_CONFIRMED", 1, null);
 
     @Test
-    void acknowledgedPublishUsesStableDeliveryKeyAndRoundTripsEnvelope() throws Exception {
-        when(kafka.send(anyString(), anyString(), anyString()))
-                .thenReturn(CompletableFuture.completedFuture(null));
+    void stableDeliveryIdentityIsDurablyEnqueuedWithoutDirectBrokerPublication() throws Exception {
         publisher.publish(message);
-        var payload = ArgumentCaptor.forClass(String.class);
-        verify(kafka)
-                .send(
-                        eq(WebhookKafkaTopics.DELIVERIES),
+        verify(queue)
+                .enqueue(
+                        anyString(),
+                        eq("KAFKA"),
+                        eq("webhooks.outbound.deliveries"),
                         eq(message.deliveryId().toString()),
-                        payload.capture());
-        assertThat(mapper.readValue(payload.getValue(), DeliveryMessage.class)).isEqualTo(message);
+                        eq(mapper.writeValueAsString(message)),
+                        any(Instant.class));
     }
 
     @Test
-    void asynchronousBrokerRejectionPropagatesToConsumingListener() {
-        when(kafka.send(anyString(), anyString(), anyString()))
-                .thenReturn(
-                        CompletableFuture.failedFuture(
-                                new IllegalStateException("broker unavailable")));
+    void delayedRetryIsStoredWithItsDueTimeInsteadOfSleepingOnAPartition() {
+        long due = System.currentTimeMillis() + 60000;
+        var retry =
+                new DeliveryMessage(
+                        message.deliveryId(),
+                        message.subscriptionId(),
+                        message.eventId(),
+                        message.eventType(),
+                        2,
+                        due);
+        publisher.publish("retry-topic", retry);
+        verify(queue)
+                .enqueue(
+                        anyString(),
+                        eq("KAFKA"),
+                        eq("retry-topic"),
+                        eq(message.deliveryId().toString()),
+                        anyString(),
+                        eq(Instant.ofEpochMilli(due)));
+    }
+
+    @Test
+    void databaseFailurePropagatesToTheConsumingTransaction() {
+        doThrow(new IllegalStateException("database down"))
+                .when(queue)
+                .enqueue(anyString(), anyString(), anyString(), anyString(), anyString(), any());
         assertThatThrownBy(() -> publisher.publish(message))
-                .hasRootCauseMessage("broker unavailable");
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void missingAcknowledgmentHasABoundedWait() throws Exception {
-        CompletableFuture<SendResult<String, String>> future = mock(CompletableFuture.class);
-        when(future.get(10, TimeUnit.SECONDS)).thenThrow(new TimeoutException("no acknowledgment"));
-        when(kafka.send(anyString(), anyString(), anyString())).thenReturn(future);
-        assertThatThrownBy(() -> publisher.publish(message))
-                .hasCauseInstanceOf(TimeoutException.class);
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void interruptionIsPreservedForContainerShutdown() throws Exception {
-        CompletableFuture<SendResult<String, String>> future = mock(CompletableFuture.class);
-        when(future.get(10, TimeUnit.SECONDS)).thenThrow(new InterruptedException());
-        when(kafka.send(anyString(), anyString(), anyString())).thenReturn(future);
-        try {
-            assertThatThrownBy(() -> publisher.publish(message))
-                    .hasCauseInstanceOf(InterruptedException.class);
-            assertThat(Thread.currentThread().isInterrupted()).isTrue();
-        } finally {
-            Thread.interrupted();
-        }
+    void invalidDeliveryCannotBeEnqueued() {
+        assertThatThrownBy(
+                        () ->
+                                publisher.publish(
+                                        new DeliveryMessage(null, null, "bad", "bad", 0, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(queue);
     }
 }

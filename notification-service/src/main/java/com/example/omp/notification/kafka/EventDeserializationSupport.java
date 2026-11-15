@@ -55,10 +55,12 @@ public class EventDeserializationSupport {
 
         try {
             JsonNode node = mapper.readTree(json);
+            if (node != null && node.has("data"))
+                return com.example.omp.shared.events.EventContract.typed(
+                        new com.example.omp.shared.events.DomainEventReader(mapper).read(json));
             JsonNode typeNode = node.get("eventType");
             if (typeNode == null || typeNode.isNull()) {
-                throw new EventDeserializationException(
-                        "Missing eventType field in payload: " + truncate(json));
+                throw new EventDeserializationException("Missing eventType field");
             }
 
             String eventType = typeNode.asText();
@@ -72,8 +74,7 @@ public class EventDeserializationSupport {
         } catch (EventDeserializationException e) {
             throw e;
         } catch (Exception e) {
-            throw new EventDeserializationException(
-                    "Failed to deserialize event: " + e.getMessage(), e);
+            throw new EventDeserializationException("Failed to deserialize event", e);
         }
     }
 

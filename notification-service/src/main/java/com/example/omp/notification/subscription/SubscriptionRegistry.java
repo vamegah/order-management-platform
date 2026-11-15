@@ -43,6 +43,8 @@ public class SubscriptionRegistry {
      * IDs may subscribe to the same destination independently.
      */
     public synchronized void register(Subscription subscription) {
+        if (bySession.getOrDefault(subscription.sessionId(), Set.of()).size() >= 100)
+            throw new SubscriptionUnauthorizedException("Session subscription limit reached");
         if (bySession.getOrDefault(subscription.sessionId(), Set.of()).stream()
                 .anyMatch(existing -> existing.id().equals(subscription.id())))
             throw new SubscriptionUnauthorizedException("Subscription ID is already in use");
@@ -102,6 +104,10 @@ public class SubscriptionRegistry {
     public synchronized Set<Subscription> find(TopicType type, String resourceId) {
         Set<Subscription> subs = byTypeAndResource.get(key(type, resourceId));
         return subs != null ? Set.copyOf(subs) : Set.of();
+    }
+
+    public synchronized int subscriptionsForSession(String sessionId) {
+        return bySession.getOrDefault(sessionId, Set.of()).size();
     }
 
     /** Total active subscriptions. */

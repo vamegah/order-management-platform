@@ -53,7 +53,7 @@ class WebhookEventTypesTest {
                 .thenReturn(List.of(both, dotted));
         matcher.matchAndPublish("event", "PAYMENT_REFUNDED", null);
         var messages = ArgumentCaptor.forClass(DeliveryMessage.class);
-        verify(publisher, times(2)).publish(messages.capture());
+        verify(publisher, times(2)).enqueue(messages.capture());
         assertThat(messages.getAllValues())
                 .extracting(DeliveryMessage::subscriptionId)
                 .containsExactly(both.getId(), dotted.getId());

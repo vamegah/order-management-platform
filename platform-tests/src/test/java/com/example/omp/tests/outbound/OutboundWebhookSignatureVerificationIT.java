@@ -27,7 +27,7 @@ class OutboundWebhookSignatureVerificationIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-sig-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-sig\"}");
 
@@ -50,7 +50,7 @@ class OutboundWebhookSignatureVerificationIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-sig-wrong-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-sig-wrong\"}");
 
@@ -72,7 +72,7 @@ class OutboundWebhookSignatureVerificationIT extends OutboundWebhookBase {
 
         publishEvent(
                 "payments.events.payment",
-                "evt-sig-tamper-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "payment.confirmed",
                 "{\"paymentId\":\"p-tamper\"}");
 
@@ -97,7 +97,7 @@ class OutboundWebhookSignatureVerificationIT extends OutboundWebhookBase {
 
         publishEvent(
                 "orders.events.order",
-                "evt-sig-ts-" + java.util.UUID.randomUUID(),
+                java.util.UUID.randomUUID().toString(),
                 "order.placed",
                 "{\"orderId\":\"o-sig\"}");
 

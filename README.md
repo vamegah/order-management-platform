@@ -17,7 +17,7 @@ Published REST/GraphQL artifacts and executable consumer examples are documented
 | REST | Versioned OpenAPI 3.1 contracts, owned orders, durable references, fulfillment and compensation | Endpoint-wide security review and ingress quotas |
 | GraphQL | Compiled public consumers, aggregation, batching, mutations, query limits and deployed policy checks | Broader performance and release acceptance |
 | gRPC | Inventory/payment operations, streaming APIs and mTLS configuration | Streaming transport cases, replica behavior and certificate rotation |
-| Events/WebSocket | Outboxes, Kafka/Redis bridge, ownership, private notifications and unsubscribe cleanup | Replay/durability, replica recovery and load acceptance |
+| Events/WebSocket | Versioned outboxes/inboxes, quarantine and audited replay, owned subscriptions and token expiry | Required two-replica recovery and 1,000-client acceptance; see [operations](docs/events-and-websockets.md) |
 | Payments/webhooks | Idempotency, provider refunds, reconciliation, signing, retries and DLQ management | Complete security, provider delivery and recovery acceptance |
 | SOAP | Banking facade/simulator, WS-Security, fault mapping and frozen contracts | Deployed trusted TLS and resilience acceptance |
 | Operations | Compose, telemetry, alerts and CI workflows | Security/performance/recovery evidence and release approval |

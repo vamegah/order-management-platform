@@ -59,7 +59,7 @@ class OutboundWebhookCircuitBreakerIT extends OutboundWebhookBase {
                         new com.example.omp.notification.webhook.matcher.DeliveryMessage(
                                 java.util.UUID.randomUUID(),
                                 sub.getId(),
-                                "evt-disabled-" + java.util.UUID.randomUUID(),
+                                java.util.UUID.randomUUID().toString(),
                                 "payment.confirmed",
                                 1,
                                 null));
