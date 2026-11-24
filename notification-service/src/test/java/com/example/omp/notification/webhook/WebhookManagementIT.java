@@ -173,4 +173,71 @@ class WebhookManagementIT extends AbstractNotificationTest {
                 .statusCode(400);
         as(TestTokens.admin()).get("/api/v1/webhook-dlq?" + query).then().statusCode(400);
     }
+
+    private java.util.List<Integer> concurrentChanges(String id, String first, String second)
+            throws Exception {
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.List<java.util.concurrent.Future<Integer>> results;
+            try (var held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                try (var statement =
+                        held.prepareStatement(
+                                "SELECT id FROM notifications.webhook_subscription WHERE id=? FOR UPDATE")) {
+                    statement.setObject(1, UUID.fromString(id));
+                    statement.executeQuery().close();
+                }
+                results =
+                        java.util.List.of(
+                                pool.submit(
+                                        () ->
+                                                as(TestTokens.alice())
+                                                        .post(BASE + "/" + id + "/" + first)
+                                                        .statusCode()),
+                                pool.submit(
+                                        () ->
+                                                as(TestTokens.alice())
+                                                        .post(BASE + "/" + id + "/" + second)
+                                                        .statusCode()));
+                try {
+                    org.awaitility.Awaitility.await()
+                            .atMost(java.time.Duration.ofSeconds(10))
+                            .untilAsserted(
+                                    () ->
+                                            assertThat(
+                                                            jdbc.queryForObject(
+                                                                    "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND lower(query) LIKE '%webhook_subscription%'",
+                                                                    Integer.class))
+                                                    .isGreaterThanOrEqualTo(2));
+                } finally {
+                    held.rollback();
+                }
+            }
+            return java.util.List.of(
+                    results.get(0).get(15, java.util.concurrent.TimeUnit.SECONDS),
+                    results.get(1).get(15, java.util.concurrent.TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void concurrentRotationsRetainExactlyOnePreviousKey() throws Exception {
+        var original = create(TestTokens.alice());
+        String id = original.get("id").toString();
+        assertThat(concurrentChanges(id, "rotate-secret", "rotate-secret"))
+                .containsExactlyInAnyOrder(200, 409);
+        var stored = subscriptions.findById(UUID.fromString(id)).orElseThrow();
+        assertThat(stored.getKeyVersion()).isEqualTo(2);
+        assertThat(stored.getPreviousSecret()).isEqualTo(original.get("secret"));
+        assertThat(stored.getSecret()).isNotEqualTo(original.get("secret"));
+    }
+
+    @Test
+    void enablingDuringRotationCannotRestoreTheRetiredKey() throws Exception {
+        var original = create(TestTokens.alice());
+        String id = original.get("id").toString();
+        assertThat(concurrentChanges(id, "rotate-secret", "enable")).containsExactly(200, 200);
+        var stored = subscriptions.findById(UUID.fromString(id)).orElseThrow();
+        assertThat(stored.getKeyVersion()).isEqualTo(2);
+        assertThat(stored.getPreviousSecret()).isEqualTo(original.get("secret"));
+        assertThat(stored.getSecret()).isNotEqualTo(original.get("secret"));
+    }
 }

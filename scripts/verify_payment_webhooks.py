@@ -35,7 +35,7 @@ def wait_for(predicate,seconds=90):
 class Subscriber:
     def __init__(self):
         self.lock=threading.Lock();self.secrets=[];self.status=204;self.delay=0
-        self.deliveries={};self.attempts={};self.order_times={};self.latencies={};self.rejected=0;self.old_key_acceptances=0;self.lose_ack_once=False;self.lost_ack_ids=set()
+        self.deliveries={};self.attempts={};self.order_times={};self.latencies={};self.rejected=0;self.old_key_acceptances=0;self.lose_ack_once=False;self.lost_ack_ids=set();self.failure_gate=threading.Event();self.failure_gate.set()
         owner=self
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
@@ -64,6 +64,7 @@ class Subscriber:
                                 order=data.get('data',{}).get('orderId')
                                 if order in owner.order_times:owner.latencies[order]=(time.monotonic()-owner.order_times[order])*1000
                                 if old_valid:owner.old_key_acceptances+=1
+                    if status==503:owner.failure_gate.wait(8)
                     if delay:time.sleep(delay)
                     if drop_ack:self.close_connection=True;return
                     self.send_response(status);self.send_header('Content-Length','0');self.end_headers()
@@ -82,7 +83,7 @@ class Subscriber:
                 finally:self.slots.release()
         self.server=BoundedServer(('0.0.0.0',0),Handler)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
-    def close(self):self.server.shutdown();self.server.server_close();self.thread.join(5)
+    def close(self):self.failure_gate.set();self.server.shutdown();self.server.server_close();self.thread.join(5)
     def orders(self):
         with self.lock:return {d.get('data',{}).get('orderId') for d in self.deliveries.values()}
 
@@ -196,7 +197,8 @@ class Acceptance:
         wait_for(lambda:self.backlog()['inboxPending']==0)
         return {'events':len(latencies),'p95Ms':round(p95),'p99Ms':round(p99),'backlogAfterDrain':self.backlog()}
     def delivery(self):
-        workload=self.profile['workload'];orders=[str(uuid.uuid4()) for _ in range(workload['chargeEvents'])];start=time.monotonic()
+        workload=self.profile['workload'];orders=[str(uuid.uuid4()) for _ in range(workload['chargeEvents'])]
+        provider_before=self.call(self.args.provider,'/__test/stats',role=None,headers={'Authorization':'Bearer sk_test_omp_simulator'})[0]['payments'];start=time.monotonic()
         transient_replies=[]
         def charge(item):
             index,order=item;due=start+index/workload['chargesPerSecond'];time.sleep(max(0,due-time.monotonic()))
@@ -216,10 +218,13 @@ class Acceptance:
             latencies=[self.subscriber.latencies[o] for o in orders]
             ids=[identifier for identifier,d in self.subscriber.deliveries.items() if d.get('data',{}).get('orderId') in orders]
             duplicates=sum(max(0,self.subscriber.attempts[i]-1) for i in ids)
+        provider_after=self.call(self.args.provider,'/__test/stats',role=None,headers={'Authorization':'Bearer sk_test_omp_simulator'})[0]['payments']
+        assert provider_after-provider_before==len(orders),'Provider monetary identity conservation failed'
         p95,p99=percentile(latencies,.95),percentile(latencies,.99);objectives=self.profile['objectives']
+        self.observed={'events':len(orders),'received':len(ids),'duplicates':duplicates,'p95Ms':round(p95),'p99Ms':round(p99),'transientProviderReplies':len(transient_replies),'canonicalConfirmed':len(identifiers),'providerPaymentsCreated':provider_after-provider_before}
         assert len(ids)==len(orders) and duplicates==0,'Healthy delivery conservation failed'
         assert p95<=objectives['deliveryP95Ms'] and p99<=objectives['deliveryP99Ms'],'Delivery latency objective missed'
-        return {'events':len(orders),'received':len(ids),'duplicates':duplicates,'p95Ms':round(p95),'p99Ms':round(p99),'durationSeconds':round(time.monotonic()-start,2),'transientProviderReplies':len(transient_replies),'canonicalConfirmed':len(identifiers)}
+        return {'events':len(orders),'received':len(ids),'duplicates':duplicates,'p95Ms':round(p95),'p99Ms':round(p99),'durationSeconds':round(time.monotonic()-start,2),'transientProviderReplies':len(transient_replies),'canonicalConfirmed':len(identifiers),'providerPaymentsCreated':provider_after-provider_before}
     def rotation(self):
         old=self.subscriber.secrets[0]
         rotated,_=self.call(self.args.notification,'/api/v1/webhook-subscriptions/'+self.subscription+'/rotate-secret','POST')
@@ -243,9 +248,14 @@ class Acceptance:
             lost_id=next(identifier for identifier,data in self.subscriber.deliveries.items() if data.get('data',{}).get('orderId')==lost_body['orderId'])
         wait_for(lambda:self.subscriber.attempts.get(lost_id,0)>=2,90)
         assert sum(d.get('data',{}).get('orderId')==lost_body['orderId'] for d in self.subscriber.deliveries.values())==1
-        count=self.profile['workload']['failedSubscriberEvents'];self.subscriber.status=503
-        with ThreadPoolExecutor(max_workers=10) as pool:results=list(pool.map(lambda _:self.payment(),range(count)))
-        orders={body['orderId'] for _,body in results}
+        count=self.profile['workload']['failedSubscriberEvents'];self.subscriber.status=503;self.subscriber.failure_gate.clear()
+        try:
+            def admit(_):
+                result,_=self.call(self.args.notification,'/api/v1/webhook-subscriptions/'+self.subscription+'/test','POST',expected=(202,))
+                return result['deliveryId']
+            with ThreadPoolExecutor(max_workers=8) as pool:delivery_ids=set(pool.map(admit,range(count)))
+        finally:self.subscriber.failure_gate.set()
+        assert len(delivery_ids)==count,'Test delivery admission did not conserve identities'
         def entries():
             page=self.call(self.args.notification,'/api/v1/webhook-dlq?size=200',role='admin')[0]
             return [x for x in page['content'] if x['subscriptionId']==self.subscription]
@@ -254,10 +264,10 @@ class Acceptance:
         self.subscriber.status=204;self.call(self.args.notification,'/api/v1/webhook-subscriptions/'+self.subscription+'/enable','POST')
         start=time.monotonic()
         with ThreadPoolExecutor(max_workers=8) as pool:list(pool.map(lambda e:self.call(self.args.notification,'/api/v1/webhook-dlq/'+e['deliveryId']+'/replay','POST',role='admin'),dead))
-        wait_for(lambda:orders<=self.subscriber.orders(),self.profile['objectives']['replaySeconds'])
+        wait_for(lambda:delivery_ids<=set(self.subscriber.deliveries),self.profile['objectives']['replaySeconds'])
         assert time.monotonic()-start<=self.profile['objectives']['replaySeconds']
         self.call(self.args.notification,'/api/v1/webhook-dlq/'+dead[0]['deliveryId']+'/replay','POST',role='admin',expected=(409,))
-        return {'deadLetters':len(dead),'recovered':len(orders),'replaySeconds':round(time.monotonic()-start,2),'unauthorizedReplayDenied':True,'replayDrainPerSecond':round(len(orders)/max(.001,time.monotonic()-start),2),'slowSubscriberEvents':len(slow_orders),'slowSubscriberSeconds':round(slow_seconds,2),'lostAcknowledgmentStableIdentity':True,'backlogAfterRecovery':self.backlog()}
+        return {'deadLetters':len(dead),'recovered':len(delivery_ids),'replaySeconds':round(time.monotonic()-start,2),'unauthorizedReplayDenied':True,'replayDrainPerSecond':round(len(delivery_ids)/max(.001,time.monotonic()-start),2),'admissionSource':'owner-authorized test deliveries before circuit opening','slowSubscriberEvents':len(slow_orders),'slowSubscriberSeconds':round(slow_seconds,2),'lostAcknowledgmentStableIdentity':True,'backlogAfterRecovery':self.backlog()}
     @contextmanager
     def paused(self,service):
         identifier=self.containers[service];self.docker('pause',identifier)
@@ -295,10 +305,11 @@ class Acceptance:
         try:
             for name,function in zip(self.profile['requiredPhases'],functions):
                 start=time.monotonic()
+                self.observed={}
                 try:measurements=function();passed=True
                 except Exception as failure:
                     frame=traceback.extract_tb(failure.__traceback__)[-1]
-                    measurements={'failureType':type(failure).__name__,'failureLocation':Path(frame.filename).name+':'+str(frame.lineno)}
+                    measurements={**self.observed,'failureType':type(failure).__name__,'failureLocation':Path(frame.filename).name+':'+str(frame.lineno)}
                     if isinstance(failure,AssertionError):measurements['assertion']=str(failure)[:300]
                     passed=False
                 self.report['phases'].append({'name':name,'passed':passed,'seconds':round(time.monotonic()-start,2),'measurements':measurements})

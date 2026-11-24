@@ -26,6 +26,9 @@ services:
       PAYMENT_PROVIDER: noop
       STRIPE_API_KEY: ""
       STRIPE_WEBHOOK_SECRET: ""
+  notification-service:
+    environment:
+      WEBHOOK_DESTINATION_TEST_ALLOWED_HOSTS: localhost
   graphql-gateway:
     environment:
       OMP_GRAPHQL_PROTECTION_REQUESTSPERWINDOW: "60"

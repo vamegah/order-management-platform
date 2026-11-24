@@ -131,7 +131,7 @@ class PublicApiAcceptance(unittest.TestCase):
 
     def test_09_webhook_crud_and_secret_visibility_are_owner_scoped(self):
         alice,bob=self.auth.token('alice'),self.auth.token('bob')
-        body={'name':'public-api-'+uuid4().hex,'targetUrl':'https://example.invalid/contract',
+        body={'name':'public-api-'+uuid4().hex,'targetUrl':'http://localhost/contract',
               'eventTypes':['public-api.contract.never']}
         created=self.webhooks.webhook_subscription_create(body=body,token=alice,expected_status=201).data
         identity={'id':created['id']}

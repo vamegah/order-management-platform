@@ -147,6 +147,15 @@ required `payments-e2e` CI job. Smaller local hosts are diagnostic; acceptance
 uses the declared Linux reference host. An explicit image-tag variable supports
 isolated local artifacts without replacing development images.
 
+The durable notification drainer claims at most 100 due tasks per transaction,
+works for at most one second between transport calls, and stops on the first
+transport failure. Unattempted rows remain pending. Each charge can create three
+dispatch tasks, so capacity must account for fan-out as well as charge rate.
+
+The provider request uses [Stripe dynamic payment methods](https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods)
+with redirects disabled and a client-supplied token. SDK SCA remains supported;
+the backend never accepts raw card details.
+
 Real Stripe test-mode acceptance is separate from deterministic CI. Use an
 explicitly authorized test sandbox, store API/listener keys in private mounted
 files, retain TLS verification and verify `livemode=false` through the Stripe API

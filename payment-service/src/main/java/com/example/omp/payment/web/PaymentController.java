@@ -120,6 +120,7 @@ public class PaymentController {
     public record ConfirmHttpRequest(
             @NotBlank @Pattern(regexp = "pm_[A-Za-z0-9_]{1,240}") String paymentMethodId) {}
 
+    @io.swagger.v3.oas.annotations.media.Schema(types = {"object", "null"})
     public record NextAction(String type, String clientSecret) {
         @Override
         public String toString() {

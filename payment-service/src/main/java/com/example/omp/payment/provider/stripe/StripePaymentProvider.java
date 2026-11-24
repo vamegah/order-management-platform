@@ -45,7 +45,8 @@ public class StripePaymentProvider implements PaymentProvider {
                     || !request.paymentMethodId().matches("pm_[A-Za-z0-9_]{1,240}"))
                 return ProviderChargeResult.error("Tokenized payment method required");
             params.put("payment_method", request.paymentMethodId());
-            params.put("payment_method_types[0]", "card");
+            params.put("automatic_payment_methods[enabled]", "true");
+            params.put("automatic_payment_methods[allow_redirects]", "never");
             params.put("use_stripe_sdk", "true");
             params.put(
                     "description",

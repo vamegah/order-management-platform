@@ -138,7 +138,10 @@
             "type": "string"
           }
         },
-        "type": "object"
+        "type": [
+          "object",
+          "null"
+        ]
       },
       "PaymentResponse": {
         "properties": {

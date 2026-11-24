@@ -77,7 +77,7 @@ public class WebhookSubscriptionService {
             SubscriptionOwnerType ownerType,
             UUID ownerId,
             UpdateSubscriptionRequest request) {
-        WebhookSubscription sub = loadOwned(id, ownerType, ownerId);
+        WebhookSubscription sub = loadOwnedForUpdate(id, ownerType, ownerId);
 
         if (request.name() != null) {
             sub.setName(request.name());
@@ -97,7 +97,7 @@ public class WebhookSubscriptionService {
      */
     @Transactional
     public void delete(UUID id, SubscriptionOwnerType ownerType, UUID ownerId) {
-        WebhookSubscription sub = loadOwned(id, ownerType, ownerId);
+        WebhookSubscription sub = loadOwnedForUpdate(id, ownerType, ownerId);
         sub.setEnabled(false);
         sub.setDisabledAt(Instant.now());
         sub.setDisabledReason("Disabled by owner");
@@ -106,11 +106,7 @@ public class WebhookSubscriptionService {
 
     @Transactional
     public String rotateSecret(UUID id, SubscriptionOwnerType ownerType, UUID ownerId) {
-        WebhookSubscription sub = loadOwned(id, ownerType, ownerId);
-        sub =
-                repository
-                        .findLockedById(id)
-                        .orElseThrow(() -> new WebhookExceptions.SubscriptionNotFound(id));
+        WebhookSubscription sub = loadOwnedForUpdate(id, ownerType, ownerId);
         if (sub.getPreviousSecretValidUntil() != null
                 && sub.getPreviousSecretValidUntil().isAfter(Instant.now()))
             throw new org.springframework.web.server.ResponseStatusException(
@@ -127,7 +123,7 @@ public class WebhookSubscriptionService {
 
     @Transactional
     public SubscriptionResponse enable(UUID id, SubscriptionOwnerType ownerType, UUID ownerId) {
-        WebhookSubscription sub = loadOwned(id, ownerType, ownerId);
+        WebhookSubscription sub = loadOwnedForUpdate(id, ownerType, ownerId);
         sub.setEnabled(true);
         sub.setDisabledAt(null);
         sub.setDisabledReason(null);
@@ -142,6 +138,20 @@ public class WebhookSubscriptionService {
                         .findById(id)
                         .orElseThrow(() -> new WebhookExceptions.SubscriptionNotFound(id));
 
+        return requireOwner(sub, id, ownerType, ownerId);
+    }
+
+    private WebhookSubscription loadOwnedForUpdate(
+            UUID id, SubscriptionOwnerType ownerType, UUID ownerId) {
+        var sub =
+                repository
+                        .findLockedById(id)
+                        .orElseThrow(() -> new WebhookExceptions.SubscriptionNotFound(id));
+        return requireOwner(sub, id, ownerType, ownerId);
+    }
+
+    private WebhookSubscription requireOwner(
+            WebhookSubscription sub, UUID id, SubscriptionOwnerType ownerType, UUID ownerId) {
         if (ownerType == SubscriptionOwnerType.ADMIN) {
             return sub;
         }

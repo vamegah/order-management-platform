@@ -366,7 +366,11 @@ class StripePaymentProviderTest {
         wireMock.verify(
                 postRequestedFor(urlEqualTo("/v1/payment_intents"))
                         .withHeader("Idempotency-Key", equalTo("omp-charge-" + chargePayment))
-                        .withRequestBody(containing("payment_method=pm_clientToken")));
+                        .withFormParam("payment_method", equalTo("pm_clientToken"))
+                        .withFormParam("automatic_payment_methods[enabled]", equalTo("true"))
+                        .withFormParam(
+                                "automatic_payment_methods[allow_redirects]", equalTo("never"))
+                        .withRequestBody(notMatching("(?s).*payment_method_types.*")));
         if (expected == ProviderChargeResult.Status.REQUIRES_ACTION) {
             assertThat(result.clientSecret()).isEqualTo("pi_verified_secret_test");
             assertThat(result.toString()).doesNotContain("secret_test");

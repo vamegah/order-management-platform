@@ -87,11 +87,15 @@ class PaymentFulfillmentFenceIT {
                                                 .setAmount("10")
                                                 .setCurrency("USD"))
                                 .build());
-        return handler.confirm(
-                ConfirmPaymentRequest.newBuilder()
-                        .setPaymentId(payment.getId())
-                        .setProviderReference("pi-" + UUID.randomUUID())
-                        .build());
+        // Provider-backed intents must be seeded through the verified result path.
+        var captured =
+                context.getBean(com.example.omp.payment.service.PaymentTransactionalOps.class)
+                        .applyChargeResult(
+                                UUID.fromString(payment.getId()),
+                                com.example.omp.payment.provider.ProviderChargeResult.succeeded(
+                                        "pi_" + UUID.randomUUID()));
+        return com.example.omp.payment.grpc.converter.ProtoConverters.toProto(
+                captured, new com.example.omp.payment.domain.MoneyConverter());
     }
 
     private FulfillmentDecision decide(Payment payment, FulfillmentAction action) {

@@ -276,6 +276,17 @@ public class ProviderFixtureLedger {
         long now = System.currentTimeMillis();
         var due = new ArrayList<Callback>();
         for (var original : new ArrayList<>(resources.values())) {
+            boolean completes =
+                    original.has("_completeAt") && original.path("_completeAt").asLong() <= now;
+            boolean claims =
+                    !controls.path("dropCallbacks").asBoolean()
+                            && original.path("_events")
+                                    .valueStream()
+                                    .anyMatch(
+                                            event ->
+                                                    !event.path("_sent").asBoolean()
+                                                            && event.path("_due").asLong() <= now);
+            if (!completes && !claims) continue;
             var row = original.deepCopy();
             boolean changed = false;
             if (row.has("_completeAt") && row.path("_completeAt").asLong() <= now) {
