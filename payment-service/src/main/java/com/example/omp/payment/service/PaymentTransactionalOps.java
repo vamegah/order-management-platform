@@ -27,17 +27,20 @@ public class PaymentTransactionalOps {
     private final PaymentRepository paymentRepository;
     private final OutboxWriter outboxWriter;
     private final PaymentCreationLock creationLock;
+    private final RefundStore refunds;
     private final com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams;
 
     public PaymentTransactionalOps(
             PaymentRepository paymentRepository,
             OutboxWriter outboxWriter,
             PaymentCreationLock creationLock,
-            com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams) {
+            com.example.omp.payment.grpc.handler.PaymentEventStreamHandler streams,
+            RefundStore refunds) {
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
         this.creationLock = creationLock;
         this.streams = streams;
+        this.refunds = refunds;
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -63,6 +66,7 @@ public class PaymentTransactionalOps {
         if (requestedAmount.getAmount().precision() > 19) {
             throw new IllegalArgumentException("Payment amount exceeds storage precision");
         }
+        validateMethod(command.paymentMethodId(), providerName);
         creationLock.acquire(command.idempotencyKey());
         Optional<Payment> existing =
                 paymentRepository.findByIdempotencyKey(command.idempotencyKey());
@@ -80,6 +84,7 @@ public class PaymentTransactionalOps {
                         "Idempotency key reused with different provider");
             }
             if (previous.getProvider() == null) previous.setProvider(providerName);
+            bind(previous, command.paymentMethodId());
             return previous;
         }
 
@@ -90,6 +95,7 @@ public class PaymentTransactionalOps {
                         requestedAmount,
                         command.idempotencyKey());
         payment.setProvider(providerName);
+        bind(payment, command.paymentMethodId());
 
         Payment saved = paymentRepository.save(payment);
 
@@ -109,12 +115,27 @@ public class PaymentTransactionalOps {
     public Payment applyChargeResult(UUID paymentId, ProviderChargeResult result) {
         Payment payment =
                 paymentRepository
-                        .findById(paymentId)
+                        .lockForRefund(paymentId)
                         .orElseThrow(
                                 () ->
                                         new IllegalStateException(
                                                 "Payment vanished mid-flight: " + paymentId));
 
+        if (payment.getStatus() == PaymentStatus.FAILED
+                && result.status() == ProviderChargeResult.Status.SUCCEEDED) {
+            payment.reconcileProviderCapture(result.providerReference());
+            refunds.compensateReconciledCapture(payment);
+            paymentRepository.save(payment);
+            outboxWriter.write(
+                    PaymentEventPayloads.PAYMENT_CONFIRMED,
+                    payment.getId(),
+                    PaymentEventPayloads.confirmed(payment));
+            streams.publishEvent(
+                    payment,
+                    com.example.omp.proto.payment.PaymentStatus.PAYMENT_STATUS_FAILED,
+                    "provider capture reconciled");
+            return payment;
+        }
         if (payment.getStatus() != PaymentStatus.PENDING) {
             return payment;
         }
@@ -134,6 +155,8 @@ public class PaymentTransactionalOps {
                         "confirmed");
             }
             case DECLINED -> {
+                if (result.providerReference() != null)
+                    payment.setProviderReference(result.providerReference());
                 payment.markFailed(result.declineCode(), result.declineMessage());
                 paymentRepository.save(payment);
                 outboxWriter.write(
@@ -147,6 +170,12 @@ public class PaymentTransactionalOps {
             }
             case REQUIRES_ACTION -> {
                 payment.setProviderReference(result.providerReference());
+                payment.setActionRequired(true);
+                paymentRepository.save(payment);
+            }
+            case PENDING -> {
+                payment.setProviderReference(result.providerReference());
+                payment.setActionRequired(false);
                 paymentRepository.save(payment);
             }
             case ERROR -> {
@@ -158,6 +187,48 @@ public class PaymentTransactionalOps {
             }
         }
         return payment;
+    }
+
+    @Transactional
+    public Payment bindPaymentMethod(UUID id, UUID customer, String method, String provider) {
+        validateMethod(method, provider);
+        Payment payment =
+                paymentRepository
+                        .lockForRefund(id)
+                        .orElseThrow(
+                                () -> new PaymentApplicationService.PaymentNotFoundException(id));
+        if (!payment.getCustomerId().equals(customer))
+            throw new PaymentApplicationService.PaymentNotFoundException(id);
+        if (!provider.equals(payment.getProvider()))
+            throw new IllegalArgumentException("Payment provider mismatch");
+        bind(payment, method);
+        return payment;
+    }
+
+    private static void validateMethod(String method, String provider) {
+        if (("stripe".equals(provider) && method == null)
+                || (method != null && !method.matches("pm_[A-Za-z0-9_]{1,240}")))
+            throw new IllegalArgumentException("A tokenized provider payment method is required");
+    }
+
+    private static void bind(Payment payment, String method) {
+        if (payment.getStatus() == PaymentStatus.PENDING && payment.isCancellationRequested())
+            throw new IllegalStateException("Payment cancellation is pending");
+        if (payment.getPaymentMethodId() != null && !payment.getPaymentMethodId().equals(method))
+            throw new IllegalArgumentException("Payment method does not match the original intent");
+        if (payment.getPaymentMethodId() == null && method != null) {
+            if (payment.getStatus() != PaymentStatus.PENDING)
+                throw new IllegalArgumentException("Payment is no longer pending");
+            payment.setPaymentMethodId(method);
+        }
+        if (payment.getChargeStartedAt() == null)
+            payment.setChargeStartedAt(java.time.Instant.now());
+        if (payment.getStatus() == PaymentStatus.PENDING
+                && payment.getProviderReference() == null
+                && payment.getChargeStartedAt()
+                        .isBefore(java.time.Instant.now().minusSeconds(20 * 3600)))
+            throw new IllegalStateException(
+                    "Unresolved payment requires provider-reference reconciliation");
     }
 
     @Transactional

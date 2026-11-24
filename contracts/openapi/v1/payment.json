@@ -57,6 +57,10 @@
           "orderId": {
             "format": "uuid",
             "type": "string"
+          },
+          "paymentMethodId": {
+            "pattern": "pm_[A-Za-z0-9_]{1,240}",
+            "type": "string"
           }
         },
         "required": [
@@ -80,6 +84,9 @@
               "null"
             ]
           },
+          "nextAction": {
+            "$ref": "#/components/schemas/NextAction"
+          },
           "paymentId": {
             "format": "uuid",
             "type": [
@@ -100,6 +107,30 @@
             ]
           },
           "result": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ConfirmHttpRequest": {
+        "properties": {
+          "paymentMethodId": {
+            "minLength": 1,
+            "pattern": "pm_[A-Za-z0-9_]{1,240}",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paymentMethodId"
+        ],
+        "type": "object"
+      },
+      "NextAction": {
+        "properties": {
+          "clientSecret": {
+            "type": "string"
+          },
+          "type": {
             "type": "string"
           }
         },
@@ -272,6 +303,19 @@
         },
         "type": "object"
       },
+      "Replay": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "Request": {
         "properties": {
           "providerReference": {
@@ -440,6 +484,166 @@
         ]
       }
     },
+    "/api/v1/payments/webhook-events": {
+      "get": {
+        "operationId": "ProviderEventRecovery_attention",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {},
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "description": "The authenticated identity is not authorized for this operation."
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "tags": [
+          "provider-event-recovery-controller"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
+    "/api/v1/payments/webhook-events/{id}/replay": {
+      "post": {
+        "operationId": "ProviderEventRecovery_replay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Replay"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "403": {
+            "description": "The authenticated identity is not authorized for this operation."
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "tags": [
+          "provider-event-recovery-controller"
+        ],
+        "x-method-authorization": "hasRole('admin')"
+      }
+    },
     "/api/v1/payments/webhooks/{providerName}": {
       "post": {
         "operationId": "StripeWebhook_receive",
@@ -544,7 +748,20 @@
                 }
               }
             },
-            "description": "Event processing failed; provider should retry"
+            "description": "Unexpected server failure; provider should retry"
+          },
+          "503": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Durable receipt unavailable; provider should retry"
           }
         },
         "security": [
@@ -629,6 +846,123 @@
               }
             },
             "description": "Conflict"
+          }
+        },
+        "tags": [
+          "payment-controller"
+        ],
+        "x-method-authorization": "@paymentAccess.canAccess(#id, authentication)"
+      }
+    },
+    "/api/v1/payments/{id}/confirm": {
+      "post": {
+        "operationId": "Payment_confirm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmHttpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargeResponse"
+                }
+              }
+            },
+            "description": "Existing or newly confirmed charge"
+          },
+          "202": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargeResponse"
+                }
+              }
+            },
+            "description": "Provider processing or customer action required"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Missing or invalid authentication credentials."
+          },
+          "402": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargeResponse"
+                }
+              }
+            },
+            "description": "Charge declined"
+          },
+          "403": {
+            "description": "The authenticated identity is not authorized for this operation."
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "502": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargeResponse"
+                }
+              }
+            },
+            "description": "Provider outcome unresolved"
           }
         },
         "tags": [
@@ -1152,11 +1486,14 @@
     }
   ],
   "x-implemented-routes": [
+    "GET /api/v1/payments/webhook-events",
     "GET /api/v1/payments/{id}",
     "GET /api/v1/payments/{paymentId}/refunds/{refundId}",
     "GET /api/v1/payments/{paymentId}/refunds/{refundId}/reconciliation",
     "POST /api/v1/payments",
+    "POST /api/v1/payments/webhook-events/{id}/replay",
     "POST /api/v1/payments/webhooks/{providerName}",
+    "POST /api/v1/payments/{id}/confirm",
     "POST /api/v1/payments/{paymentId}/refunds",
     "POST /api/v1/payments/{paymentId}/refunds/{refundId}/reconciliation",
     "POST /api/v1/payments/{paymentId}/refunds/{refundId}/retry"

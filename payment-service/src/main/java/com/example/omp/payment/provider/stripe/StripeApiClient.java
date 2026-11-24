@@ -42,8 +42,19 @@ public class StripeApiClient {
     public StripeApiClient(
             @Qualifier("stripeHttpClient") HttpClient httpClient,
             ObjectMapper objectMapper,
-            StripeProperties properties) {
-        this(httpClient, objectMapper, properties, "https://api.stripe.com/v1");
+            StripeProperties properties,
+            org.springframework.core.env.Environment environment) {
+        this(httpClient, objectMapper, properties, properties.getApiBaseUrl());
+        var profiles = java.util.Set.of(environment.getActiveProfiles());
+        if (!"https://api.stripe.com/v1".equals(properties.getApiBaseUrl())
+                && (!properties.isSimulatorEnabled()
+                        || profiles.contains("prod")
+                        || profiles.contains("production")
+                        || java.util.Collections.disjoint(
+                                profiles,
+                                java.util.Set.of("local", "dev", "test", "acceptance", "e2e"))))
+            throw new IllegalArgumentException(
+                    "Provider API override requires an isolated simulator profile");
     }
 
     public StripeApiClient(
@@ -58,7 +69,13 @@ public class StripeApiClient {
     }
 
     public JsonNode createPaymentIntent(Map<String, String> params) {
-        return post("/payment_intents", params);
+        throw new IllegalArgumentException("Payment intent idempotency key required");
+    }
+
+    public JsonNode createPaymentIntent(Map<String, String> params, String key) {
+        if (key == null || !key.matches("[!-~]{1,255}"))
+            throw new IllegalArgumentException("Provider idempotency key required");
+        return post("/payment_intents", params, key);
     }
 
     public JsonNode createRefund(Map<String, String> params, String idempotencyKey) {
@@ -68,7 +85,15 @@ public class StripeApiClient {
     }
 
     public JsonNode getPaymentIntent(String id) {
+        if (id == null || !id.matches("pi_[A-Za-z0-9_]{1,240}"))
+            throw new IllegalArgumentException("Invalid provider payment reference");
         return get("/payment_intents/" + id);
+    }
+
+    public JsonNode cancelPaymentIntent(String id, String key) {
+        if (id == null || !id.matches("pi_[A-Za-z0-9_]{1,240}"))
+            throw new IllegalArgumentException("Invalid provider intent reference");
+        return post("/payment_intents/" + id + "/cancel", Map.of(), key);
     }
 
     public JsonNode getRefund(String id) {
@@ -80,10 +105,6 @@ public class StripeApiClient {
     // -----------------------------------------------------------------------
     // internals
     // -----------------------------------------------------------------------
-
-    private JsonNode post(String path, Map<String, String> params) {
-        return post(path, params, null);
-    }
 
     private JsonNode post(String path, Map<String, String> params, String idempotencyKey) {
         String body = encodeForm(params);
@@ -113,7 +134,6 @@ public class StripeApiClient {
     private JsonNode send(HttpRequest request) {
         int attempts = 0;
         int maxAttempts = properties.getMaxNetworkRetries() + 1;
-        IOException lastIo = null;
 
         while (attempts < maxAttempts) {
             attempts++;
@@ -129,12 +149,7 @@ public class StripeApiClient {
                 }
                 if (status >= 500 || status == 429) {
                     // Retryable at the HTTP level. Back off briefly.
-                    log.warn(
-                            "Stripe returned {} (attempt {}/{}): {}",
-                            status,
-                            attempts,
-                            maxAttempts,
-                            response.body());
+                    log.warn("Provider returned {} (attempt {}/{})", status, attempts, maxAttempts);
                     if (attempts < maxAttempts) {
                         sleepBackoff(attempts);
                         continue;
@@ -142,21 +157,15 @@ public class StripeApiClient {
                 }
 
                 // 4xx (other than 429) -> caller receives the error body.
-                throw new StripeApiException(status, errorMessage(node), node);
+                throw new StripeApiException(status, "Provider request rejected", node);
             } catch (HttpTimeoutException e) {
-                lastIo = e;
                 log.warn("Stripe request timed out (attempt {}/{})", attempts, maxAttempts);
                 if (attempts < maxAttempts) {
                     sleepBackoff(attempts);
                     continue;
                 }
             } catch (IOException e) {
-                lastIo = e;
-                log.warn(
-                        "Stripe I/O error (attempt {}/{}): {}",
-                        attempts,
-                        maxAttempts,
-                        e.getMessage());
+                log.warn("Provider transport unavailable (attempt {}/{})", attempts, maxAttempts);
                 if (attempts < maxAttempts) {
                     sleepBackoff(attempts);
                     continue;
@@ -168,29 +177,15 @@ public class StripeApiClient {
         }
 
         throw new StripeApiException(
-                0,
-                "Stripe unreachable after "
-                        + maxAttempts
-                        + " attempts: "
-                        + (lastIo != null ? lastIo.getMessage() : "unknown"),
-                null);
+                0, "Provider outcome unavailable after " + maxAttempts + " attempts", null);
     }
 
     private JsonNode parse(String body) {
         try {
             return objectMapper.readTree(body == null ? "{}" : body);
         } catch (IOException e) {
-            throw new StripeApiException(0, "Unparseable Stripe response: " + e.getMessage(), null);
+            throw new StripeApiException(0, "Invalid provider response", null);
         }
-    }
-
-    private static String errorMessage(JsonNode node) {
-        if (node == null) return "unknown error";
-        JsonNode error = node.get("error");
-        if (error != null && error.has("message")) {
-            return error.get("message").asText();
-        }
-        return node.toString();
     }
 
     private static String encodeForm(Map<String, String> params) {

@@ -40,8 +40,14 @@ spring:
       maximum-pool-size: 8
       minimum-idle: 2
       keepalive-time: 300000
-      connection-timeout: 5000
-      validation-timeout: 3000
+      connection-timeout: 2000
+      validation-timeout: 1000
+      data-source-properties:
+        # SQL deadlines also need bounded TCP reads and cancellation connections
+        # when the database process is paused or unreachable.
+        socketTimeout: 2
+        connectTimeout: 2
+        cancelSignalTimeout: 1
       pool-name: payment-service-hikari
 
   # ----------------------------------------------------------------------------
@@ -95,6 +101,10 @@ payment:
   stripe:
     api-key: ${STRIPE_API_KEY:}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    api-key-file: ${STRIPE_API_KEY_FILE:}
+    webhook-secret-file: ${STRIPE_WEBHOOK_SECRET_FILE:}
+    previous-webhook-secret-file: ${STRIPE_PREVIOUS_WEBHOOK_SECRET_FILE:}
+    previous-webhook-secret-valid-until: ${STRIPE_PREVIOUS_WEBHOOK_SECRET_VALID_UNTIL:}
     api-version: 2024-06-20
     timeout-seconds: 15
     max-network-retries: 2
@@ -246,4 +256,5 @@ springdoc:
     enabled: false
 
 server:
+  forward-headers-strategy: none
   port: ${SERVER_PORT:8080}

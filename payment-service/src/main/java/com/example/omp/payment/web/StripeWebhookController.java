@@ -3,7 +3,6 @@ package com.example.omp.payment.web;
 import com.example.omp.payment.metrics.PaymentMetrics;
 import com.example.omp.payment.provider.PaymentProvider;
 import com.example.omp.payment.provider.ProviderWebhookVerification;
-import com.example.omp.payment.service.PaymentProviderEventService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -34,15 +33,15 @@ public class StripeWebhookController {
     private static final Logger log = LoggerFactory.getLogger(StripeWebhookController.class);
 
     private final PaymentProvider provider;
-    private final PaymentProviderEventService eventService;
+    private final com.example.omp.payment.service.PaymentWebhookInbox inbox;
     private final PaymentMetrics metrics;
 
     public StripeWebhookController(
             PaymentProvider provider,
-            PaymentProviderEventService eventService,
+            com.example.omp.payment.service.PaymentWebhookInbox inbox,
             PaymentMetrics metrics) {
         this.provider = provider;
-        this.eventService = eventService;
+        this.inbox = inbox;
         this.metrics = metrics;
     }
 
@@ -51,6 +50,10 @@ public class StripeWebhookController {
      * provider is supported. For Phase 5 only "stripe" and "noop" exist; the mapping is dynamic.
      */
     @PostMapping("/{providerName}")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Unexpected server failure; provider should retry",
+            useReturnTypeSchema = true)
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "Verified event accepted, duplicated or ignored",
@@ -64,8 +67,8 @@ public class StripeWebhookController {
             description = "Unknown provider",
             useReturnTypeSchema = true)
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "500",
-            description = "Event processing failed; provider should retry",
+            responseCode = "503",
+            description = "Durable receipt unavailable; provider should retry",
             useReturnTypeSchema = true)
     public ResponseEntity<Map<String, String>> receive(
             @PathVariable String providerName,
@@ -88,10 +91,28 @@ public class StripeWebhookController {
                     .body(Collections.singletonMap("error", "unknown provider"));
         }
 
-        String body = new String(rawBody, StandardCharsets.UTF_8);
+        final String body;
+        try {
+            body =
+                    StandardCharsets.UTF_8
+                            .newDecoder()
+                            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                            .decode(java.nio.ByteBuffer.wrap(rawBody))
+                            .toString();
+        } catch (java.nio.charset.CharacterCodingException malformed) {
+            metrics.recordWebhook(provider.providerName(), "invalid_encoding");
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid_encoding"));
+        }
         Map<String, String> headers = extractHeaders(request);
 
-        ProviderWebhookVerification verification = provider.verifyWebhook(body, headers);
+        ProviderWebhookVerification verification;
+        try {
+            verification = provider.verifyWebhook(body, headers);
+        } catch (RuntimeException unavailable) {
+            metrics.recordWebhook(providerName, "verification_unavailable");
+            return ResponseEntity.status(503).body(Map.of("error", "verification_unavailable"));
+        }
 
         if (!verification.valid()) {
             log.warn("Webhook signature verification failed: {}", verification.reason());
@@ -102,23 +123,18 @@ public class StripeWebhookController {
         }
 
         try {
-            PaymentProviderEventService.ProcessResult result =
-                    eventService.process(providerName, verification.event());
-
-            String outcome =
-                    switch (result) {
-                        case ACCEPTED -> "accepted";
-                        case DUPLICATE -> "duplicate";
-                        case IGNORED -> "ignored";
-                    };
+            String outcome = inbox.accept(provider.providerName(), verification.event(), rawBody);
             metrics.recordWebhook(providerName, outcome);
 
             return ResponseEntity.ok(Map.of("status", outcome));
+        } catch (com.example.omp.payment.service.PaymentWebhookInbox.ConflictingEvent conflict) {
+            metrics.recordWebhook(provider.providerName(), "identity_conflict");
+            return ResponseEntity.status(409).body(Map.of("error", "event_identity_conflict"));
         } catch (RuntimeException e) {
-            log.error("Error processing PSP webhook", e);
+            log.warn("Provider event was not durably accepted");
             metrics.recordWebhook(providerName, "error");
-            // 500 -> the provider retries; we've already stored the event.
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            // No acknowledgment until the durable receipt transaction commits.
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Collections.singletonMap("error", "processing_failed"));
         }
     }

@@ -316,66 +316,102 @@ class StripePaymentProviderTest {
         wireMock.verify(0, postRequestedFor(anyUrl()));
     }
 
-    @Test
-    void charge_succeeds_when_stripe_returns_succeeded() {
+    private final UUID chargePayment = UUID.randomUUID(),
+            chargeOrder = UUID.randomUUID(),
+            chargeCustomer = UUID.randomUUID();
+
+    private ChargeRequest chargeRequest(String reference) {
+        return new ChargeRequest(
+                chargePayment,
+                chargeOrder,
+                chargeCustomer,
+                1000,
+                "USD",
+                "client-key",
+                "Order test",
+                "pm_clientToken",
+                reference);
+    }
+
+    private com.fasterxml.jackson.databind.node.ObjectNode chargeResponse(String status) {
+        var response = new ObjectMapper().createObjectNode();
+        response.put("id", "pi_verified")
+                .put("status", status)
+                .put("amount", 1000)
+                .put("currency", "usd")
+                .put("payment_method", "pm_clientToken")
+                .put("client_secret", "pi_verified_secret_test");
+        response.putObject("metadata")
+                .put("payment_id", chargePayment.toString())
+                .put("order_id", chargeOrder.toString())
+                .put("customer_id", chargeCustomer.toString());
+        response.putObject("last_payment_error").put("decline_code", "card_declined");
+        return response;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "succeeded,SUCCEEDED",
+        "requires_action,REQUIRES_ACTION",
+        "requires_payment_method,DECLINED",
+        "processing,PENDING"
+    })
+    void chargeUsesBoundTokenAndStableProviderIdentity(
+            String status, ProviderChargeResult.Status expected) {
         wireMock.stubFor(
                 post(urlEqualTo("/v1/payment_intents"))
-                        .willReturn(
-                                aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody(
-                                                """
-                                {"id":"pi_123","status":"succeeded","amount":1000,"currency":"usd"}
-                                """)));
+                        .willReturn(okJson(chargeResponse(status).toString())));
+        var result = provider.charge(chargeRequest(null));
+        assertThat(result.status()).isEqualTo(expected);
+        wireMock.verify(
+                postRequestedFor(urlEqualTo("/v1/payment_intents"))
+                        .withHeader("Idempotency-Key", equalTo("omp-charge-" + chargePayment))
+                        .withFormParam("payment_method", equalTo("pm_clientToken"))
+                        .withFormParam("automatic_payment_methods[enabled]", equalTo("true"))
+                        .withFormParam(
+                                "automatic_payment_methods[allow_redirects]", equalTo("never"))
+                        .withRequestBody(notMatching("(?s).*payment_method_types.*")));
+        if (expected == ProviderChargeResult.Status.REQUIRES_ACTION) {
+            assertThat(result.clientSecret()).isEqualTo("pi_verified_secret_test");
+            assertThat(result.toString()).doesNotContain("secret_test");
+        }
+    }
 
-        ProviderChargeResult result =
-                provider.charge(
-                        new ChargeRequest(
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                1000L,
-                                "USD",
-                                "idem-1",
-                                "Order test"));
-
-        assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.SUCCEEDED);
-        assertThat(result.providerReference()).isEqualTo("pi_123");
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "id",
+                "amount",
+                "currency",
+                "payment_method",
+                "payment_id",
+                "order_id",
+                "customer_id"
+            })
+    void unrelatedProviderResponsesCannotConfirmAnIntent(String changed) {
+        var response = chargeResponse("succeeded");
+        if (java.util.Set.of("payment_id", "order_id", "customer_id").contains(changed))
+            ((com.fasterxml.jackson.databind.node.ObjectNode) response.path("metadata"))
+                    .put(changed, UUID.randomUUID().toString());
+        else response.remove(changed);
+        wireMock.stubFor(
+                post(urlEqualTo("/v1/payment_intents")).willReturn(okJson(response.toString())));
+        assertThat(provider.charge(chargeRequest(null)).status())
+                .isEqualTo(ProviderChargeResult.Status.ERROR);
     }
 
     @Test
-    void charge_declined_when_stripe_returns_requires_payment_method() {
+    void anExistingProviderIntentIsReadWithoutCreatingAnotherCharge() {
         wireMock.stubFor(
-                post(urlEqualTo("/v1/payment_intents"))
-                        .willReturn(
-                                aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody(
-                                                """
-                                {"id":"pi_456","status":"requires_payment_method",
-                                 "last_payment_error":{"decline_code":"card_declined",
-                                 "message":"Your card was declined."}}
-                                """)));
-
-        ProviderChargeResult result =
-                provider.charge(
-                        new ChargeRequest(
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                2000L,
-                                "USD",
-                                "idem-2",
-                                "Order test"));
-
-        assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.DECLINED);
-        assertThat(result.declineCode()).isEqualTo("card_declined");
+                get(urlEqualTo("/v1/payment_intents/pi_verified"))
+                        .willReturn(okJson(chargeResponse("succeeded").toString())));
+        assertThat(provider.charge(chargeRequest("pi_verified")).status())
+                .isEqualTo(ProviderChargeResult.Status.SUCCEEDED);
+        wireMock.verify(0, postRequestedFor(anyUrl()));
     }
 
     @Test
-    void charge_returns_error_when_stripe_unreachable() {
+    void providerTimeoutLeavesOutcomeUnresolved() {
         wireMock.stubFor(
                 post(urlEqualTo("/v1/payment_intents"))
                         .willReturn(
@@ -383,47 +419,59 @@ class StripePaymentProviderTest {
                                         .withFault(
                                                 com.github.tomakehurst.wiremock.http.Fault
                                                         .CONNECTION_RESET_BY_PEER)));
-
-        ProviderChargeResult result =
-                provider.charge(
-                        new ChargeRequest(
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                3000L,
-                                "USD",
-                                "idem-3",
-                                "Order test"));
-
-        assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.ERROR);
+        assertThat(provider.charge(chargeRequest(null)).status())
+                .isEqualTo(ProviderChargeResult.Status.ERROR);
     }
 
-    @Test
-    void charge_returns_requires_action_when_3ds_required() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {400, 401, 402, 403, 409})
+    void providerRequestErrorsDoNotProveAFinancialDecline(int status) {
         wireMock.stubFor(
                 post(urlEqualTo("/v1/payment_intents"))
                         .willReturn(
                                 aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody(
-                                                """
-                                {"id":"pi_789","status":"requires_action",
-                                 "next_action":{"redirect_to_url":{"url":"https://3ds.example/x"}}}
-                                """)));
+                                        .withStatus(status)
+                                        .withBody("{\"error\":{\"code\":\"card_declined\"}}")));
+        assertThat(provider.charge(chargeRequest(null)).status())
+                .isEqualTo(ProviderChargeResult.Status.ERROR);
+    }
 
-        ProviderChargeResult result =
-                provider.charge(
-                        new ChargeRequest(
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                4000L,
-                                "USD",
-                                "idem-4",
-                                "Order test"));
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void aCorrelatedHttp402RetainsTheProviderIntentForDuplicateCallbacks(boolean clearedMethod) {
+        var response = new ObjectMapper().createObjectNode();
+        var intent = chargeResponse("requires_payment_method");
+        if (clearedMethod) {
+            intent.putNull("payment_method");
+            intent.withObject("last_payment_error")
+                    .putObject("payment_method")
+                    .put("id", "pm_clientToken");
+        }
+        response.putObject("error").set("payment_intent", intent);
+        wireMock.stubFor(
+                post(urlEqualTo("/v1/payment_intents"))
+                        .willReturn(aResponse().withStatus(402).withBody(response.toString())));
+        var result = provider.charge(chargeRequest(null));
+        assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.DECLINED);
+        assertThat(result.providerReference()).isEqualTo("pi_verified");
+    }
 
-        assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.REQUIRES_ACTION);
-        assertThat(result.requiresActionUrl()).isEqualTo("https://3ds.example/x");
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "requires_payment_method,wrong",
+        "requires_payment_method,missing",
+        "succeeded,matching"
+    })
+    void clearedMethodCannotBindAnotherTokenOrProveCapture(String status, String token) {
+        var intent = chargeResponse(status);
+        intent.putNull("payment_method");
+        if (!token.equals("missing"))
+            intent.withObject("last_payment_error")
+                    .putObject("payment_method")
+                    .put("id", token.equals("matching") ? "pm_clientToken" : "pm_other");
+        wireMock.stubFor(
+                post(urlEqualTo("/v1/payment_intents")).willReturn(okJson(intent.toString())));
+        assertThat(provider.charge(chargeRequest(null)).status())
+                .isEqualTo(ProviderChargeResult.Status.ERROR);
     }
 }

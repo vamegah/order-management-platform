@@ -115,7 +115,12 @@ public class WebhookDeliveryWorker {
         UUID deliveryId = message.deliveryId();
 
         // Idempotency: if any attempt for this delivery already succeeded, skip.
-        if (attemptRepository.existsByDeliveryIdAndStatus(deliveryId, DeliveryStatus.SUCCESS)) {
+        if (attemptRepository.existsByDeliveryIdAndStatus(deliveryId, DeliveryStatus.SUCCESS)
+                || Boolean.TRUE.equals(
+                        jdbc.queryForObject(
+                                "SELECT EXISTS(SELECT 1 FROM webhook_delivery_receipt WHERE delivery_id=?)",
+                                Boolean.class,
+                                deliveryId))) {
             log.debug("Delivery {} already succeeded; skipping duplicate", deliveryId);
             return;
         }
@@ -152,7 +157,8 @@ public class WebhookDeliveryWorker {
         String rawBody = buildPayload(message, sub);
         String signature = signer.sign(sub.getSecret(), timestampSeconds, rawBody);
 
-        Map<String, String> headers = buildHeaders(message, sub, timestampSeconds, signature);
+        Map<String, String> headers =
+                buildHeaders(message, sub, timestampSeconds, signature, rawBody);
 
         WebhookDeliveryAttempt attempt =
                 recordAttempt(
@@ -171,6 +177,11 @@ public class WebhookDeliveryWorker {
             case SUCCESS -> {
                 attempt.setStatus(DeliveryStatus.SUCCESS);
                 attemptRepository.save(attempt);
+                jdbc.update(
+                        "INSERT INTO webhook_delivery_receipt(delivery_id,subscription_id,event_id) VALUES(?,?,?) ON CONFLICT DO NOTHING",
+                        deliveryId,
+                        sub.getId(),
+                        message.eventId());
                 circuitBreaker.recordSuccess(sub.getId());
                 metrics.recordDelivery(message.eventType(), "success");
                 metrics.recordDeliveryDuration(sub.getId(), attempt);
@@ -209,9 +220,20 @@ public class WebhookDeliveryWorker {
             DeliveryMessage message,
             WebhookSubscription sub,
             long timestampSeconds,
-            String signature) {
+            String signature,
+            String rawBody) {
         Map<String, String> headers = new HashMap<>();
         headers.put("X-Signature-256", signature);
+        String signatures = "v1=" + signature.substring("sha256=".length());
+        if (sub.getPreviousSecret() != null
+                && sub.getPreviousSecretValidUntil() != null
+                && sub.getPreviousSecretValidUntil().isAfter(Instant.now()))
+            signatures +=
+                    ",v1="
+                            + signer.sign(sub.getPreviousSecret(), timestampSeconds, rawBody)
+                                    .substring("sha256=".length());
+        headers.put("X-Webhook-Signatures", signatures);
+        headers.put("X-Webhook-Key-Version", Integer.toString(sub.getKeyVersion()));
         headers.put("X-Timestamp", Long.toString(timestampSeconds));
         headers.put("X-Webhook-Id", message.eventId());
         headers.put("X-Webhook-Delivery-Id", message.deliveryId().toString());
@@ -227,6 +249,7 @@ public class WebhookDeliveryWorker {
     private String buildPayload(DeliveryMessage message, WebhookSubscription sub) {
         try {
             Map<String, Object> envelope = new HashMap<>();
+            envelope.put("schemaVersion", 1);
             envelope.put("eventId", message.eventId());
             envelope.put("eventType", message.eventType());
             envelope.put("deliveryId", message.deliveryId().toString());
@@ -237,9 +260,21 @@ public class WebhookDeliveryWorker {
             if (WebhookTestEvent.EVENT_TYPE.equals(message.eventType())) {
                 envelope.put("data", WebhookTestEvent.payload(sub.getId()));
             } else {
-                // Real domain events carry a reference; the subscriber can fetch
-                // full detail out of band. Phase 7 will inline the full body.
-                envelope.put("data", Map.of("eventId", message.eventId()));
+                var source =
+                        jdbc.queryForList(
+                                "SELECT payload::text AS payload,occurred_at FROM webhook_event_payload WHERE event_id=?",
+                                message.eventId());
+                if (source.isEmpty()) envelope.put("data", Map.of("eventId", message.eventId()));
+                else {
+                    envelope.put(
+                            "data",
+                            objectMapper.readTree((String) source.getFirst().get("payload")));
+                    envelope.put(
+                            "occurredAt",
+                            ((java.sql.Timestamp) source.getFirst().get("occurred_at"))
+                                    .toInstant()
+                                    .toString());
+                }
             }
 
             return objectMapper.writeValueAsString(envelope);

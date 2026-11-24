@@ -16,10 +16,30 @@ class DlqServiceTest {
     final WebhookDeliveryPublisher publisher = mock(WebhookDeliveryPublisher.class);
     final WebhookMetrics metrics = mock(WebhookMetrics.class);
     final ObjectMapper mapper = new ObjectMapper();
-    final DlqService service = new DlqService(repository, publisher, mapper, metrics);
+    final DlqService service =
+            new DlqService(
+                    repository,
+                    publisher,
+                    mapper,
+                    metrics,
+                    mock(org.springframework.jdbc.core.JdbcTemplate.class));
     final DeliveryMessage message =
             new DeliveryMessage(
                     UUID.randomUUID(), UUID.randomUUID(), "event", "payment.failed", 6, null);
+
+    @Test
+    void aFailedReplayReturnsToTheUnresolvedQueue() {
+        var entry = new WebhookDlqEntry();
+        entry.setReplayedAt(java.time.Instant.now());
+        entry.setReplayedBy("first-admin");
+        when(repository.findLockedByDeliveryId(message.deliveryId()))
+                .thenReturn(Optional.of(entry));
+        service.persist(message, "SUBSCRIPTION_DISABLED", "FAILED_PERMANENT");
+        assertThat(entry.getReplayedAt()).isNull();
+        assertThat(entry.getReplayedBy()).isNull();
+        assertThat(entry.getReason()).isEqualTo("SUBSCRIPTION_DISABLED");
+        verify(repository).save(entry);
+    }
 
     @Test
     void failedPersistencePropagatesInsteadOfBeingAcknowledged() {

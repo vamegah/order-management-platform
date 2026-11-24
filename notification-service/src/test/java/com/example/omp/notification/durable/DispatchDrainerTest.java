@@ -89,6 +89,28 @@ class DispatchDrainerTest {
     }
 
     @Test
+    void transportFailureDoesNotSpendATimeoutOrMarkUntouchedBatchRows() {
+        var failed = row("KAFKA", 0);
+        var untouched = row("KAFKA", 0);
+        when(jdbc.queryForList(anyString())).thenReturn(List.of(failed, untouched));
+        when(kafka.send(anyString(), anyString(), anyString()))
+                .thenReturn(
+                        CompletableFuture.failedFuture(new IllegalStateException("unavailable")));
+        drainer.drain();
+        verify(kafka, times(1)).send(anyString(), anyString(), anyString());
+        verify(jdbc)
+                .update(
+                        contains("attempts=?"),
+                        eq(1),
+                        eq("PENDING"),
+                        eq("TRANSPORT_FAILURE"),
+                        any(),
+                        eq(failed.get("id")));
+        verify(jdbc, never()).update(anyString(), eq(untouched.get("id")));
+        assertThat(metrics.get("notification.dispatch.failures").counter().count()).isEqualTo(1);
+    }
+
+    @Test
     void disabledWorkerDoesNotReadOrDeleteAnything() {
         var disabled = new DispatchDrainer(jdbc, kafka, redis, metrics, false);
         disabled.drain();

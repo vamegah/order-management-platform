@@ -92,6 +92,20 @@ public class RefundStore {
         return refund;
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void compensateReconciledCapture(Payment payment) {
+        if ("CANCELLING".equals(payment.getFulfillmentState()))
+            throw new IllegalStateException("Late capture awaits inventory compensation");
+        if ("REFUNDABLE".equals(payment.getFulfillmentState()))
+            prepare(
+                    payment.getId(),
+                    null,
+                    null,
+                    "Late provider capture after order cancellation",
+                    "late-capture-" + payment.getId(),
+                    payment.getProvider());
+    }
+
     @Transactional
     public Attempt claim(UUID paymentId, UUID refundId) {
         Payment payment = lock(paymentId);

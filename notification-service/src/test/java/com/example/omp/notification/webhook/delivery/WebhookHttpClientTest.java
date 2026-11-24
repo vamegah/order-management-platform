@@ -4,29 +4,26 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.io.IOException;
-import java.net.http.*;
+import java.net.URI;
+import java.time.*;
 import java.util.Map;
-import javax.net.ssl.SSLHandshakeException;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.core5.http.ClassicHttpRequest;
+import org.apache.hc.core5.http.io.HttpClientResponseHandler;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.http.message.BasicClassicHttpResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
+import org.springframework.mock.env.MockEnvironment;
 
 class WebhookHttpClientTest {
-    final HttpClient transport = mock(HttpClient.class);
-    final WebhookHttpClient client = new WebhookHttpClient(transport, 10);
+    static final java.util.concurrent.ScheduledExecutorService deadlines =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
 
-    @SuppressWarnings("unchecked")
-    final HttpResponse<String> response = mock(HttpResponse.class);
-
-    void responds(int status, String body, Map<String, java.util.List<String>> headers)
-            throws Exception {
-        when(response.statusCode()).thenReturn(status);
-        when(response.body()).thenReturn(body);
-        when(response.headers()).thenReturn(HttpHeaders.of(headers, (key, value) -> true));
-        doReturn(response).when(transport).send(any(), any());
+    @org.junit.jupiter.api.AfterAll
+    static void closeDeadlines() {
+        deadlines.shutdownNow();
     }
 
     @ParameterizedTest
@@ -46,97 +43,116 @@ class WebhookHttpClientTest {
         "500,RETRYABLE",
         "503,RETRYABLE"
     })
-    void classifiesSubscriberStatusWithoutFollowingRedirects(int status, DeliveryOutcome outcome)
+    @SuppressWarnings("unchecked")
+    void subscriberResponsesRetainClassification(int status, DeliveryOutcome expected)
             throws Exception {
-        responds(status, "response", Map.of());
-        var result = client.post("https://subscriber.example/hook", "{}", Map.of());
-        assertThat(result.outcome()).isEqualTo(outcome);
-        assertThat(result.httpStatus()).isEqualTo(status);
-    }
-
-    @Test
-    void postCarriesRawBodySignatureHeadersTimeoutAndTruncatedAuditResponse() throws Exception {
-        responds(429, "x".repeat(5000), Map.of("Retry-After", java.util.List.of("12")));
+        var transport = mock(CloseableHttpClient.class);
+        var policy = mock(WebhookDestinationPolicy.class);
+        when(policy.validate(anyString()))
+                .thenReturn(URI.create("https://subscriber.example/hook"));
+        when(transport.execute(any(ClassicHttpRequest.class), any(HttpClientResponseHandler.class)))
+                .thenAnswer(
+                        call -> {
+                            var request = (ClassicHttpRequest) call.getArgument(0);
+                            assertThat(request.getMethod()).isEqualTo("POST");
+                            assertThat(request.getFirstHeader("X-Signature-256").getValue())
+                                    .isEqualTo("signed");
+                            var response = new BasicClassicHttpResponse(status);
+                            response.setEntity(new StringEntity("response"));
+                            response.setHeader("Retry-After", "12");
+                            return ((HttpClientResponseHandler<?>) call.getArgument(1))
+                                    .handleResponse(response);
+                        });
         var result =
-                client.post(
-                        "https://subscriber.example/hook",
-                        "{\"value\":1}",
-                        Map.of("X-Signature-256", "sha256=test"));
-        assertThat(result.retryAfterMillis()).isEqualTo(12_000L);
-        assertThat(result.responseBody()).hasSize(4096);
-        var request = ArgumentCaptor.forClass(HttpRequest.class);
-        verify(transport).send(request.capture(), any());
-        assertThat(request.getValue().method()).isEqualTo("POST");
-        assertThat(request.getValue().timeout()).contains(java.time.Duration.ofSeconds(10));
-        assertThat(request.getValue().headers().firstValue("X-Signature-256"))
-                .contains("sha256=test");
-        assertThat(request.getValue().headers().firstValue("Content-Type"))
-                .contains("application/json; charset=utf-8");
+                new WebhookHttpClient(transport, policy, 2, deadlines)
+                        .post(
+                                "https://subscriber.example/hook",
+                                "{}",
+                                Map.of("X-Signature-256", "signed"));
+        assertThat(result.outcome()).isEqualTo(expected);
+        assertThat(result.httpStatus()).isEqualTo(status);
+        if (expected == DeliveryOutcome.RETRYABLE)
+            assertThat(result.retryAfterMillis()).isEqualTo(12000);
     }
 
     @Test
-    void invalidRetryAfterDoesNotPreventRetryClassification() throws Exception {
-        responds(408, null, Map.of("Retry-After", java.util.List.of("not-seconds")));
-        var result = client.post("https://subscriber.example/hook", "{}", Map.of());
-        assertThat(result.outcome()).isEqualTo(DeliveryOutcome.RETRYABLE);
-        assertThat(result.retryAfterMillis()).isNull();
-    }
-
-    @Test
-    void configuredTimeoutBoundsTheRequest() throws Exception {
-        responds(200, "ok", Map.of());
-        new WebhookHttpClient(transport, 2).post("https://subscriber.example/hook", "{}", Map.of());
-        var request = ArgumentCaptor.forClass(HttpRequest.class);
-        verify(transport).send(request.capture(), any());
-        assertThat(request.getValue().timeout()).contains(java.time.Duration.ofSeconds(2));
-    }
-
-    @ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(longs = {0, -1, 61, Long.MAX_VALUE})
-    void invalidTimeoutFailsAtStartup(long seconds) {
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> new WebhookHttpClient(transport, seconds));
+    void forbiddenDestinationsNeverReachTransport() {
+        var transport = mock(CloseableHttpClient.class);
+        var env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+        var policy = new WebhookDestinationPolicy(env, "");
+        for (String url :
+                java.util.List.of(
+                        "http://127.0.0.1/hook",
+                        "https://127.0.0.1/hook",
+                        "https://[::1]/hook",
+                        "https://user:pass@example.com/",
+                        "file:///etc/passwd"))
+            assertThat(
+                            new WebhookHttpClient(transport, policy, 2, deadlines)
+                                    .post(url, "{}", Map.of())
+                                    .outcome())
+                    .isEqualTo(DeliveryOutcome.PERMANENT);
         verifyNoInteractions(transport);
     }
 
-    static java.util.List<Exception> transportFailures() {
-        return java.util.List.of(
-                new HttpTimeoutException("timed out"),
-                new IOException("connection reset"),
-                new SSLHandshakeException("untrusted certificate"),
-                new IllegalStateException("transport closed"));
-    }
-
-    @ParameterizedTest
-    @MethodSource("transportFailures")
-    void classifiesTransportFailures(Exception failure) throws Exception {
-        doThrow(failure).when(transport).send(any(), any());
-        var result = client.post("https://subscriber.example/hook", "{}", Map.of());
-        assertThat(result.outcome())
-                .isEqualTo(
-                        failure instanceof SSLHandshakeException
-                                ? DeliveryOutcome.PERMANENT
-                                : DeliveryOutcome.RETRYABLE);
-        assertThat(result.httpStatus()).isNull();
-        assertThat(result.errorMessage()).isNotBlank();
-    }
-
     @Test
-    void interruptedSendPreservesThreadInterruption() throws Exception {
-        doThrow(new InterruptedException()).when(transport).send(any(), any());
-        try {
-            assertThat(client.post("https://subscriber.example/hook", "{}", Map.of()).outcome())
-                    .isEqualTo(DeliveryOutcome.RETRYABLE);
-            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    void realTransportRefusesRedirectAndBoundsResponseBodies() throws Exception {
+        var server =
+                com.sun.net.httpserver.HttpServer.create(
+                        new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        var escaped = new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext(
+                "/redirect",
+                e -> {
+                    e.getResponseHeaders().set("Location", "/forbidden");
+                    e.sendResponseHeaders(302, -1);
+                    e.close();
+                });
+        server.createContext(
+                "/forbidden",
+                e -> {
+                    escaped.incrementAndGet();
+                    e.sendResponseHeaders(204, -1);
+                    e.close();
+                });
+        server.createContext(
+                "/large",
+                e -> {
+                    e.sendResponseHeaders(200, 1000000);
+                    try {
+                        e.getResponseBody().write(new byte[1000000]);
+                    } catch (Exception ignored) {
+                    } finally {
+                        e.close();
+                    }
+                });
+        server.start();
+        var env = new MockEnvironment();
+        env.setActiveProfiles("test");
+        var policy = new WebhookDestinationPolicy(env, "localhost");
+        try (var transport =
+                new com.example.omp.notification.webhook.config.WebhookHttpClientConfig()
+                        .webhookTransport(policy)) {
+            var client = new WebhookHttpClient(transport, policy, 2, deadlines);
+            String base = "http://localhost:" + server.getAddress().getPort();
+            assertThat(client.post(base + "/redirect", "{}", Map.of()).outcome())
+                    .isEqualTo(DeliveryOutcome.PERMANENT);
+            assertThat(escaped).hasValue(0);
+            var result = client.post(base + "/large", "{}", Map.of());
+            assertThat(result.responseBody()).hasSize(4096);
         } finally {
-            Thread.interrupted();
+            server.stop(0);
         }
     }
 
     @Test
-    void invalidUrlNeverUsesTransport() {
-        assertThat(client.post("not a uri", "{}", Map.of()).outcome())
-                .isEqualTo(DeliveryOutcome.PERMANENT);
-        verifyNoInteractions(transport);
+    void retryAfterSupportsDatesAndDoesNotOverflow() {
+        Instant now = Instant.parse("2026-11-15T00:00:00Z");
+        assertThat(WebhookHttpClient.retryAfter("Sun, 15 Nov 2026 00:01:00 GMT", now))
+                .isEqualTo(60000);
+        assertThat(WebhookHttpClient.retryAfter("9999999999", now)).isEqualTo(86400000);
+        assertThat(WebhookHttpClient.retryAfter("-1", now)).isNull();
+        assertThat(WebhookHttpClient.retryAfter("invalid", now)).isNull();
     }
 }

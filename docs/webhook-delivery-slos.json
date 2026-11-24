@@ -1,0 +1,8 @@
+{
+  "version":1,
+  "referenceHardware":"4 vCPU / at least 15 GiB Linux CI host; actual Docker hardware and runtime limits are recorded with each run",
+  "workload":{"ingressEvents":500,"ingressPerSecond":50,"chargeEvents":200,"chargesPerSecond":10,"failedSubscriberEvents":200,"subscriberWorkers":16,"callbackWorkers":4,"databaseFaultSeconds":3},
+  "objectives":{"ackP95Ms":500,"ackP99Ms":1000,"durableFailureAckMaxMs":6000,"deliveryP95Ms":5000,"deliveryP99Ms":10000,"healthyDeliveryRatio":1.0,"healthyDuplicates":0,"recoverySeconds":90,"replaySeconds":60,"unauthorizedActions":0,"duplicateMonetaryEffects":0},
+  "requiredPhases":["provider-lifecycle","inbound-security","ingress-load","delivery-load","signing-rotation","subscriber-failure-replay","durable-fault-recovery"],
+  "semantics":"Callbacks commit a verified receipt before acknowledgment. Money/outbox updates are atomic. HTTP delivery is at least once with one durable delivery identity; the subscriber deduplicates business actions. No secrets or raw callback bodies are retained in reports."
+}

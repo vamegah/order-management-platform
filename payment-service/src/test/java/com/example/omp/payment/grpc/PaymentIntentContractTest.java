@@ -43,7 +43,16 @@ class PaymentIntentContractTest {
         ReflectionTestUtils.setField(existing, "updatedAt", Instant.now());
         when(repository.findByIdempotencyKey("key")).thenReturn(Optional.of(existing));
         when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
-        var handler = new PaymentIntentHandler(repository, new MoneyConverter(), events, lock);
+        when(repository.lockForRefund(existing.getId())).thenReturn(Optional.of(existing));
+        var cancellation =
+                new com.example.omp.payment.service.PaymentCancellationService(
+                        new com.example.omp.payment.service.PaymentCancellationStore(
+                                repository, events),
+                        new com.example.omp.payment.provider.noop.NoopPaymentProvider(
+                                new com.fasterxml.jackson.databind.ObjectMapper()));
+        var handler =
+                new PaymentIntentHandler(
+                        repository, new MoneyConverter(), events, lock, cancellation);
         String name = InProcessServerBuilder.generateName();
         server =
                 InProcessServerBuilder.forName(name)

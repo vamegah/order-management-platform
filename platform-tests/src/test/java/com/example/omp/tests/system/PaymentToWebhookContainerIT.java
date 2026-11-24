@@ -226,6 +226,7 @@ class PaymentToWebhookContainerIT {
         properties.put("server.port", 8080);
         properties.put("management.server.port", 8080);
         properties.put("spring.profiles.active", "acceptance");
+        properties.put("webhook.destination.test-allowed-hosts", "subscriber");
         properties.put(
                 "spring.datasource.url",
                 "jdbc:postgresql://postgres:5432/omp?currentSchema=" + schema + ",public");

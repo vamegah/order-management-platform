@@ -51,6 +51,8 @@ management:
     enabled: false
 
 webhook:
+  destination:
+    test-allowed-hosts: localhost,127.0.0.1,host.docker.internal
   kafka:
     replication-factor: 1
     delivery-concurrency: 1

@@ -21,7 +21,8 @@ class StripeWebhookVerifierTest {
         for (long timestamp : new long[] {Long.MIN_VALUE, Long.MAX_VALUE, -1}) {
             var result =
                     verifier.verify(
-                            "{}", Map.of("Stripe-Signature", "t=" + timestamp + ",v1=invalid"));
+                            "{}",
+                            Map.of("Stripe-Signature", "t=" + timestamp + ",v1=" + "0".repeat(64)));
             assertThat(result.valid()).isFalse();
             assertThat(result.reason()).isEqualTo("timestamp_out_of_tolerance");
         }
@@ -68,7 +69,10 @@ class StripeWebhookVerifierTest {
         StripeWebhookVerifier verifier = new StripeWebhookVerifier(props);
 
         long ts = System.currentTimeMillis() / 1000L;
-        var result = verifier.verify("{}", Map.of("Stripe-Signature", "t=" + ts + ",v1=deadbeef"));
+        var result =
+                verifier.verify(
+                        "{}",
+                        Map.of("Stripe-Signature", "t=" + ts + ",v1=" + "deadbeef".repeat(8)));
 
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).isEqualTo("signature_mismatch");

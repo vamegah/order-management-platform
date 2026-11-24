@@ -69,8 +69,12 @@ public class DispatchDrainer {
         if (!enabled) return;
         var rows =
                 jdbc.queryForList(
-                        "SELECT * FROM notification_dispatch WHERE state='PENDING' AND available_at<=now() ORDER BY created_at,id LIMIT 10 FOR UPDATE SKIP LOCKED");
+                        "SELECT * FROM notification_dispatch WHERE state='PENDING' AND available_at<=now() ORDER BY created_at,id LIMIT 100 FOR UPDATE SKIP LOCKED");
+        // Each domain event can fan out to several durable tasks. Drain enough
+        // to keep up, while bounding transaction time when a transport slows.
+        long started = System.nanoTime();
         for (var row : rows) {
+            if (System.nanoTime() - started >= TimeUnit.SECONDS.toNanos(1)) break;
             try {
                 String destination = (String) row.get("destination"),
                         payload = (String) row.get("payload");
@@ -95,7 +99,8 @@ public class DispatchDrainer {
                                         .plusSeconds(Math.min(300, 1L << Math.min(attempts, 8)))),
                         row.get("id"));
                 metrics.counter("notification.dispatch.failures").increment();
-                if (Thread.currentThread().isInterrupted()) break;
+                // Leave untouched tasks pending rather than spending a timeout on each.
+                break;
             }
         }
     }

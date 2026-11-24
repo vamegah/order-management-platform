@@ -38,14 +38,14 @@ class RetrySchedulerTest {
     }
 
     @Test
-    void immediateRetryAfterAvoidsWaitingAndUnsupportedAttemptDoesNotPublish() {
+    void retryAfterCannotShortenBackoffAndUnsupportedAttemptDoesNotPublish() {
         UUID id = UUID.randomUUID();
         long before = System.currentTimeMillis();
         scheduler.scheduleRetry(1, id, id, "event", "payment.confirmed", 0L);
         var captor = ArgumentCaptor.forClass(DeliveryMessage.class);
         verify(publisher).publish(anyString(), captor.capture());
         assertThat(captor.getValue().scheduledAtMillis())
-                .isBetween(before, System.currentTimeMillis());
+                .isBetween(before + 54_000L, System.currentTimeMillis() + 66_000L);
         clearInvocations(publisher);
         assertThatThrownBy(
                         () ->
@@ -53,5 +53,16 @@ class RetrySchedulerTest {
                                         6, id, id, "event", "payment.confirmed", null))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void providerRetryAfterIsALowerBoundCappedAtOneDay() {
+        UUID id = UUID.randomUUID();
+        long before = System.currentTimeMillis();
+        scheduler.scheduleRetry(1, id, id, "event", "payment.confirmed", Long.MAX_VALUE);
+        var captor = ArgumentCaptor.forClass(DeliveryMessage.class);
+        verify(publisher).publish(anyString(), captor.capture());
+        assertThat(captor.getValue().scheduledAtMillis())
+                .isBetween(before + 86_400_000L, System.currentTimeMillis() + 86_400_000L);
     }
 }

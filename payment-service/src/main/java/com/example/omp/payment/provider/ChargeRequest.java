@@ -9,4 +9,26 @@ public record ChargeRequest(
         long amountMinor,
         String currency,
         String idempotencyKey,
-        String description) {}
+        String description,
+        String paymentMethodId,
+        String providerReference) {
+    public ChargeRequest(
+            UUID paymentId,
+            UUID orderId,
+            UUID customerId,
+            long amountMinor,
+            String currency,
+            String idempotencyKey,
+            String description) {
+        this(
+                paymentId,
+                orderId,
+                customerId,
+                amountMinor,
+                currency,
+                idempotencyKey,
+                description,
+                null,
+                null);
+    }
+}

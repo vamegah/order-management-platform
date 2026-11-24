@@ -30,21 +30,38 @@ public class DlqService {
     private final WebhookDeliveryPublisher publisher;
     private final ObjectMapper objectMapper;
     private final WebhookMetrics metrics;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public DlqService(
             WebhookDlqRepository repository,
             WebhookDeliveryPublisher publisher,
             ObjectMapper objectMapper,
-            WebhookMetrics metrics) {
+            WebhookMetrics metrics,
+            org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.repository = repository;
         this.publisher = publisher;
         this.objectMapper = objectMapper;
         this.metrics = metrics;
+        this.jdbc = jdbc;
     }
 
     @Transactional
     public void persist(DeliveryMessage message, String reason, String finalStatus) {
-        if (repository.findByDeliveryId(message.deliveryId()).isPresent()) return;
+        var existing = repository.findLockedByDeliveryId(message.deliveryId());
+        if (existing.isPresent()) {
+            var entry = existing.get();
+            if (entry.getReplayedAt() != null) {
+                // A replay that fails again is unresolved work; keep every replay audit.
+                entry.setReplayedAt(null);
+                entry.setReplayedBy(null);
+                entry.setReason(truncate(reason));
+                entry.setFinalStatus(finalStatus);
+                entry.setAttempts(message.attemptNumber());
+                repository.save(entry);
+                metrics.recordDlq(reason);
+            }
+            return;
+        }
         try {
             WebhookDlqEntry entry = new WebhookDlqEntry();
             entry.setDeliveryId(message.deliveryId());
@@ -94,6 +111,11 @@ public class DlqService {
                         1,
                         null);
 
+        jdbc.update(
+                "INSERT INTO webhook_replay_audit(delivery_id,actor,payload_hash) VALUES(?,?,?)",
+                deliveryId,
+                replayedBy,
+                com.example.omp.notification.durable.DomainEventIngestion.hash(entry.getPayload()));
         publisher.publish(WebhookKafkaTopics.DELIVERIES, replayMessage);
 
         entry.setReplayedAt(Instant.now());

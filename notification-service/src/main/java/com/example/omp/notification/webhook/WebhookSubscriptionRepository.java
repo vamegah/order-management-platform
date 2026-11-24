@@ -27,6 +27,11 @@ public interface WebhookSubscriptionRepository extends JpaRepository<WebhookSubs
             nativeQuery = true)
     List<WebhookSubscription> findEnabledByEventType(@Param("eventType") String eventType);
 
+    @org.springframework.data.jpa.repository.Lock(
+            jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from WebhookSubscription s where s.id=:id")
+    java.util.Optional<WebhookSubscription> findLockedById(@Param("id") UUID id);
+
     long countByEnabledTrue();
 
     long countByEnabledFalse();

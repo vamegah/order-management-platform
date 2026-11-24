@@ -56,8 +56,13 @@ public class RetryScheduler {
             Long retryAfterMs) {
 
         int nextAttempt = currentAttempt + 1;
-        long baseDelayMs = retryAfterMs != null ? retryAfterMs : delayForAttempt(currentAttempt);
-        long delayMs = applyJitter(baseDelayMs);
+        long baseDelayMs = delayForAttempt(currentAttempt);
+        long delayMs =
+                Math.max(
+                        applyJitter(baseDelayMs),
+                        retryAfterMs == null
+                                ? 0
+                                : Math.min(86_400_000L, Math.max(0, retryAfterMs)));
         long scheduledAt = System.currentTimeMillis() + delayMs;
 
         DeliveryMessage message =

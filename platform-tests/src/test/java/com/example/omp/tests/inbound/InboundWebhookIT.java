@@ -47,7 +47,7 @@ class InboundWebhookIT {
 
     @BeforeEach
     void clean() {
-        jdbc.execute("TRUNCATE payments.provider_event");
+        jdbc.execute("TRUNCATE payments.provider_event_replay_audit, payments.provider_event");
     }
 
     private String event(String id) {
@@ -128,8 +128,9 @@ class InboundWebhookIT {
     void reusedEventIdCannotReplaceTheOriginalPayload() throws Exception {
         String first = event("evt_immutable"), second = first.replace("pi_unknown", "pi_altered");
         post(first, sign(System.currentTimeMillis() / 1000, first));
-        assertThat(post(second, sign(System.currentTimeMillis() / 1000, second)).body())
-                .contains("duplicate");
+        var conflicting = post(second, sign(System.currentTimeMillis() / 1000, second));
+        assertThat(conflicting.statusCode()).isEqualTo(409);
+        assertThat(conflicting.body()).contains("event_identity_conflict");
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT payload FROM payments.provider_event WHERE provider_event_id='evt_immutable'",

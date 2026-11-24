@@ -1,0 +1,77 @@
+# Opt-in disposable payment/provider/webhook acceptance. Public development fixture credentials only.
+services:
+  postgres:
+    ports: !reset []
+  kafka:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  payment-service:
+    image: omp/payment-service:${PAYMENT_ACCEPTANCE_IMAGE_TAG:-1.0.0-SNAPSHOT}
+    depends_on: !override
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+    environment:
+      SPRING_PROFILES_ACTIVE: acceptance
+      MANAGEMENT_TRACING_ENABLED: "false"
+      PAYMENT_PROVIDER: stripe
+      PAYMENT_STRIPE_SIMULATOR_ENABLED: "true"
+      PAYMENT_STRIPE_API_BASE_URL: http://payment-provider-simulator:8090/v1
+      STRIPE_API_KEY: sk_test_omp_simulator
+      STRIPE_WEBHOOK_SECRET: dev-simulator-secret-not-for-production
+      PAYMENT_STRIPE_TIMEOUT_SECONDS: "1"
+      PAYMENT_STRIPE_MAX_NETWORK_RETRIES: "0"
+      PAYMENT_REFUND_RECOVERY_ENABLED: "true"
+      PAYMENT_REFUND_RECOVERY_INTERVAL_MS: "1000"
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+    ports:
+      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:19094:9094"
+    deploy:
+      resources:
+        limits: {cpus: "2", memory: 768M}
+  notification-service:
+    image: omp/notification-service:${PAYMENT_ACCEPTANCE_IMAGE_TAG:-1.0.0-SNAPSHOT}
+    depends_on: !override
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      SPRING_PROFILES_ACTIVE: acceptance
+      MANAGEMENT_TRACING_ENABLED: "false"
+      WEBHOOK_DESTINATION_TEST_ALLOWED_HOSTS: host.docker.internal,localhost
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "127.0.0.1:18084:8084"
+    deploy:
+      resources:
+        limits: {cpus: "2", memory: 1G}
+  payment-provider-simulator:
+    image: omp/payment-provider-simulator:${PAYMENT_ACCEPTANCE_IMAGE_TAG:-1.0.0-SNAPSHOT}
+    depends_on: !reset {}
+    profiles: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: acceptance
+      MANAGEMENT_TRACING_ENABLED: "false"
+      WEBHOOK_URL: http://payment-service:8080/api/v1/payments/webhooks/stripe
+      WEBHOOK_HMAC_SECRET: dev-simulator-secret-not-for-production
+      OMP_SIMULATOR_API_KEY: sk_test_omp_simulator
+      OMP_SIMULATOR_DATA_DIRECTORY: /data/provider
+    volumes:
+      - provider-ledger:/data/provider
+    ports: !override
+      - "127.0.0.1:18090:8090"
+    deploy:
+      resources:
+        limits: {cpus: "1", memory: 512M}
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://keycloak.localhost
+    ports: !override
+      - "127.0.0.1:18089:8080"
+volumes:
+  provider-ledger:

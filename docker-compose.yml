@@ -869,6 +869,7 @@ services:
   #   - 8091: management HTTP (actuator/health, actuator/prometheus)
   # ============================================================================
   payment-provider-simulator:
+    profiles: [payment-tests]
     build:
       context: .
       dockerfile: payment-provider-simulator/Dockerfile
@@ -881,7 +882,7 @@ services:
       SPRING_PROFILES_ACTIVE: local
       SERVER_PORT: "8090"
       MANAGEMENT_PORT: "8091"
-      WEBHOOK_URL: http://payment-service:9093/webhooks/payment
+      WEBHOOK_URL: http://payment-service:8080/api/v1/payments/webhooks/stripe
       WEBHOOK_HMAC_SECRET: ${SIMULATOR_WEBHOOK_SECRET:-dev-simulator-secret-not-for-production}
       WEBHOOK_DELAY_MS: ${SIMULATOR_WEBHOOK_DELAY_MS:-2000}
       FAILURE_RATE: ${SIMULATOR_FAILURE_RATE:-0.0}
@@ -889,7 +890,7 @@ services:
     networks:
       - app
     ports:
-      - "${SIMULATOR_PORT:-8090}:8090"
+      - "127.0.0.1:${SIMULATOR_PORT:-8090}:8090"
     deploy:
       resources:
         limits:
@@ -1215,7 +1216,7 @@ services:
       # `env` external label (see infrastructure/prometheus/prometheus.yml,
       # global.external_labels). Without this flag, ${PROMETHEUS_ENV} would
       # be treated as a literal string, not expanded.
-      - --enable-feature=expand-external-labels 
+      - --enable-feature=expand-external-labels
     environment:
       # Environment label applied to every metric as an external label.
       # Used in Grafana queries like `up{env="dev"}` to distinguish
@@ -1225,7 +1226,7 @@ services:
       # redundant in dev but essential in the prod overlay, where
       # PROMETHEUS_ENV=prod is set explicitly.
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
-    
+
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infrastructure/prometheus/rules:/etc/prometheus/rules:ro

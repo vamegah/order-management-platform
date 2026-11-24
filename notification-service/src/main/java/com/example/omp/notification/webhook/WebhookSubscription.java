@@ -58,6 +58,39 @@ public class WebhookSubscription {
     @Column(name = "disabled_reason", length = 200)
     private String disabledReason;
 
+    @Column(name = "previous_secret")
+    private String previousSecret;
+
+    @Column(name = "previous_secret_valid_until")
+    private Instant previousSecretValidUntil;
+
+    @Column(name = "key_version", nullable = false)
+    private int keyVersion = 1;
+
+    public String getPreviousSecret() {
+        return previousSecret;
+    }
+
+    public void setPreviousSecret(String value) {
+        previousSecret = value;
+    }
+
+    public Instant getPreviousSecretValidUntil() {
+        return previousSecretValidUntil;
+    }
+
+    public void setPreviousSecretValidUntil(Instant value) {
+        previousSecretValidUntil = value;
+    }
+
+    public int getKeyVersion() {
+        return keyVersion;
+    }
+
+    public void setKeyVersion(int value) {
+        keyVersion = value;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

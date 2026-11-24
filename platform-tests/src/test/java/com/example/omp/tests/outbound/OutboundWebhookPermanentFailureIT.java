@@ -142,7 +142,8 @@ class OutboundWebhookPermanentFailureIT extends OutboundWebhookBase {
                             assertThat(all).hasSize(1);
                             assertThat(all.get(0).getStatus())
                                     .isEqualTo(DeliveryStatus.FAILED_PERMANENT);
-                            assertThat(all.get(0).getErrorMessage()).contains("Invalid URL");
+                            assertThat(all.get(0).getErrorMessage())
+                                    .isEqualTo("DESTINATION_DENIED");
                             assertThat(dlqRepository.findAll()).hasSize(1);
                             assertThat(subscriber.requestCount.get()).isZero();
                         });

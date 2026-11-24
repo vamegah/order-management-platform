@@ -29,16 +29,19 @@ public class PaymentIntentHandler {
     private final MoneyConverter moneyConverter;
     private final PaymentEventPublisher paymentEventPublisher;
     private final com.example.omp.payment.service.PaymentCreationLock creationLock;
+    private final com.example.omp.payment.service.PaymentCancellationService cancellations;
 
     public PaymentIntentHandler(
             PaymentRepository paymentRepository,
             MoneyConverter moneyConverter,
             PaymentEventPublisher paymentEventPublisher,
-            com.example.omp.payment.service.PaymentCreationLock creationLock) {
+            com.example.omp.payment.service.PaymentCreationLock creationLock,
+            com.example.omp.payment.service.PaymentCancellationService cancellations) {
         this.paymentRepository = paymentRepository;
         this.moneyConverter = moneyConverter;
         this.paymentEventPublisher = paymentEventPublisher;
         this.creationLock = creationLock;
+        this.cancellations = cancellations;
     }
 
     // =========================================================================
@@ -102,6 +105,9 @@ public class PaymentIntentHandler {
             return ProtoConverters.toProto(payment, moneyConverter);
         }
 
+        if (!"noop".equals(payment.getProvider() == null ? providerName : payment.getProvider()))
+            throw new IllegalStateException(
+                    "Provider payments require verified provider confirmation");
         // Domain method validates the transition (must be PENDING).
         payment.confirm(request.getProviderReference());
         paymentEventPublisher.publishConfirmed(payment);
@@ -118,21 +124,10 @@ public class PaymentIntentHandler {
     // Cancel
     // =========================================================================
 
-    @Transactional
     public com.example.omp.proto.payment.Payment cancel(CancelPaymentRequest request) {
-        Payment payment = findPayment(request.getPaymentId());
-
-        // Idempotency: cancel is a no-op if already cancelled.
-        if (payment.getStatus() == com.example.omp.payment.domain.PaymentStatus.CANCELLED) {
-            log.debug("Cancel is idempotent — payment {} already cancelled", payment.getId());
-            return ProtoConverters.toProto(payment, moneyConverter);
-        }
-
-        payment.cancel(request.getReason());
-        paymentEventPublisher.publishCancelled(payment, request.getReason());
-
-        log.info("Cancelled payment id={}", payment.getId());
-        return ProtoConverters.toProto(payment, moneyConverter);
+        return ProtoConverters.toProto(
+                cancellations.cancel(UUID.fromString(request.getPaymentId()), request.getReason()),
+                moneyConverter);
     }
 
     // =========================================================================

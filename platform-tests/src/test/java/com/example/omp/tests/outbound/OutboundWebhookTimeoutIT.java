@@ -29,7 +29,13 @@ class OutboundWebhookTimeoutIT extends OutboundWebhookBase {
                             assertThat(all.get(1).getStatus())
                                     .isEqualTo(DeliveryStatus.FAILED_RETRYABLE);
                             assertThat(all.get(1).getErrorMessage())
-                                    .containsIgnoringCase("timeout");
+                                    .isEqualTo("TRANSPORT_UNAVAILABLE");
+                            assertThat(
+                                            Duration.between(
+                                                            all.get(1).getStartedAt(),
+                                                            all.get(1).getCompletedAt())
+                                                    .toMillis())
+                                    .isBetween(1000L, 4500L);
                             assertThat(subscriber.requestCount.get()).isEqualTo(2);
                         });
     }

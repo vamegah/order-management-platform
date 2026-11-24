@@ -21,7 +21,7 @@
 
         Exposes an HTTP API to trigger payments, and after a configurable
         delay, sends a signed webhook to the configured callback URL
-        (typically payment-service's /webhooks/payment endpoint).
+        (payment-service's /api/v1/payments/webhooks/stripe endpoint).
 
         The HMAC signing format matches the industry standard: SHA-256 over
         (timestamp + "." + raw_body), sent in X-Signature-256 header. This
@@ -40,8 +40,7 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-restclient</artifactId>
-            <scope>test</scope>
+            <artifactId>spring-boot-starter-restclient</artifactId>
         </dependency>
 
         <dependency>

@@ -47,9 +47,15 @@ public class DomainEventIngestion {
             if (!hash.equals(previous)) throw new EventContract.InvalidEventException();
             return;
         }
-        if ("webhook".equals(consumer))
+        if ("webhook".equals(consumer)) {
+            jdbc.update(
+                    "INSERT INTO webhook_event_payload(event_id,event_type,payload,occurred_at) VALUES(?,?,?::jsonb,?) ON CONFLICT DO NOTHING",
+                    event.eventId(),
+                    event.eventType(),
+                    event.data().toString(),
+                    java.sql.Timestamp.from(Instant.parse(event.occurredAt())));
             matcher.matchAndPublish(event.eventId(), event.eventType(), event.data());
-        else if ("live".equals(consumer)) {
+        } else if ("live".equals(consumer)) {
             String channel =
                     switch (new EventRegistry().categoryOf(event.eventType())) {
                         case ORDER -> RedisChannels.ORDERS;

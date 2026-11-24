@@ -40,6 +40,8 @@ class SimulatorHttpTest {
     private static final AtomicInteger STATUS = new AtomicInteger(204);
     private static final HttpServer RECEIVER = receiver();
 
+    @org.junit.jupiter.api.io.TempDir static java.nio.file.Path fixtureDirectory;
+    @Autowired ProviderFixtureLedger ledger;
     @Autowired TestRestTemplate rest;
     @Autowired ObjectMapper mapper;
     @Autowired WebhookSender sender;
@@ -84,6 +86,7 @@ class SimulatorHttpTest {
                 "omp.simulator.webhook-url",
                 () -> "http://localhost:" + RECEIVER.getAddress().getPort() + "/webhook");
         registry.add("omp.simulator.hmac-secret", () -> SECRET);
+        registry.add("omp.simulator.data-directory", () -> fixtureDirectory.toString());
     }
 
     @BeforeEach
@@ -179,5 +182,157 @@ class SimulatorHttpTest {
         assertThat(sender.send(payload)).isFalse();
         assertThat(metrics.counter("simulator.webhook.send.errors", "reason", "delivery").count())
                 .isEqualTo(before + 1);
+    }
+
+    private org.springframework.http.HttpHeaders fixtureHeaders(boolean form) {
+        var headers = new HttpHeaders();
+        headers.setBearerAuth("sk_test_omp_simulator");
+        headers.setContentType(
+                form ? MediaType.APPLICATION_FORM_URLENCODED : MediaType.APPLICATION_JSON);
+        return headers;
+    }
+
+    @Test
+    void providerHttpApiPreservesIdentityAndCompletesPendingRefunds() throws Exception {
+        ledger.configure(mapper.readTree("{\"dropCallbacks\":true,\"delayMs\":0}"));
+        var form = new org.springframework.util.LinkedMultiValueMap<String, String>();
+        form.set("amount", "1500");
+        form.set("currency", "usd");
+        form.set("payment_method", "pm_success");
+        form.set("metadata[payment_id]", java.util.UUID.randomUUID().toString());
+        form.set("metadata[order_id]", java.util.UUID.randomUUID().toString());
+        form.set("metadata[customer_id]", java.util.UUID.randomUUID().toString());
+        var headers = fixtureHeaders(true);
+        headers.set("Idempotency-Key", java.util.UUID.randomUUID().toString());
+        var created =
+                rest.postForEntity(
+                        "/v1/payment_intents",
+                        new HttpEntity<>(form, headers),
+                        com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(created.getStatusCode().value()).isEqualTo(200);
+        String id = created.getBody().path("id").asText();
+        var same =
+                rest.postForEntity(
+                        "/v1/payment_intents",
+                        new HttpEntity<>(form, headers),
+                        com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(same.getBody().path("id").asText()).isEqualTo(id);
+        var read =
+                rest.exchange(
+                        "/v1/payment_intents/" + id,
+                        org.springframework.http.HttpMethod.GET,
+                        new HttpEntity<>(fixtureHeaders(false)),
+                        com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(read.getBody().path("status").asText()).isEqualTo("succeeded");
+        form.clear();
+        form.set("payment_intent", id);
+        form.set("amount", "500");
+        form.set("metadata[payment_id]", java.util.UUID.randomUUID().toString());
+        form.set("metadata[refund_id]", java.util.UUID.randomUUID().toString());
+        headers.set("Idempotency-Key", java.util.UUID.randomUUID().toString());
+        var refund =
+                rest.postForEntity(
+                        "/v1/refunds",
+                        new HttpEntity<>(form, headers),
+                        com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(refund.getBody().path("status").asText()).isEqualTo("pending");
+        org.awaitility.Awaitility.await()
+                .atMost(java.time.Duration.ofSeconds(5))
+                .untilAsserted(
+                        () -> {
+                            var result =
+                                    rest.exchange(
+                                            "/v1/refunds/" + refund.getBody().path("id").asText(),
+                                            org.springframework.http.HttpMethod.GET,
+                                            new HttpEntity<>(fixtureHeaders(false)),
+                                            com.fasterxml.jackson.databind.JsonNode.class);
+                            assertThat(result.getBody().path("status").asText())
+                                    .isEqualTo("succeeded");
+                        });
+        assertThat(
+                        rest.exchange(
+                                        "/__test/stats",
+                                        org.springframework.http.HttpMethod.GET,
+                                        new HttpEntity<>(fixtureHeaders(false)),
+                                        String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void fixtureControlsRejectUnauthorizedAndOversizedJson() {
+        assertThat(rest.getForEntity("/__test/stats", String.class).getStatusCode().value())
+                .isEqualTo(401);
+        var wrong = fixtureHeaders(false);
+        wrong.setBearerAuth("wrong");
+        assertThat(
+                        rest.exchange(
+                                        "/__test/stats",
+                                        org.springframework.http.HttpMethod.GET,
+                                        new HttpEntity<>(wrong),
+                                        String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(401);
+        var valid = fixtureHeaders(false);
+        assertThat(
+                        rest.exchange(
+                                        "/__test/controls",
+                                        org.springframework.http.HttpMethod.PUT,
+                                        new HttpEntity<>(
+                                                "{\"padding\":\"" + "x".repeat(16385) + "\"}",
+                                                valid),
+                                        String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(413);
+        assertThat(
+                        rest.exchange(
+                                        "/__test/controls",
+                                        org.springframework.http.HttpMethod.PUT,
+                                        new HttpEntity<>(
+                                                Map.of("dropCallbacks", true, "delayMs", 0), valid),
+                                        String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void providerActionAndCancellationUseTheAuthenticatedHttpContract() throws Exception {
+        ledger.configure(mapper.readTree("{\"dropCallbacks\":true,\"delayMs\":0}"));
+        String action =
+                ledger.charge(
+                                new java.util.HashMap<>(
+                                        Map.of(
+                                                "amount",
+                                                "1000",
+                                                "currency",
+                                                "usd",
+                                                "payment_method",
+                                                "pm_action",
+                                                "metadata[payment_id]",
+                                                java.util.UUID.randomUUID().toString(),
+                                                "metadata[order_id]",
+                                                java.util.UUID.randomUUID().toString(),
+                                                "metadata[customer_id]",
+                                                java.util.UUID.randomUUID().toString())),
+                                "http-action")
+                        .path("id")
+                        .asText();
+        var completed =
+                rest.postForEntity(
+                        "/__test/payment_intents/" + action + "/complete",
+                        new HttpEntity<>(Map.of("success", false), fixtureHeaders(false)),
+                        com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(completed.getBody().path("status").asText())
+                .isEqualTo("requires_payment_method");
+        var cancelled =
+                rest.postForEntity(
+                        "/v1/payment_intents/" + action + "/cancel",
+                        new HttpEntity<>(fixtureHeaders(false)),
+                        com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(cancelled.getBody().path("status").asText()).isEqualTo("canceled");
     }
 }

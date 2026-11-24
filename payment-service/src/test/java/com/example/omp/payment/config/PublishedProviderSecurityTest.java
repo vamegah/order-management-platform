@@ -27,7 +27,12 @@ class PublishedProviderSecurityTest {
         var header = document.getComponents().getSecuritySchemes().get("noopSignature");
         var verifier = new NoopPaymentProvider(new ObjectMapper());
         assertThat(
-                        verifier.verifyWebhook(BODY, Map.of(header.getName(), "noop-dev-secret"))
+                        verifier.verifyWebhook(
+                                        BODY,
+                                        Map.of(
+                                                header.getName(),
+                                                com.example.omp.payment.support.ProviderSignatures
+                                                        .noop(BODY)))
                                 .valid())
                 .isTrue();
         assertThat(

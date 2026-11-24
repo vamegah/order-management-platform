@@ -18,6 +18,11 @@ public interface PaymentProvider {
      */
     ProviderChargeResult charge(ChargeRequest request);
 
+    /** Cancels a known intent; this method never creates a payment. */
+    default ProviderChargeResult cancelCharge(ChargeRequest request) {
+        return ProviderChargeResult.error("Provider cancellation unresolved");
+    }
+
     /** Refunds a previously captured payment. Idempotent on {@code request.idempotencyKey()}. */
     ProviderRefundResult refund(RefundRequest request);
 

@@ -366,6 +366,15 @@ webhook workers/management, payment contracts, Compose and provider e2e suites.
   recovery time meet published objectives or lead to explicit prioritized fixes.
   Durable events survive the fault windows and unauthorized replay remains denied.
 
+**Section 5 implemented (2026-11-23):** All six closure conditions are met by
+the required seven-phase simulator/load acceptance and five actual Stripe test-mode
+checks. The real-provider follow-up also covers cleared declined-method tokens;
+concurrent PostgreSQL rotation/edit regressions and bounded database failure
+handling are verified. See [operations and measured limits](payment-webhooks.md),
+[TASKS](../TASKS.md#5-complete-payment-and-webhook-integrations) and
+[PR #26](https://github.com/vamegah/order-management-platform/pull/26).
+Stop before Section 6; its implementation remains a separate instruction.
+
 ## 6. Complete SOAP boundary
 
 Primary areas: `legacy-bank-service`, `legacy-banking-adapter`, SOAP/OpenAPI

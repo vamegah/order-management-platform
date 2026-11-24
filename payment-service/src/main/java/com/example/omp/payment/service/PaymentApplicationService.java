@@ -43,19 +43,37 @@ public class PaymentApplicationService {
     public ChargeOutcome charge(ChargeCommand command) {
         Payment payment = transactionalOps.createOrFindPending(command, provider.providerName());
 
+        return chargePending(payment);
+    }
+
+    public ChargeOutcome confirm(UUID paymentId, UUID customerId, String paymentMethodId) {
+        return chargePending(
+                transactionalOps.bindPaymentMethod(
+                        paymentId, customerId, paymentMethodId, provider.providerName()));
+    }
+
+    private ChargeOutcome chargePending(Payment payment) {
         if (payment.getStatus() != PaymentStatus.PENDING) {
             return ChargeOutcome.fromExisting(payment);
         }
 
         ProviderChargeResult result = callProvider(payment);
         Payment applied = transactionalOps.applyChargeResult(payment.getId(), result);
+        if (applied.getStatus() != PaymentStatus.PENDING
+                && !((result.status() == ProviderChargeResult.Status.SUCCEEDED
+                                && applied.getStatus() == PaymentStatus.CONFIRMED)
+                        || (result.status() == ProviderChargeResult.Status.DECLINED
+                                && applied.getStatus() == PaymentStatus.FAILED)))
+            return ChargeOutcome.fromExisting(applied);
 
         return switch (result.status()) {
             case SUCCEEDED -> ChargeOutcome.confirmed(applied);
             case DECLINED -> ChargeOutcome.declined(applied);
             case REQUIRES_ACTION ->
-                    ChargeOutcome.requiresAction(applied, result.requiresActionUrl());
-            case ERROR -> ChargeOutcome.error(applied, result.declineMessage());
+                    ChargeOutcome.requiresAction(
+                            applied, result.requiresActionUrl(), result.clientSecret());
+            case PENDING -> ChargeOutcome.pending(applied);
+            case ERROR -> ChargeOutcome.error(applied, "Provider outcome pending reconciliation");
         };
     }
 
@@ -68,7 +86,9 @@ public class PaymentApplicationService {
                         payment.getAmountMinor(),
                         payment.getCurrency(),
                         payment.getIdempotencyKey(),
-                        "Order " + payment.getOrderId());
+                        "Order " + payment.getOrderId(),
+                        payment.getPaymentMethodId(),
+                        payment.getProviderReference());
 
         Instant start = Instant.now();
         try {
@@ -81,8 +101,8 @@ public class PaymentApplicationService {
             metrics.recordCharge(provider.providerName(), "error");
             metrics.recordChargeDuration(
                     provider.providerName(), Duration.between(start, Instant.now()));
-            log.error("Provider threw for payment {}", payment.getId(), e);
-            return ProviderChargeResult.error(e.getMessage());
+            log.warn("Provider outcome unresolved for payment {}", payment.getId());
+            return ProviderChargeResult.error("Provider outcome unresolved");
         }
     }
 
@@ -91,6 +111,7 @@ public class PaymentApplicationService {
             case SUCCEEDED -> "success";
             case DECLINED -> "declined";
             case REQUIRES_ACTION -> "requires_action";
+            case PENDING -> "pending";
             case ERROR -> "error";
         };
     }
@@ -105,7 +126,17 @@ public class PaymentApplicationService {
             UUID customerId,
             long amountMinor,
             String currency,
-            String idempotencyKey) {}
+            String idempotencyKey,
+            String paymentMethodId) {
+        public ChargeCommand(
+                UUID orderId,
+                UUID customerId,
+                long amountMinor,
+                String currency,
+                String idempotencyKey) {
+            this(orderId, customerId, amountMinor, currency, idempotencyKey, null);
+        }
+    }
 
     public record ChargeOutcome(
             String result,
@@ -113,7 +144,35 @@ public class PaymentApplicationService {
             String providerReference,
             String failureCode,
             String failureMessage,
-            String requiresActionUrl) {
+            String requiresActionUrl,
+            String clientSecret) {
+        public ChargeOutcome(
+                String result,
+                UUID paymentId,
+                String providerReference,
+                String failureCode,
+                String failureMessage,
+                String requiresActionUrl) {
+            this(
+                    result,
+                    paymentId,
+                    providerReference,
+                    failureCode,
+                    failureMessage,
+                    requiresActionUrl,
+                    null);
+        }
+
+        @Override
+        public String toString() {
+            return "ChargeOutcome[result=" + result + ", paymentId=" + paymentId + "]";
+        }
+
+        public static ChargeOutcome pending(Payment p) {
+            return new ChargeOutcome(
+                    "pending", p.getId(), p.getProviderReference(), null, null, null);
+        }
+
         public static ChargeOutcome confirmed(Payment p) {
             return new ChargeOutcome(
                     "confirmed", p.getId(), p.getProviderReference(), null, null, null);
@@ -125,8 +184,18 @@ public class PaymentApplicationService {
         }
 
         public static ChargeOutcome requiresAction(Payment p, String url) {
+            return requiresAction(p, url, null);
+        }
+
+        public static ChargeOutcome requiresAction(Payment p, String url, String secret) {
             return new ChargeOutcome(
-                    "requires_action", p.getId(), p.getProviderReference(), null, null, url);
+                    "requires_action",
+                    p.getId(),
+                    p.getProviderReference(),
+                    null,
+                    null,
+                    url,
+                    secret);
         }
 
         public static ChargeOutcome error(Payment p, String message) {
