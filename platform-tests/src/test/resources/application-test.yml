@@ -27,6 +27,8 @@ logging:
     org.testcontainers: WARN
 
 webhook:
+  destination:
+    test-allowed-hosts: localhost,127.0.0.1,host.docker.internal
   delivery:
     timeout-seconds: 5
     max-attempts: 6

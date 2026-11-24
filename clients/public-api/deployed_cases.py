@@ -1,3 +1,4 @@
+import hmac, hashlib, time
 """Real consumer requests through Traefik; no service imports, mocked HTTP or direct DB edits."""
 from datetime import datetime,timedelta,timezone
 import json
@@ -176,7 +177,10 @@ class PublicApiAcceptance(unittest.TestCase):
         body={'id':'evt_contract_'+uuid4().hex,'type':'public-api.ignored','data':{'object':{'id':'noop_contract'}}}
         self.payments.stripe_webhook_receive(path_params={'providerName':'unknown'},body=body,token=None,expected_status=404)
         self.payments.stripe_webhook_receive(path_params={'providerName':'noop'},body=body,token=None,expected_status=401)
-        arguments={'path_params':{'providerName':'noop'},'body':body,'headers':{'X-Noop-Signature':'noop-dev-secret'},'token':None,'expected_status':200}
+        timestamp=str(int(time.time()))
+        signed=json.dumps(body,separators=(',',':'),ensure_ascii=False)
+        signature='t='+timestamp+',v1='+hmac.new(b'noop-dev-secret',(timestamp+'.'+signed).encode(),hashlib.sha256).hexdigest()
+        arguments={'path_params':{'providerName':'noop'},'body':body,'headers':{'X-Noop-Signature':signature},'token':None,'expected_status':200}
         first=self.payments.stripe_webhook_receive(**arguments).data
         self.assertIn(first['status'],('ignored','accepted'))
         self.assertEqual('duplicate',self.payments.stripe_webhook_receive(**arguments).data['status'])

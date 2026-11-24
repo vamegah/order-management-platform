@@ -35,7 +35,7 @@ class WebhookManagementIT extends AbstractNotificationTest {
                                 "name",
                                 "contract-test",
                                 "targetUrl",
-                                "https://subscriber.example/hook",
+                                "http://localhost/hook",
                                 "eventTypes",
                                 List.of("payment.confirmed")))
                 .post(BASE)

@@ -41,7 +41,12 @@ public class StripePaymentProvider implements PaymentProvider {
             params.put("currency", request.currency().toLowerCase());
             params.put("confirm", "true");
             params.put("capture_method", "automatic");
-            params.put("payment_method", "pm_card_visa"); // NOTE: placeholder; see design note
+            if (request.paymentMethodId() == null
+                    || !request.paymentMethodId().matches("pm_[A-Za-z0-9_]{1,240}"))
+                return ProviderChargeResult.error("Tokenized payment method required");
+            params.put("payment_method", request.paymentMethodId());
+            params.put("payment_method_types[0]", "card");
+            params.put("use_stripe_sdk", "true");
             params.put(
                     "description",
                     request.description() == null
@@ -51,19 +56,61 @@ public class StripePaymentProvider implements PaymentProvider {
             params.put("metadata[customer_id]", request.customerId().toString());
             params.put("metadata[payment_id]", request.paymentId().toString());
 
-            JsonNode response = apiClient.createPaymentIntent(params);
+            JsonNode response =
+                    request.providerReference() == null
+                            ? apiClient.createPaymentIntent(
+                                    params, "omp-charge-" + request.paymentId())
+                            : apiClient.getPaymentIntent(request.providerReference());
+            if (!matchesCharge(request, response))
+                return ProviderChargeResult.error("Provider payment response mismatch");
             return classifyCharge(response);
 
         } catch (StripeApiException e) {
             log.warn(
-                    "Stripe charge failed (status={}, retryable={}): {}",
+                    "Provider charge unresolved (status={}, retryable={})",
                     e.getHttpStatus(),
-                    e.isRetryable(),
-                    e.getMessage());
-            if (e.isRetryable()) {
-                return ProviderChargeResult.error(e.getMessage());
-            }
-            return ProviderChargeResult.declined(classifyDeclineCode(e), e.getMessage());
+                    e.isRetryable());
+            // Only a fully correlated terminal intent proves a decline. Authentication,
+            // validation and conflict errors do not establish a financial outcome.
+            JsonNode intent =
+                    e.getBody() == null ? null : e.getBody().path("error").path("payment_intent");
+            if (e.getHttpStatus() == 402
+                    && intent != null
+                    && matchesCharge(request, intent)
+                    && "requires_payment_method".equals(intent.path("status").asText()))
+                return classifyCharge(intent);
+            return ProviderChargeResult.error("Provider outcome unresolved");
+        }
+    }
+
+    @Override
+    public ProviderChargeResult cancelCharge(ChargeRequest request) {
+        if (request.providerReference() == null)
+            return ProviderChargeResult.error("Provider reference pending");
+        try {
+            JsonNode response = apiClient.getPaymentIntent(request.providerReference());
+            if (!matchesCharge(request, response))
+                return ProviderChargeResult.error("Provider intent mismatch");
+            String status = response.path("status").asText();
+            if (!java.util.Set.of("succeeded", "canceled").contains(status))
+                response =
+                        apiClient.cancelPaymentIntent(
+                                request.providerReference(), "omp-cancel-" + request.paymentId());
+            if (!matchesCharge(request, response))
+                return ProviderChargeResult.error("Provider intent mismatch");
+            return switch (response.path("status").asText()) {
+                case "succeeded" -> ProviderChargeResult.succeeded(request.providerReference());
+                case "canceled" ->
+                        new ProviderChargeResult(
+                                ProviderChargeResult.Status.DECLINED,
+                                request.providerReference(),
+                                "provider_canceled",
+                                "Provider cancellation verified",
+                                null);
+                default -> ProviderChargeResult.pending(request.providerReference());
+            };
+        } catch (RuntimeException unresolved) {
+            return ProviderChargeResult.error("Provider cancellation unresolved");
         }
     }
 
@@ -170,11 +217,33 @@ public class StripePaymentProvider implements PaymentProvider {
 
             String paymentRef = extractPaymentReference(eventType, data);
 
+            if (!eventId.matches("evt_[A-Za-z0-9_-]{1,240}")
+                    || eventType.length() > 128
+                    || !data.isObject()
+                    || paymentRef == null
+                    || paymentRef.length() > 255)
+                return ProviderWebhookVerification.invalid("invalid_event_contract");
+            var safe = objectMapper.createObjectNode();
+            for (String field :
+                    java.util.List.of(
+                            "id",
+                            "status",
+                            "amount",
+                            "currency",
+                            "payment_intent",
+                            "failure_reason",
+                            "last_payment_error"))
+                if (data.has(field)) safe.set(field, data.get(field));
+            var metadata = safe.putObject("metadata");
+            for (String field :
+                    java.util.List.of("payment_id", "refund_id", "order_id", "customer_id"))
+                if (data.path("metadata").has(field))
+                    metadata.set(field, data.path("metadata").get(field));
             return ProviderWebhookVerification.valid(
-                    new ProviderWebhookEvent(eventId, eventType, data, paymentRef));
+                    new ProviderWebhookEvent(eventId, eventType, safe, paymentRef));
 
         } catch (Exception e) {
-            log.warn("Failed to parse Stripe webhook payload", e);
+            log.warn("Provider webhook JSON contract rejected");
             return ProviderWebhookVerification.invalid("unparseable_body");
         }
     }
@@ -183,6 +252,28 @@ public class StripePaymentProvider implements PaymentProvider {
     // Response classification
     // -----------------------------------------------------------------------
 
+    private static boolean matchesCharge(ChargeRequest request, JsonNode response) {
+        return response.path("id").asText("").matches("pi_[A-Za-z0-9_]{1,240}")
+                && (request.providerReference() == null
+                        || request.providerReference().equals(response.path("id").asText()))
+                && response.path("amount").isIntegralNumber()
+                && response.path("amount").canConvertToLong()
+                && response.path("amount").longValue() == request.amountMinor()
+                && request.currency().equalsIgnoreCase(response.path("currency").asText(""))
+                && request.paymentId()
+                        .toString()
+                        .equals(response.path("metadata").path("payment_id").asText(""))
+                && request.orderId()
+                        .toString()
+                        .equals(response.path("metadata").path("order_id").asText(""))
+                && request.customerId()
+                        .toString()
+                        .equals(response.path("metadata").path("customer_id").asText(""))
+                && (request.paymentMethodId() == null
+                        || request.paymentMethodId()
+                                .equals(response.path("payment_method").asText("")));
+    }
+
     private ProviderChargeResult classifyCharge(JsonNode response) {
         String status = response.path("status").asText("");
         String id = response.path("id").asText(null);
@@ -190,44 +281,32 @@ public class StripePaymentProvider implements PaymentProvider {
         switch (status) {
             case "succeeded":
                 return ProviderChargeResult.succeeded(id);
-            case "requires_action", "requires_confirmation":
-                String url =
-                        response.path("next_action")
-                                .path("redirect_to_url")
-                                .path("url")
-                                .asText(null);
-                return ProviderChargeResult.requiresAction(url, id);
+            case "requires_action":
+                String secret = response.path("client_secret").asText("");
+                if (!secret.startsWith(id + "_secret_") || secret.length() > 512)
+                    return ProviderChargeResult.error("Provider next action unavailable");
+                return ProviderChargeResult.requiresSdk(id, secret);
+            case "processing", "requires_confirmation":
+                return ProviderChargeResult.pending(id);
             case "requires_payment_method":
                 String declineCode =
                         response.path("last_payment_error")
                                 .path("decline_code")
                                 .asText("card_declined");
-                String message =
-                        response.path("last_payment_error")
-                                .path("message")
-                                .asText("Payment method declined");
-                return ProviderChargeResult.declined(declineCode, message);
+                return new ProviderChargeResult(
+                        ProviderChargeResult.Status.DECLINED,
+                        id,
+                        declineCode.matches("[a-zA-Z0-9_]{1,50}")
+                                ? declineCode
+                                : "provider_declined",
+                        "Payment method declined",
+                        null);
             case "canceled":
                 return ProviderChargeResult.declined("canceled", "Payment canceled");
             default:
                 // processing, requires_capture -> treat as error so the caller retries
                 return ProviderChargeResult.error("PaymentIntent status: " + status);
         }
-    }
-
-    private static String classifyDeclineCode(StripeApiException e) {
-        JsonNode body = e.getBody();
-        if (body != null) {
-            JsonNode error = body.path("error");
-            String code = error.path("decline_code").asText(null);
-            if (code == null || code.isBlank()) {
-                code = error.path("code").asText(null);
-            }
-            if (code != null && !code.isBlank()) {
-                return code;
-            }
-        }
-        return "provider_declined";
     }
 
     private static String extractPaymentReference(String eventType, JsonNode data) {

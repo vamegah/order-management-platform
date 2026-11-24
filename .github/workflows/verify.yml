@@ -752,9 +752,69 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.events-e2e.yml
           down -v --remove-orphans
 
+  payments-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: omp-payments-acceptance-${{ github.run_id }}
+      KEYCLOAK_URL: http://127.0.0.1:18089
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned acceptance-client dependencies
+        run: python -m pip install -r scripts/contracts-requirements.lock
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare isolated development trust
+        run: |
+          bash scripts/ci-setup.sh
+          sudo chgrp 1000 infrastructure/tls/payment-service/tls.key
+          chmod 640 infrastructure/tls/payment-service/tls.key
+      - name: Build the independently packaged payment pipeline
+        run: |
+          for service in payment-service notification-service payment-provider-simulator; do
+            docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml build "$service"
+          done
+      - name: Start the disposable provider and webhook topology
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml
+          up -d --no-build --wait --wait-timeout 600 payment-provider-simulator payment-service notification-service
+      - name: Verify payment lifecycle and webhook security load and recovery
+        run: python scripts/verify_payment_webhooks.py --project "$COMPOSE_PROJECT_NAME"
+      - name: Reject missing or incomplete payment acceptance evidence
+        run: |
+          python scripts/check_junit.py coverage/payment-webhooks/payment-webhooks.xml --minimum-tests 7
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report=json.loads(Path('coverage/payment-webhooks/payment-webhooks.json').read_text())
+          assert report['passed'] and len(report['phases'])==7 and all(p['passed'] for p in report['phases'])
+          assert report['cleanupPassed'] and not report['sourceDirty']
+          assert report['sourceRevision']==os.environ['GITHUB_SHA']
+          PY
+      - name: Retain payment pipeline diagnostics
+        if: always()
+        run: |
+          mkdir -p coverage/payment-webhooks
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml ps -a > coverage/payment-webhooks/containers.txt
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml logs --no-color --tail 200 > coverage/payment-webhooks/services.log
+      - name: Publish source-bound payment acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-webhook-acceptance
+          path: coverage/payment-webhooks/**
+          if-no-files-found: error
+      - name: Remove only this run's disposable payment topology
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml
+          down --volumes --remove-orphans
+
   quality-gate:
     if: always()
-    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, events-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
+    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, events-e2e, payments-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -764,6 +824,7 @@ jobs:
           JOURNEY_RESULT: ${{ needs['packaged-payment-journey'].result }}
           EXTERNAL_RESULT: ${{ needs['external-e2e'].result }}
           EVENTS_RESULT: ${{ needs['events-e2e'].result }}
+          PAYMENTS_RESULT: ${{ needs['payments-e2e'].result }}
           GRPC_RESULT: ${{ needs['grpc-e2e'].result }}
           PUBLIC_API_RESULT: ${{ needs['public-api-e2e'].result }}
           CLIENT_RESULT: ${{ needs['notification-client'].result }}
@@ -774,7 +835,7 @@ jobs:
           IMAGE_RESULT: ${{ needs.images.result }}
           IDENTITY_RESULT: ${{ needs['workload-identity'].result }}
         run: |
-          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$EVENTS_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$EVENTS_RESULT" "$PAYMENTS_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required verification job failed, was cancelled, or was skipped."
               exit 1

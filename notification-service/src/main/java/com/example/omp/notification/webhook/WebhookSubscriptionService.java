@@ -15,11 +15,17 @@ public class WebhookSubscriptionService {
 
     private final WebhookSubscriptionRepository repository;
     private final SecretGenerator secretGenerator;
+    private final com.example.omp.notification.webhook.delivery.WebhookDestinationPolicy
+            destinationPolicy;
 
     public WebhookSubscriptionService(
-            WebhookSubscriptionRepository repository, SecretGenerator secretGenerator) {
+            WebhookSubscriptionRepository repository,
+            SecretGenerator secretGenerator,
+            com.example.omp.notification.webhook.delivery.WebhookDestinationPolicy
+                    destinationPolicy) {
         this.repository = repository;
         this.secretGenerator = secretGenerator;
+        this.destinationPolicy = destinationPolicy;
     }
 
     @Transactional
@@ -29,7 +35,7 @@ public class WebhookSubscriptionService {
         sub.setOwnerType(ownerType);
         sub.setOwnerId(ownerId);
         sub.setName(request.name());
-        sub.setTargetUrl(request.targetUrl());
+        sub.setTargetUrl(destinationPolicy.validate(request.targetUrl()).toString());
         sub.setEventTypes(List.copyOf(request.eventTypes()));
         sub.setSecret(secretGenerator.generate());
         sub.setEnabled(true);
@@ -45,7 +51,7 @@ public class WebhookSubscriptionService {
         sub.setOwnerType(ownerType);
         sub.setOwnerId(ownerId);
         sub.setName(request.name());
-        sub.setTargetUrl(request.targetUrl());
+        sub.setTargetUrl(destinationPolicy.validate(request.targetUrl()).toString());
         sub.setEventTypes(List.copyOf(request.eventTypes()));
         sub.setSecret(secretGenerator.generate());
         sub.setEnabled(true);
@@ -77,7 +83,7 @@ public class WebhookSubscriptionService {
             sub.setName(request.name());
         }
         if (request.targetUrl() != null) {
-            sub.setTargetUrl(request.targetUrl());
+            sub.setTargetUrl(destinationPolicy.validate(request.targetUrl()).toString());
         }
         if (request.eventTypes() != null && !request.eventTypes().isEmpty()) {
             sub.setEventTypes(List.copyOf(request.eventTypes()));
@@ -101,7 +107,19 @@ public class WebhookSubscriptionService {
     @Transactional
     public String rotateSecret(UUID id, SubscriptionOwnerType ownerType, UUID ownerId) {
         WebhookSubscription sub = loadOwned(id, ownerType, ownerId);
+        sub =
+                repository
+                        .findLockedById(id)
+                        .orElseThrow(() -> new WebhookExceptions.SubscriptionNotFound(id));
+        if (sub.getPreviousSecretValidUntil() != null
+                && sub.getPreviousSecretValidUntil().isAfter(Instant.now()))
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "Signing key overlap is still active");
         String newSecret = secretGenerator.generate();
+        sub.setPreviousSecret(sub.getSecret());
+        sub.setPreviousSecretValidUntil(Instant.now().plusSeconds(86400));
+        sub.setKeyVersion(Math.addExact(sub.getKeyVersion(), 1));
         sub.setSecret(newSecret);
         repository.save(sub);
         return newSecret;
@@ -148,7 +166,7 @@ public class WebhookSubscriptionService {
         sub.setOwnerType(ownerType);
         sub.setOwnerId(ownerId);
         sub.setName(request.name());
-        sub.setTargetUrl(request.targetUrl());
+        sub.setTargetUrl(destinationPolicy.validate(request.targetUrl()).toString());
         sub.setEventTypes(List.copyOf(request.eventTypes()));
         sub.setSecret(secretGenerator.generate());
         sub.setEnabled(true);

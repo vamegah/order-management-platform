@@ -1,123 +1,141 @@
 package com.example.omp.notification.webhook.delivery;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
-import java.time.Duration;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
-import java.util.Optional;
-import javax.net.ssl.SSLHandshakeException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import javax.net.ssl.SSLException;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/**
- * HTTP client wrapper for outbound webhook delivery.
- *
- * <p>- 10s connect timeout and configurable request timeout (default 10s) - Does not follow
- * redirects (a redirect to a different host is usually a misconfiguration) - Reuses connections
- * (HttpClient is thread-safe and connection-pooled) - Classifies transport-level failures into
- * DeliveryResult
- */
 @Component
 public class WebhookHttpClient {
+    private final CloseableHttpClient transport;
+    private final WebhookDestinationPolicy policy;
+    private final long timeout;
+    private final java.util.concurrent.ScheduledExecutorService deadlines;
 
-    private static final Logger log = LoggerFactory.getLogger(WebhookHttpClient.class);
-    private final HttpClient httpClient;
-    private final Duration timeout;
+    @org.springframework.beans.factory.annotation.Autowired
+    public WebhookHttpClient(
+            WebhookTransport transport,
+            WebhookDestinationPolicy policy,
+            @Value("${webhook.delivery.timeout-seconds:10}") long seconds,
+            @org.springframework.beans.factory.annotation.Qualifier("webhookDeadlines")
+                    java.util.concurrent.ScheduledExecutorService deadlines) {
+        this(transport.client(), policy, seconds, deadlines);
+    }
 
     public WebhookHttpClient(
-            HttpClient httpClient,
-            @Value("${webhook.delivery.timeout-seconds:10}") long timeoutSeconds) {
-        if (timeoutSeconds < 1 || timeoutSeconds > 60) {
-            throw new IllegalArgumentException(
-                    "webhook.delivery.timeout-seconds must be between 1 and 60");
-        }
-        this.httpClient = httpClient;
-        this.timeout = Duration.ofSeconds(timeoutSeconds);
+            CloseableHttpClient transport,
+            WebhookDestinationPolicy policy,
+            long seconds,
+            java.util.concurrent.ScheduledExecutorService deadlines) {
+        if (seconds < 1 || seconds > 60)
+            throw new IllegalArgumentException("Webhook timeout must be between 1 and 60 seconds");
+        this.transport = transport;
+        this.policy = policy;
+        this.timeout = seconds;
+        this.deadlines = deadlines;
     }
 
-    public DeliveryResult post(String url, String rawBody, Map<String, String> headers) {
-        HttpRequest.Builder builder;
+    public DeliveryResult post(String url, String body, Map<String, String> headers) {
+        final java.net.URI destination;
         try {
-            builder =
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(url))
-                            .timeout(timeout)
-                            .POST(HttpRequest.BodyPublishers.ofString(rawBody));
-        } catch (IllegalArgumentException e) {
-            return DeliveryResult.permanentError("Invalid URL: " + e.getMessage());
+            destination = policy.validate(url);
+        } catch (IllegalArgumentException denied) {
+            return DeliveryResult.permanentError("DESTINATION_DENIED");
         }
-
-        headers.forEach(builder::header);
-        builder.header("Content-Type", "application/json; charset=utf-8");
-
-        HttpRequest request = builder.build();
-
+        var request = new HttpPost(destination);
+        request.setConfig(
+                RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(2))
+                        .setResponseTimeout(Timeout.ofSeconds(timeout))
+                        .build());
+        request.setEntity(new StringEntity(body, ContentType.APPLICATION_JSON));
+        headers.forEach(request::setHeader);
+        var deadline =
+                deadlines.schedule(
+                        () -> request.cancel(), timeout, java.util.concurrent.TimeUnit.SECONDS);
         try {
-            HttpResponse<String> response =
-                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            return classify(response);
-        } catch (HttpTimeoutException e) {
-            return DeliveryResult.retryableError("Timeout after " + timeout.toSeconds() + "s");
-        } catch (SSLHandshakeException e) {
-            return DeliveryResult.permanentError("TLS handshake failed: " + e.getMessage());
-        } catch (IOException e) {
-            return DeliveryResult.retryableError("I/O error: " + e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return DeliveryResult.retryableError("Interrupted");
-        } catch (RuntimeException e) {
-            log.warn("Unexpected error during webhook POST", e);
-            return DeliveryResult.retryableError("Unexpected error: " + e.getMessage());
-        }
-    }
-
-    private DeliveryResult classify(HttpResponse<String> response) {
-        int status = response.statusCode();
-        String body = truncate(response.body());
-
-        if (status >= 200 && status < 300) {
-            return DeliveryResult.success(status, body);
-        }
-        if (status == 408 || status == 429) {
-            Long retryAfter = retryAfterMillis(response).orElse(null);
-            return DeliveryResult.retryable(status, body, retryAfter);
-        }
-        if (status == 401 || status == 403) {
-            // Subscriber auth misconfig — retryable: they may fix it in the window.
-            return DeliveryResult.retryable(status, body);
-        }
-        if (status >= 500) {
-            return DeliveryResult.retryable(status, body);
-        }
-        // Remaining 4xx (400, 404, 410, 422, ...) -> permanent.
-        return DeliveryResult.permanent(status, body);
-    }
-
-    private Optional<Long> retryAfterMillis(HttpResponse<String> response) {
-        return response.headers()
-                .firstValue("Retry-After")
-                .flatMap(
-                        value -> {
+            return transport.execute(
+                    request,
+                    response -> {
+                        int status = response.getCode();
+                        String text = null;
+                        if (response.getEntity() != null) {
+                            var input = response.getEntity().getContent();
+                            boolean truncated = false;
                             try {
-                                // Only the delta-seconds form is supported.
-                                long seconds = Long.parseLong(value.trim());
-                                return Optional.of(seconds * 1000L);
-                            } catch (NumberFormatException e) {
-                                return Optional.empty();
+                                byte[] bytes = input.readNBytes(4097);
+                                truncated = bytes.length > 4096;
+                                text =
+                                        new String(
+                                                bytes,
+                                                0,
+                                                Math.min(4096, bytes.length),
+                                                StandardCharsets.UTF_8);
+                            } finally {
+                                if (truncated) {
+                                    request.cancel();
+                                    try {
+                                        input.close();
+                                    } catch (IOException ignored) {
+                                    }
+                                } else input.close();
                             }
-                        });
+                        }
+                        if (status >= 200 && status < 300)
+                            return DeliveryResult.success(status, text);
+                        if (status == 408
+                                || status == 429
+                                || status == 401
+                                || status == 403
+                                || status >= 500) {
+                            var header = response.getFirstHeader("Retry-After");
+                            return DeliveryResult.retryable(
+                                    status,
+                                    text,
+                                    retryAfter(
+                                            header == null ? null : header.getValue(),
+                                            Instant.now()));
+                        }
+                        return DeliveryResult.permanent(status, text);
+                    });
+        } catch (SSLException failure) {
+            return DeliveryResult.permanentError("TLS_VERIFICATION_FAILED");
+        } catch (IOException failure) {
+            return DeliveryResult.retryableError("TRANSPORT_UNAVAILABLE");
+        } catch (RuntimeException failure) {
+            return DeliveryResult.retryableError("TRANSPORT_FAILURE");
+        } finally {
+            deadline.cancel(false);
+        }
     }
 
-    private static String truncate(String body) {
-        if (body == null) {
+    public static Long retryAfter(String value, Instant now) {
+        if (value == null || value.length() > 128) return null;
+        try {
+            long millis;
+            if (value.matches("[0-9]{1,10}"))
+                millis = Math.multiplyExact(Long.parseLong(value), 1000);
+            else
+                millis =
+                        Duration.between(
+                                        now,
+                                        ZonedDateTime.parse(
+                                                        value, DateTimeFormatter.RFC_1123_DATE_TIME)
+                                                .toInstant())
+                                .toMillis();
+            return Math.min(86_400_000L, Math.max(0, millis));
+        } catch (Exception ignored) {
             return null;
         }
-        return body.length() <= 4096 ? body : body.substring(0, 4096);
     }
 }

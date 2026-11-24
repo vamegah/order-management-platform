@@ -35,12 +35,13 @@ class PaymentIdempotencyTest {
         var service =
                 new PaymentProviderEventService(
                         receipts, payments, outbox, mock(RefundStore.class), streams);
-        var event =
-                new ProviderWebhookEvent(
-                        "event-1",
-                        "payment_intent.succeeded",
-                        new ObjectMapper().createObjectNode(),
-                        "pi-1");
+        var data = new ObjectMapper().createObjectNode();
+        data.put("id", "pi-1").put("amount", 1000).put("currency", "usd");
+        data.putObject("metadata")
+                .put("payment_id", payment.getId().toString())
+                .put("order_id", payment.getOrderId().toString())
+                .put("customer_id", payment.getCustomerId().toString());
+        var event = new ProviderWebhookEvent("event-1", "payment_intent.succeeded", data, "pi-1");
         assertThat(service.process("stripe", event))
                 .isEqualTo(PaymentProviderEventService.ProcessResult.ACCEPTED);
         assertThat(service.process("stripe", event))
@@ -65,7 +66,8 @@ class PaymentIdempotencyTest {
                         lock,
                         org.mockito.Mockito.mock(
                                 com.example.omp.payment.grpc.handler.PaymentEventStreamHandler
-                                        .class));
+                                        .class),
+                        mock(RefundStore.class));
         assertThatThrownBy(
                         () ->
                                 operations.createOrFindPending(
@@ -94,11 +96,12 @@ class PaymentIdempotencyTest {
                         mock(PaymentCreationLock.class),
                         org.mockito.Mockito.mock(
                                 com.example.omp.payment.grpc.handler.PaymentEventStreamHandler
-                                        .class));
+                                        .class),
+                        mock(RefundStore.class));
         assertThat(
                         operations.createOrFindPending(
                                 new PaymentApplicationService.ChargeCommand(
-                                        order, customer, 1000, "USD", "key"),
+                                        order, customer, 1000, "USD", "key", "pm_clientToken"),
                                 "stripe"))
                 .isSameAs(previous);
         assertThat(previous.getProvider()).isEqualTo("stripe");
@@ -120,12 +123,18 @@ class PaymentIdempotencyTest {
                         mock(PaymentCreationLock.class),
                         org.mockito.Mockito.mock(
                                 com.example.omp.payment.grpc.handler.PaymentEventStreamHandler
-                                        .class));
+                                        .class),
+                        mock(RefundStore.class));
         assertThatThrownBy(
                         () ->
                                 operations.createOrFindPending(
                                         new PaymentApplicationService.ChargeCommand(
-                                                order, customer, 1000, "USD", "key"),
+                                                order,
+                                                customer,
+                                                1000,
+                                                "USD",
+                                                "key",
+                                                "pm_clientToken"),
                                         "stripe"))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(outbox);
@@ -145,7 +154,8 @@ class PaymentIdempotencyTest {
                         mock(PaymentCreationLock.class),
                         org.mockito.Mockito.mock(
                                 com.example.omp.payment.grpc.handler.PaymentEventStreamHandler
-                                        .class));
+                                        .class),
+                        mock(RefundStore.class));
         assertThatThrownBy(
                         () ->
                                 operations.createOrFindPending(

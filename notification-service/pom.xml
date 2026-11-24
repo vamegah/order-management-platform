@@ -39,6 +39,10 @@
          ===================================================================== -->
     <dependencies>
         <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
@@ -240,7 +244,7 @@
         </dependency>
 
         <!-- ================================================================
-             Redis — pub/sub for cross-replica fan-out
+             Redis â€” pub/sub for cross-replica fan-out
              ================================================================ -->
 
         <!-- Provides StringRedisTemplate, RedisMessageListenerContainer,
@@ -251,7 +255,7 @@
         </dependency>
 
         <!-- ================================================================
-             Spring Cloud — Feign clients for ownership verification
+             Spring Cloud â€” Feign clients for ownership verification
              ================================================================ -->
 
         <!-- CustomerClient (calls customer-service /me) and OrderClient
@@ -268,7 +272,7 @@
         </dependency>
 
         <!-- ================================================================
-             Resilience4j — protection for Feign calls
+             Resilience4j â€” protection for Feign calls
              ================================================================ -->
 
         <dependency>
@@ -391,7 +395,7 @@
         <plugins>
 
             <!-- ============================================================
-                 Spring Boot Maven Plugin — executable jar packaging
+                 Spring Boot Maven Plugin â€” executable jar packaging
                  ============================================================ -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
@@ -399,7 +403,7 @@
             </plugin>
 
             <!-- ============================================================
-                 Surefire — unit tests
+                 Surefire â€” unit tests
                  ============================================================ -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -407,7 +411,7 @@
             </plugin>
 
             <!-- ============================================================
-                 Failsafe — integration tests
+                 Failsafe â€” integration tests
                  ============================================================ -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -415,7 +419,7 @@
             </plugin>
 
             <!-- ============================================================
-                 JaCoCo — 80% coverage enforcement
+                 JaCoCo â€” 80% coverage enforcement
                  ============================================================
                  Excludes:
                    - NotificationServiceApplication (main class)

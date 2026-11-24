@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * <p>Simulates an external payment provider for local development and end-to-end testing.
  *
  * <p>The simulator exposes HTTP endpoints that trigger simulated payment flows. After a
- * configurable delay, it sends a signed webhook to the configured callback URL — typically
+ * configurable delay, it sends a signed webhook to the configured callback URL â€” typically
  * payment-service's {@code /webhooks/payment} endpoint.
  *
  * <p><b>HMAC signing format:</b> The simulator uses the same signature format as Stripe and other
@@ -33,6 +33,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * @see com.example.omp.provider.WebhookSender
  * @see com.example.omp.provider.PaymentSimulationController
  */
+@org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class SimulatorApplication {

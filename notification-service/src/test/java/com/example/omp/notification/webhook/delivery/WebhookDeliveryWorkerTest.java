@@ -47,7 +47,10 @@ class WebhookDeliveryWorkerTest {
 
     @BeforeEach
     void subscription() {
-        when(jdbc.queryForObject(anyString(), eq(Boolean.class), any(Object.class)))
+        when(jdbc.queryForObject(
+                        startsWith("SELECT pg_try_advisory_xact_lock"),
+                        eq(Boolean.class),
+                        any(Object.class)))
                 .thenReturn(true);
         sub.setId(UUID.randomUUID());
         sub.setTargetUrl("https://subscriber.example/hook");

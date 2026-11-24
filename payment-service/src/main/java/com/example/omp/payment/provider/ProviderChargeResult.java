@@ -12,12 +12,31 @@ public record ProviderChargeResult(
         String providerReference,
         String declineCode,
         String declineMessage,
-        String requiresActionUrl) {
+        String requiresActionUrl,
+        String clientSecret) {
+    public ProviderChargeResult(
+            Status status, String ref, String code, String message, String url) {
+        this(status, ref, code, message, url, null);
+    }
+
+    @Override
+    public String toString() {
+        return "ProviderChargeResult[status=" + status + ", reference=" + providerReference + "]";
+    }
+
+    public static ProviderChargeResult pending(String ref) {
+        return new ProviderChargeResult(Status.PENDING, ref, null, null, null);
+    }
+
+    public static ProviderChargeResult requiresSdk(String ref, String secret) {
+        return new ProviderChargeResult(Status.REQUIRES_ACTION, ref, null, null, null, secret);
+    }
 
     public enum Status {
         SUCCEEDED,
         DECLINED,
         REQUIRES_ACTION,
+        PENDING,
         ERROR
     }
 

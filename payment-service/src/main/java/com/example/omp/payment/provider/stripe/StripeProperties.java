@@ -25,10 +25,77 @@ public class StripeProperties {
     /** Webhook signature tolerance window. */
     private int webhookToleranceSeconds = 300;
 
+    private String apiBaseUrl = "https://api.stripe.com/v1";
+    private boolean simulatorEnabled;
+    private String apiKeyFile;
+    private String webhookSecretFile;
+    private String previousWebhookSecret;
+    private String previousWebhookSecretFile;
+    private java.time.Instant previousWebhookSecretValidUntil;
+
+    public String getApiBaseUrl() {
+        return apiBaseUrl;
+    }
+
+    public void setApiBaseUrl(String v) {
+        apiBaseUrl = v;
+    }
+
+    public boolean isSimulatorEnabled() {
+        return simulatorEnabled;
+    }
+
+    public void setSimulatorEnabled(boolean v) {
+        simulatorEnabled = v;
+    }
+
+    public void setApiKeyFile(String v) {
+        apiKeyFile = v;
+    }
+
+    public void setWebhookSecretFile(String v) {
+        webhookSecretFile = v;
+    }
+
+    public void setPreviousWebhookSecret(String v) {
+        previousWebhookSecret = v;
+    }
+
+    public void setPreviousWebhookSecretFile(String v) {
+        previousWebhookSecretFile = v;
+    }
+
+    public void setPreviousWebhookSecretValidUntil(java.time.Instant v) {
+        previousWebhookSecretValidUntil = v;
+    }
+
+    public java.util.List<String> webhookKeys() {
+        var keys = new java.util.ArrayList<String>();
+        String current = getWebhookSecret();
+        if (current != null && !current.isBlank()) keys.add(current);
+        if (previousWebhookSecretValidUntil != null
+                && java.time.Instant.now().isBefore(previousWebhookSecretValidUntil)) {
+            String previous = secret(previousWebhookSecretFile, previousWebhookSecret);
+            if (previous != null && !previous.isBlank()) keys.add(previous);
+        }
+        return java.util.List.copyOf(keys);
+    }
+
+    private static String secret(String file, String fallback) {
+        if (file == null || file.isBlank()) return fallback;
+        try (var input = java.nio.file.Files.newInputStream(java.nio.file.Path.of(file))) {
+            byte[] bytes = input.readNBytes(4097);
+            if (bytes.length > 4096) throw new IllegalStateException();
+            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8).strip();
+        } catch (Exception failure) {
+            throw new IllegalStateException("Provider credential file unavailable");
+        }
+    }
+
     // --- getters / setters ---
 
     public String getApiKey() {
-        return apiKey;
+        return secret(apiKeyFile, apiKey);
     }
 
     public void setApiKey(String apiKey) {
@@ -36,7 +103,7 @@ public class StripeProperties {
     }
 
     public String getWebhookSecret() {
-        return webhookSecret;
+        return secret(webhookSecretFile, webhookSecret);
     }
 
     public void setWebhookSecret(String webhookSecret) {

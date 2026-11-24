@@ -36,7 +36,7 @@ public class CircuitBreakerService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuccess(UUID subscriptionId) {
         repository
-                .findById(subscriptionId)
+                .findLockedById(subscriptionId)
                 .ifPresent(
                         sub -> {
                             if (sub.getFailureCount() != 0) {
@@ -51,7 +51,7 @@ public class CircuitBreakerService {
     /** Records a failure. Returns true if the subscription was disabled by this call. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean recordFailure(UUID subscriptionId, String reason) {
-        WebhookSubscription sub = repository.findById(subscriptionId).orElse(null);
+        WebhookSubscription sub = repository.findLockedById(subscriptionId).orElse(null);
         if (sub == null) {
             return false;
         }

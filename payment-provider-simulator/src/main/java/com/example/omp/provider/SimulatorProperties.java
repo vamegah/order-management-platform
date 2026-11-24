@@ -11,10 +11,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SimulatorProperties {
 
     /**
-     * The URL where webhooks are POSTed. Typically payment-service's {@code /webhooks/payment}
-     * endpoint.
+     * The URL where webhooks are POSTed. Typically payment-service's {@code
+     * /api/v1/payments/webhooks/stripe} endpoint.
      */
-    private String webhookUrl = "http://payment-service:9093/webhooks/payment";
+    private String webhookUrl = "http://payment-service:8080/api/v1/payments/webhooks/stripe";
 
     /**
      * HMAC secret used to sign outgoing webhooks. Must match the secret configured in

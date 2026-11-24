@@ -90,25 +90,38 @@ class NoopPaymentProviderTest {
     }
 
     @Test
-    void signatureHeaderIsCaseInsensitiveAndParsesTheOriginalProviderReference() {
-        var result =
-                provider.verifyWebhook(
-                        "{\"id\":\"evt\",\"type\":\"refund.updated\",\"data\":{\"object\":{\"payment_intent\":\"pi\"}}}",
-                        Map.of("x-noop-signature", "noop-dev-secret"));
+    void signatureHeaderIsCaseInsensitiveAndBindsTheRawBodyAndTimestamp() {
+        String body =
+                "{\"id\":\"evt\",\"type\":\"refund.updated\",\"data\":{\"object\":{\"payment_intent\":\"pi\"}}}";
+        String signature = com.example.omp.payment.support.ProviderSignatures.noop(body);
+        var result = provider.verifyWebhook(body, Map.of("x-noop-signature", signature));
         assertThat(result.valid()).isTrue();
         assertThat(result.event().paymentRef()).isEqualTo("pi");
-        var fallback =
-                provider.verifyWebhook(
-                        "{\"id\":\"evt2\",\"type\":\"updated\",\"data\":{\"object\":{\"id\":\"pi_fallback\"}}}",
-                        Map.of("X-Noop-Signature", "noop-dev-secret"));
-        assertThat(fallback.event().paymentRef()).isEqualTo("pi_fallback");
+        assertThat(
+                        provider.verifyWebhook(body + " ", Map.of("X-Noop-Signature", signature))
+                                .valid())
+                .isFalse();
+        assertThat(
+                        provider.verifyWebhook(
+                                        body,
+                                        Map.of(
+                                                "X-Noop-Signature",
+                                                com.example.omp.payment.support.ProviderSignatures
+                                                        .sign(body, "noop-dev-secret", 1)))
+                                .valid())
+                .isFalse();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"{}", "{\"id\":\"evt\"}", "{\"type\":\"event\"}", "not-json"})
     void authenticatedButMalformedEventsAreRejected(String body) {
         assertThat(
-                        provider.verifyWebhook(body, Map.of("X-Noop-Signature", "noop-dev-secret"))
+                        provider.verifyWebhook(
+                                        body,
+                                        Map.of(
+                                                "X-Noop-Signature",
+                                                com.example.omp.payment.support.ProviderSignatures
+                                                        .noop(body)))
                                 .valid())
                 .isFalse();
     }
@@ -117,7 +130,30 @@ class NoopPaymentProviderTest {
     void missingAndWrongSignaturesAreRejectedBeforeParsing() {
         assertThat(provider.verifyWebhook("not-json", null).reason())
                 .isEqualTo("bad_noop_signature");
-        assertThat(provider.verifyWebhook("not-json", Map.of("X-Noop-Signature", "wrong")).valid())
+        assertThat(
+                        provider.verifyWebhook(
+                                        "not-json", Map.of("X-Noop-Signature", "noop-dev-secret"))
+                                .valid())
+                .isFalse();
+    }
+
+    @Test
+    void productionRejectsThePublicDevelopmentSigningKey() {
+        var env = new org.springframework.mock.env.MockEnvironment();
+        env.setActiveProfiles("prod");
+        var production =
+                new NoopPaymentProvider(
+                        new com.fasterxml.jackson.databind.ObjectMapper(), "noop-dev-secret", env);
+        String body = "{}";
+        assertThat(
+                        production
+                                .verifyWebhook(
+                                        body,
+                                        Map.of(
+                                                "X-Noop-Signature",
+                                                com.example.omp.payment.support.ProviderSignatures
+                                                        .noop(body)))
+                                .valid())
                 .isFalse();
     }
 }

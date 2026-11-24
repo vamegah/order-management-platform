@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.omp.local/webhooks/delivery-v1.schema.json",
+  "title": "Outbound webhook delivery v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "deliveryId",
+    "subscriptionId",
+    "attempt",
+    "occurredAt",
+    "data"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deliveryId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "subscriptionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

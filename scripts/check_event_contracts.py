@@ -54,7 +54,24 @@ def check(root, base=None):
     validator=Draft202012Validator(schema,format_checker=FormatChecker())
     for fixture in fixtures:
         validator.validate(json.loads(fixture.read_text(encoding="utf-8")))
-    return {"fixtures":len(fixtures),"publishedCompatible":True,"baseCompared":bool(base)}
+    webhook_path=Path("contracts/webhooks/delivery-v1.schema.json")
+    webhook_fixtures=[]
+    if base and (base/webhook_path).exists() and not (root/webhook_path).exists():
+        raise ValueError("Published webhook contract removed")
+    if (root/webhook_path).exists():
+        current=json.loads((root/webhook_path).read_text(encoding="utf-8"))
+        frozen=Path("contracts/webhooks/published/delivery-v1.schema.json")
+        Draft202012Validator.check_schema(current)
+        compatible(json.loads((root/frozen).read_text(encoding="utf-8")),current,"webhook")
+        if base and (base/webhook_path).exists():
+            compatible(json.loads((base/webhook_path).read_text(encoding="utf-8")),current,"webhook")
+            if (base/frozen).read_bytes() != (root/frozen).read_bytes():
+                raise ValueError("Published webhook v1 schema changed")
+        webhook_fixtures=list((root/"contracts/webhooks/fixtures").glob("*.json"))
+        if not webhook_fixtures:raise ValueError("Webhook fixtures required")
+        for fixture in webhook_fixtures:
+            Draft202012Validator(current,format_checker=FormatChecker()).validate(json.loads(fixture.read_text(encoding="utf-8")))
+    return {"webhookFixtures":len(webhook_fixtures),"fixtures":len(fixtures),"publishedCompatible":True,"baseCompared":bool(base)}
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser();parser.add_argument("--base-root",type=Path);parser.add_argument("--root",type=Path,default=Path.cwd());args=parser.parse_args()

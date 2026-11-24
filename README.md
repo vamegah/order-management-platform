@@ -109,6 +109,9 @@ JavaScript and TypeScript declarations. In `clients/notifications`, run
 `npm ci --ignore-scripts`, `npm test` and `npm pack` with Node 24+ (CI uses 24).
 Its optional `npm run test:deployed` requires the dedicated core stack.
 
+Payment/provider and webhook operation, signing rotation and the disposable
+acceptance topology are documented in [the payment runbook](docs/payment-webhooks.md).
+
 ## Common operations
 
 ```bash

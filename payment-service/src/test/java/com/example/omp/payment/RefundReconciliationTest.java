@@ -171,7 +171,8 @@ class RefundReconciliationTest {
     @ValueSource(strings = {"legacy", "provider", "payment", "conflict", "in-use"})
     void blockedCandidateIsAuditedBeforeAnyProviderLookup(String kind) {
         switch (kind) {
-            case "legacy" -> ReflectionTestUtils.setField(refund, "providerKey", null);
+            case "legacy" ->
+                    ReflectionTestUtils.setField(refund, "providerKey", "unbound-legacy-key");
             case "provider" -> payment.setProvider("noop");
             case "payment" -> payment.applyRefund(Money.usd("10"));
             case "conflict" -> refund.correlate("re_other");
@@ -191,6 +192,29 @@ class RefundReconciliationTest {
         verify(provider, never()).lookupRefund(any(), any(), any());
         verify(provider, never()).refund(any());
         verifyNoInteractions(events);
+    }
+
+    @Test
+    void verifiedLegacyDiscoveryBindsTheKeyOnlyAfterSafeLookup() {
+        ReflectionTestUtils.setField(refund, "providerKey", null);
+        when(provider.lookupRefund(any(), any(), any()))
+                .thenReturn(ProviderRefundResult.succeeded("re_candidate"));
+        var result = reconcile();
+        assertThat(result.audit().outcome()).isEqualTo("COMPLETED");
+        assertThat(refund.getProviderKey()).isEqualTo("omp-refund-" + refund.getId());
+        assertThat(refund.getProviderReference()).isEqualTo("re_candidate");
+        verify(provider, never()).refund(any());
+    }
+
+    @Test
+    void unresolvedLegacyDiscoveryCannotInventAProviderKeyOrPostARefund() {
+        ReflectionTestUtils.setField(refund, "providerKey", null);
+        when(provider.lookupRefund(any(), any(), any()))
+                .thenReturn(ProviderRefundResult.error("Unresolved"));
+        assertThat(reconcile().audit().outcome()).isEqualTo("UNRESOLVED");
+        assertThat(refund.getProviderKey()).isNull();
+        assertThat(refund.getProviderReference()).isNull();
+        verify(provider, never()).refund(any());
     }
 
     @Test

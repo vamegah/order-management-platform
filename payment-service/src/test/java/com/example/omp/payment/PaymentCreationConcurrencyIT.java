@@ -110,19 +110,27 @@ class PaymentCreationConcurrencyIT {
                 PaymentRepository repository,
                 PaymentEventPublisher events,
                 PaymentCreationLock lock) {
-            return new PaymentIntentHandler(repository, new MoneyConverter(), events, lock);
+            return new PaymentIntentHandler(
+                    repository,
+                    new MoneyConverter(),
+                    events,
+                    lock,
+                    org.mockito.Mockito.mock(
+                            com.example.omp.payment.service.PaymentCancellationService.class));
         }
 
         @Bean
         PaymentTransactionalOps rest(
                 PaymentRepository repository,
                 com.example.omp.payment.outbox.OutboxWriter writer,
-                PaymentCreationLock lock) {
+                PaymentCreationLock lock,
+                RefundStore refunds) {
             return new PaymentTransactionalOps(
                     repository,
                     writer,
                     lock,
-                    new com.example.omp.payment.grpc.handler.PaymentEventStreamHandler());
+                    new com.example.omp.payment.grpc.handler.PaymentEventStreamHandler(),
+                    refunds);
         }
 
         @Bean
@@ -288,7 +296,12 @@ class PaymentCreationConcurrencyIT {
                                     throw new AssertionError("Start barrier timed out");
                                 return rest.createOrFindPending(
                                                 new PaymentApplicationService.ChargeCommand(
-                                                        order, customer, 1000, "USD", key),
+                                                        order,
+                                                        customer,
+                                                        1000,
+                                                        "USD",
+                                                        key,
+                                                        "pm_fixture"),
                                                 "stripe")
                                         .getId();
                             });
@@ -315,14 +328,14 @@ class PaymentCreationConcurrencyIT {
                         () ->
                                 rest.createOrFindPending(
                                         new PaymentApplicationService.ChargeCommand(
-                                                order, customer, 2000, "USD", key),
+                                                order, customer, 2000, "USD", key, "pm_fixture"),
                                         "stripe"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(
                         () ->
                                 rest.createOrFindPending(
                                         new PaymentApplicationService.ChargeCommand(
-                                                order, customer, 1000, "USD", key),
+                                                order, customer, 1000, "USD", key, "pm_fixture"),
                                         "noop"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("different provider");
@@ -337,7 +350,8 @@ class PaymentCreationConcurrencyIT {
                                         UUID.randomUUID(),
                                         1000,
                                         "USD",
-                                        UUID.randomUUID().toString()),
+                                        UUID.randomUUID().toString(),
+                                        "pm_fixture"),
                                 "stripe")
                         .getId();
         jdbc.update(

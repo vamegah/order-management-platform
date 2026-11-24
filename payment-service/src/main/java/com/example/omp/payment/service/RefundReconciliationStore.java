@@ -82,7 +82,8 @@ public class RefundReconciliationStore {
         } else if (!provider.equals(payment.getProvider())) {
             refund.requireAttention(Refund.RecoveryBlock.PROVIDER_MISMATCH);
             audit.finish(Outcome.BLOCKED, "PROVIDER_MISMATCH");
-        } else if (!("omp-refund-" + refundId).equals(refund.getProviderKey())) {
+        } else if (refund.getProviderKey() != null
+                && !("omp-refund-" + refundId).equals(refund.getProviderKey())) {
             refund.requireAttention(Refund.RecoveryBlock.LEGACY_INTENT);
             audit.finish(Outcome.BLOCKED, "LEGACY_INTENT");
         } else if (!canApply(payment, refund)) {
@@ -101,7 +102,9 @@ public class RefundReconciliationStore {
                                 payment.getProviderReference(),
                                 refund.getAmountMinor(),
                                 refund.getCurrency(),
-                                refund.getProviderKey(),
+                                refund.getProviderKey() == null
+                                        ? "omp-refund-" + refundId
+                                        : refund.getProviderKey(),
                                 refund.getReason());
                 return new Claim(
                         audit.getId(),
@@ -141,6 +144,7 @@ public class RefundReconciliationStore {
         } else {
             if (result.status() != ProviderRefundResult.Status.ERROR) {
                 refund.correlate(attempt.lookupReference());
+                if (refund.getProviderKey() == null) refund.initializeProviderKey();
                 refund.clearAttention();
             }
             state.complete(attempt, result);

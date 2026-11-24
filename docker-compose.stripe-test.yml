@@ -1,0 +1,20 @@
+# Apply after the payment acceptance overlay, only for an explicitly authorized Stripe test account.
+services:
+  payment-service:
+    environment:
+      PAYMENT_STRIPE_SIMULATOR_ENABLED: "false"
+      PAYMENT_STRIPE_API_BASE_URL: https://api.stripe.com/v1
+      PAYMENT_STRIPE_TIMEOUT_SECONDS: "15"
+      PAYMENT_STRIPE_MAX_NETWORK_RETRIES: "1"
+      STRIPE_API_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      STRIPE_API_KEY_FILE: /run/secrets/stripe-api-key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe-webhook-secret
+    secrets:
+      - stripe-api-key
+      - stripe-webhook-secret
+secrets:
+  stripe-api-key:
+    file: ${STRIPE_TEST_API_KEY_FILE:?Mount an explicitly authorized test sandbox key}
+  stripe-webhook-secret:
+    file: ${STRIPE_TEST_WEBHOOK_SECRET_FILE:?Mount the private Stripe CLI listener signing key}

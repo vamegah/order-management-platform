@@ -170,6 +170,50 @@ public class Payment {
     @Column(name = "idempotency_key", length = 255)
     private String idempotencyKey;
 
+    @Column(name = "cancellation_requested", nullable = false)
+    private boolean cancellationRequested;
+
+    public boolean isCancellationRequested() {
+        return cancellationRequested;
+    }
+
+    public void setCancellationRequested(boolean value) {
+        cancellationRequested = value;
+    }
+
+    @Column(name = "payment_method_id", length = 255)
+    private String paymentMethodId;
+
+    @Column(name = "action_required", nullable = false)
+    private boolean actionRequired;
+
+    @Column(name = "charge_started_at")
+    private Instant chargeStartedAt;
+
+    public String getPaymentMethodId() {
+        return paymentMethodId;
+    }
+
+    public void setPaymentMethodId(String value) {
+        paymentMethodId = value;
+    }
+
+    public boolean isActionRequired() {
+        return actionRequired && status == PaymentStatus.PENDING;
+    }
+
+    public void setActionRequired(boolean value) {
+        actionRequired = value;
+    }
+
+    public Instant getChargeStartedAt() {
+        return chargeStartedAt;
+    }
+
+    public void setChargeStartedAt(Instant value) {
+        chargeStartedAt = value;
+    }
+
     /** All refunds issued against this payment. */
     @OneToMany(mappedBy = "payment", fetch = FetchType.LAZY)
     @OrderBy("createdAt ASC")
@@ -241,6 +285,7 @@ public class Payment {
             throw new IllegalArgumentException("Provider reference is required to confirm");
         }
         this.status = PaymentStatus.CONFIRMED;
+        this.actionRequired = false;
         this.providerReference = providerReference;
         this.authorizedAt = Instant.now();
     }
@@ -251,6 +296,23 @@ public class Payment {
      */
     public void markAuthorized(String providerReference) {
         confirm(providerReference);
+    }
+
+    /** Apply a verified captured outcome that arrived after an older failure notification. */
+    public void reconcileProviderCapture(String reference) {
+        if (status != PaymentStatus.FAILED
+                || !"stripe".equals(provider)
+                || paymentMethodId == null
+                || providerReference == null
+                || !providerReference.equals(reference))
+            throw new PaymentStateException(
+                    "Captured provider outcome requires matching bound intent");
+        status = PaymentStatus.CONFIRMED;
+        authorizedAt = Instant.now();
+        capturedAt = authorizedAt;
+        failureCode = null;
+        failureMessage = null;
+        actionRequired = false;
     }
 
     /**
@@ -275,6 +337,7 @@ public class Payment {
     public void cancel(String reason) {
         expect(PaymentStatus.PENDING);
         this.status = PaymentStatus.CANCELLED;
+        this.actionRequired = false;
     }
 
     /**
@@ -285,6 +348,7 @@ public class Payment {
     public void markFailed(String code, String message) {
         expect(PaymentStatus.PENDING);
         this.status = PaymentStatus.FAILED;
+        this.actionRequired = false;
         this.failureCode = code;
         this.failureMessage = truncate(message, 500);
         this.failedAt = Instant.now();

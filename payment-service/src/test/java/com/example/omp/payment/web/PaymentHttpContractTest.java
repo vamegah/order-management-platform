@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class PaymentHttpContractTest {
     private final PaymentApplicationService payments = mock(PaymentApplicationService.class);
     private final PaymentProvider provider = mock(PaymentProvider.class);
-    private final PaymentProviderEventService events = mock(PaymentProviderEventService.class);
+    private final PaymentWebhookInbox events = mock(PaymentWebhookInbox.class);
     private final PaymentMetrics metrics = mock(PaymentMetrics.class);
     private final UUID owner = UUID.randomUUID();
     private MockMvc mvc;
@@ -61,7 +61,7 @@ class PaymentHttpContractTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"confirmed,200", "declined,402", "requires_action,202", "error,502", "pending,200"})
+    @CsvSource({"confirmed,200", "declined,402", "requires_action,202", "error,502", "pending,202"})
     void chargeOutcomesKeepTheirHttpStatusAndVerifiedCustomerIdentity(String outcome, int status)
             throws Exception {
         UUID id = UUID.randomUUID(), order = UUID.randomUUID();
@@ -114,15 +114,15 @@ class PaymentHttpContractTest {
     }
 
     @ParameterizedTest
-    @EnumSource(PaymentProviderEventService.ProcessResult.class)
-    void authenticatedProviderEventsPreserveRawBodyAndAcknowledgeProcessingOutcome(
-            PaymentProviderEventService.ProcessResult result) throws Exception {
+    @ValueSource(strings = {"accepted", "duplicate"})
+    void authenticatedProviderEventsPreserveRawBodyAndAcknowledgeProcessingOutcome(String result)
+            throws Exception {
         String raw = "{ \"id\": \"evt\", \"note\": \"café\" }\n";
         var event =
                 new ProviderWebhookEvent("evt", "updated", new ObjectMapper().readTree(raw), "pi");
         when(provider.verifyWebhook(eq(raw), anyMap()))
                 .thenReturn(ProviderWebhookVerification.valid(event));
-        when(events.process("stripe", event)).thenReturn(result);
+        when(events.accept(eq("stripe"), eq(event), any(byte[].class))).thenReturn(result);
         mvc.perform(
                         post("/api/v1/payments/webhooks/stripe")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -130,7 +130,7 @@ class PaymentHttpContractTest {
                                 .header("Stripe-Signature", "signed-exact-bytes")
                                 .content(raw))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(result.name().toLowerCase()));
+                .andExpect(jsonPath("$.status").value(result));
         verify(provider)
                 .verifyWebhook(
                         eq(raw),
@@ -147,7 +147,7 @@ class PaymentHttpContractTest {
                                                                 .map(java.util.Map.Entry::getValue)
                                                                 .findFirst()
                                                                 .orElse(""))));
-        verify(metrics).recordWebhook("stripe", result.name().toLowerCase());
+        verify(metrics).recordWebhook("stripe", result);
     }
 
     @Test
@@ -176,13 +176,13 @@ class PaymentHttpContractTest {
                         "evt", "updated", new ObjectMapper().createObjectNode(), "pi");
         when(provider.verifyWebhook(anyString(), anyMap()))
                 .thenReturn(ProviderWebhookVerification.valid(event));
-        when(events.process(anyString(), any()))
+        when(events.accept(anyString(), any(), any(byte[].class)))
                 .thenThrow(new RuntimeException("private database details"));
         mvc.perform(
                         post("/api/v1/payments/webhooks/stripe")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{}"))
-                .andExpect(status().isInternalServerError())
+                .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.error").value("processing_failed"));
         verify(metrics).recordWebhook("stripe", "error");
     }

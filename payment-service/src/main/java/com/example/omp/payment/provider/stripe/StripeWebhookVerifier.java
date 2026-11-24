@@ -36,7 +36,7 @@ public class StripeWebhookVerifier {
 
     public VerificationResult verify(String rawBody, Map<String, String> headers) {
         String header = findHeader(headers, "Stripe-Signature");
-        if (header == null || header.isBlank()) {
+        if (header == null || header.isBlank() || header.length() > 2048) {
             return VerificationResult.invalid("missing_stripe_signature");
         }
 
@@ -52,12 +52,18 @@ public class StripeWebhookVerifier {
             switch (key) {
                 case "t" -> {
                     try {
+                        if (timestamp != null)
+                            return VerificationResult.invalid("duplicate_timestamp");
                         timestamp = Long.parseLong(value);
                     } catch (NumberFormatException e) {
                         return VerificationResult.invalid("bad_timestamp");
                     }
                 }
-                case "v1" -> v1Signatures.add(value);
+                case "v1" -> {
+                    if (v1Signatures.size() >= 8 || !value.matches("[a-fA-F0-9]{64}"))
+                        return VerificationResult.invalid("bad_signature_format");
+                    v1Signatures.add(value.toLowerCase(java.util.Locale.ROOT));
+                }
                 default -> {
                     /* v0 or unknown scheme; ignore */ }
             }
@@ -82,14 +88,10 @@ public class StripeWebhookVerifier {
             return VerificationResult.invalid("timestamp_out_of_tolerance");
         }
 
-        String expected = computeSignature(timestamp, rawBody);
-
         boolean anyMatch = false;
-        for (String provided : v1Signatures) {
-            if (constantTimeEquals(expected, provided)) {
-                anyMatch = true;
-                break;
-            }
+        for (String key : properties.webhookKeys()) {
+            String expected = computeSignature(timestamp, rawBody, key);
+            for (String provided : v1Signatures) anyMatch |= constantTimeEquals(expected, provided);
         }
         if (!anyMatch) {
             return VerificationResult.invalid("signature_mismatch");
@@ -97,13 +99,10 @@ public class StripeWebhookVerifier {
         return VerificationResult.valid(timestamp);
     }
 
-    private String computeSignature(long timestamp, String rawBody) {
+    private String computeSignature(long timestamp, String rawBody, String key) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(
-                    new SecretKeySpec(
-                            properties.getWebhookSecret().getBytes(StandardCharsets.UTF_8),
-                            "HmacSHA256"));
+            mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             String signedPayload = timestamp + "." + rawBody;
             byte[] digest = mac.doFinal(signedPayload.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);

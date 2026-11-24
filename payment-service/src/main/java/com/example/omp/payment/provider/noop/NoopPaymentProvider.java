@@ -32,8 +32,28 @@ public class NoopPaymentProvider implements PaymentProvider {
     private final java.util.concurrent.ConcurrentHashMap<String, String> idempotencyStore =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    public NoopPaymentProvider(ObjectMapper objectMapper) {
+    private final com.example.omp.payment.provider.stripe.StripeWebhookVerifier signatures;
+    private final boolean webhooksEnabled;
+
+    public NoopPaymentProvider(ObjectMapper mapper) {
+        this(mapper, "noop-dev-secret", new org.springframework.core.env.StandardEnvironment());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public NoopPaymentProvider(
+            ObjectMapper objectMapper,
+            @org.springframework.beans.factory.annotation.Value(
+                            "${payment.noop.webhook-secret:noop-dev-secret}")
+                    String secret,
+            org.springframework.core.env.Environment environment) {
         this.objectMapper = objectMapper;
+        var properties = new com.example.omp.payment.provider.stripe.StripeProperties();
+        properties.setWebhookSecret(secret);
+        signatures = new com.example.omp.payment.provider.stripe.StripeWebhookVerifier(properties);
+        webhooksEnabled =
+                !(java.util.Arrays.stream(environment.getActiveProfiles())
+                                .anyMatch(p -> p.equals("prod") || p.equals("production"))
+                        && secret.equals("noop-dev-secret"));
     }
 
     @Override
@@ -43,7 +63,7 @@ public class NoopPaymentProvider implements PaymentProvider {
 
     @Override
     public ProviderChargeResult charge(ChargeRequest request) {
-        String existing = idempotencyStore.get(request.idempotencyKey());
+        String existing = idempotencyStore.get("charge:" + request.idempotencyKey());
         if (existing != null) {
             log.debug("Noop provider: idempotent hit for {}", request.idempotencyKey());
             return ProviderChargeResult.succeeded(existing);
@@ -60,26 +80,30 @@ public class NoopPaymentProvider implements PaymentProvider {
             return ProviderChargeResult.error("Simulated provider error (amount ending 99)");
         }
 
-        String ref = "noop_pi_" + UUID.randomUUID();
-        idempotencyStore.put(request.idempotencyKey(), ref);
+        String ref =
+                idempotencyStore.computeIfAbsent(
+                        "charge:" + request.idempotencyKey(),
+                        key -> "noop_pi_" + UUID.randomUUID());
         return ProviderChargeResult.succeeded(ref);
     }
 
     @Override
     public ProviderRefundResult refund(RefundRequest request) {
-        String existing = idempotencyStore.get(request.idempotencyKey());
+        String existing = idempotencyStore.get("refund:" + request.idempotencyKey());
         if (existing != null) {
             return ProviderRefundResult.succeeded(existing);
         }
         sleepQuietly(30);
-        String ref = "noop_re_" + UUID.randomUUID();
-        idempotencyStore.put(request.idempotencyKey(), ref);
+        String ref =
+                idempotencyStore.computeIfAbsent(
+                        "refund:" + request.idempotencyKey(),
+                        key -> "noop_re_" + UUID.randomUUID());
         return ProviderRefundResult.succeeded(ref);
     }
 
     @Override
     public ProviderRefundResult lookupRefund(RefundRequest request, String providerRefundId) {
-        String reference = idempotencyStore.get(request.idempotencyKey());
+        String reference = idempotencyStore.get("refund:" + request.idempotencyKey());
         return reference != null && reference.equals(providerRefundId)
                 ? ProviderRefundResult.succeeded(reference)
                 : ProviderRefundResult.error("Development refund ledger entry unavailable");
@@ -88,7 +112,9 @@ public class NoopPaymentProvider implements PaymentProvider {
     @Override
     public ProviderWebhookVerification verifyWebhook(String rawBody, Map<String, String> headers) {
         String sig = headerIgnoreCase(headers, "X-Noop-Signature");
-        if (sig == null || !sig.equals("noop-dev-secret")) {
+        if (!webhooksEnabled
+                || sig == null
+                || !signatures.verify(rawBody, Map.of("Stripe-Signature", sig)).valid()) {
             return ProviderWebhookVerification.invalid("bad_noop_signature");
         }
         try {
