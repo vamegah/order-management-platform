@@ -18,16 +18,28 @@ public class BankingEndpoint {
     private static final String NS = "http://legacybank.example.com/ws";
 
     private final BankingService bankingService;
+    private final com.example.omp.bank.service.BankFailureSimulator simulator;
 
-    public BankingEndpoint(BankingService bankingService) {
+    public BankingEndpoint(
+            BankingService bankingService,
+            com.example.omp.bank.service.BankFailureSimulator simulator) {
         this.bankingService = bankingService;
+        this.simulator = simulator;
     }
 
     @PayloadRoot(namespace = NS, localPart = "TransferFundsRequest")
     @ResponsePayload
-    public TransferFundsResponse transferFunds(@RequestPayload TransferFundsRequest request) {
+    public TransferFundsResponse transferFunds(
+            @RequestPayload TransferFundsRequest request,
+            @org.springframework.ws.soap.server.endpoint.annotation.SoapHeader(
+                            "{urn:omp:banking:request:v1}RequestId")
+                    org.springframework.ws.soap.SoapHeaderElement requestId,
+            @org.springframework.ws.soap.server.endpoint.annotation.SoapHeader(
+                            "{http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd}Security")
+                    org.springframework.ws.soap.SoapHeaderElement security) {
 
-        simulateLegacyLatency();
+        var failure = simulator.next();
+        failure.before();
 
         BankingService.TransferResult result =
                 bankingService.transfer(
@@ -35,7 +47,9 @@ public class BankingEndpoint {
                         request.getToAccount(),
                         request.getAmount(),
                         request.getCurrency(),
-                        request.getReference());
+                        request.getReference(),
+                        identity(requestId, security));
+        failure.after();
 
         TransferFundsResponse response = new TransferFundsResponse();
         response.setTransactionId(result.transactionId());
@@ -50,7 +64,8 @@ public class BankingEndpoint {
     public GetAccountBalanceResponse getAccountBalance(
             @RequestPayload GetAccountBalanceRequest request) {
 
-        simulateLegacyLatency();
+        var failure = simulator.next();
+        failure.before();
 
         BankingService.BalanceResult result = bankingService.getBalance(request.getAccountNumber());
 
@@ -67,7 +82,8 @@ public class BankingEndpoint {
     public ReverseTransactionResponse reverseTransaction(
             @RequestPayload ReverseTransactionRequest request) {
 
-        simulateLegacyLatency();
+        var failure = simulator.next();
+        failure.before();
 
         BankingService.ReverseResult result =
                 bankingService.reverse(request.getTransactionId(), request.getReason());
@@ -81,11 +97,36 @@ public class BankingEndpoint {
 
     // ---------- helpers ----------
 
-    private void simulateLegacyLatency() {
+    private String identity(
+            org.springframework.ws.soap.SoapHeaderElement requestId,
+            org.springframework.ws.soap.SoapHeaderElement security) {
+        if (requestId == null) return "legacy:" + java.util.UUID.randomUUID();
         try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            var idResult = new javax.xml.transform.dom.DOMResult();
+            javax.xml.transform.TransformerFactory.newInstance()
+                    .newTransformer()
+                    .transform(requestId.getSource(), idResult);
+            String id =
+                    ((org.w3c.dom.Document) idResult.getNode())
+                            .getDocumentElement()
+                            .getTextContent();
+            if (!id.matches("[A-Za-z0-9._:-]{1,128}")) throw new IllegalArgumentException();
+            var result = new javax.xml.transform.dom.DOMResult();
+            javax.xml.transform.TransformerFactory.newInstance()
+                    .newTransformer()
+                    .transform(security.getSource(), result);
+            var users =
+                    ((org.w3c.dom.Document) result.getNode())
+                            .getElementsByTagNameNS(
+                                    "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd",
+                                    "Username");
+            if (users.getLength() != 1) throw new IllegalArgumentException();
+            // Rotation identities share one logical platform ledger namespace. REST scopes callers
+            // upstream.
+            return "platform:" + id;
+        } catch (Exception ex) {
+            throw new com.example.omp.bank.service.BankingFaultException(
+                    "INVALID_REQUEST", "Invalid request identity");
         }
     }
 

@@ -1,31 +1,20 @@
-# Legacy bank simulator
+# Legacy bank service
 
-Spring-WS SOAP implementation for the banking contract. Handwritten endpoints
-use generated JAXB types and the bank's in-memory simulation; this service is a
-reference backend, not a production banking ledger.
+A Spring-WS SOAP authority with a PostgreSQL ledger, structured BankingFaults,
+WS-Security UsernameToken/Timestamp authentication and trusted TLS. Flyway owns
+the bank_ledger schema. Transfers atomically record both balance movements and a
+durable request/result; reversals cannot repeat or overdraw the destination.
 
-The checked-in WSDL is published at `/ws/banking.wsdl` with embedded schema.
-UsernameToken PasswordText and Timestamp validation use the configured bank
-credentials. The boundary tests reject missing/invalid credentials, digest tokens
-and missing timestamps, and verify transfer/reversal/fault behavior. See
-[banking verification](../docs/banking-verification.md) and the
-[frozen contracts](../contracts/soap/v1).
+The frozen v1 WSDL remains at `/ws/banking.wsdl`. Adapter transfers carry mandatory
+`{urn:omp:banking:request:v1}RequestId`; the bank deduplicates by that identity and
+rejects a changed payload. Legacy clients without the header remain supported but
+must not retry an ambiguous write as a fresh intent.
 
-```sh
-./mvnw -pl legacy-bank-service -am -Pstatic-analysis clean verify
-docker build -f legacy-bank-service/Dockerfile -t omp/legacy-bank-service:local .
-```
+Use the root Docker build context and `scripts/setup-banking-development.sh` for
+a fresh development Compose deployment. The docker profile seeds demonstration
+accounts once; prod never seeds accounts. TLS and credentials come from mounted
+files, and nonce hashes survive restarts. Private readiness listens on 9090.
 
-[Base configuration](src/main/resources/application.yml) selects HTTPS on 8443
-and a development `classpath:keystore.p12`. Provision a matching store or supply
-`SERVER_SSL_KEY_STORE`, `SERVER_SSL_KEY_STORE_PASSWORD`, `SERVER_SSL_KEY_ALIAS`
-and `BANK_PASSWORD` through the deployment's secret mechanism. The adapter must
-trust that issuer and hostname. Do not infer that a keystore was distributed or
-trusted because a Docker image built successfully. The accepted local SOAP tests
-use their explicit HTTP fixture; deployed trusted TLS and rotation remain open.
-
-JAXB generation, producer/client schema parity and exact PR-base drift checks
-are required by the [contract policy](../docs/contract-evolution.md). Preserve
-v1 operations, actions, fault names and namespaces. There is no deployed
-REST-to-adapter-to-bank acceptance claim yet; [TASKS.md](../TASKS.md) tracks the
-remaining TLS, topology, resilience and production data work.
+[Deployment, rotations and recovery](../docs/soap-operations.md) ·
+[Error contract](../docs/soap-fault-contract.md) ·
+[Verification](../docs/banking-verification.md).

@@ -17,7 +17,10 @@ COPY --from=build --chown=app:app /extracted/spring-boot-loader/ ./
 COPY --from=build --chown=app:app /extracted/snapshot-dependencies/ ./
 COPY --from=build --chown=app:app /extracted/application/ ./
 USER app
+ARG VCS_REF=development
+LABEL org.opencontainers.image.revision=$VCS_REF
+ENV MANAGEMENT_SERVER_PORT=9090 MANAGEMENT_SERVER_SSL_ENABLED=false
 EXPOSE 8443
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
-    CMD wget --no-check-certificate -q -O- https://localhost:8443/actuator/health || exit 1
+    CMD wget -q -O- http://localhost:9090/actuator/health/readiness || exit 1
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "org.springframework.boot.loader.launch.JarLauncher"]

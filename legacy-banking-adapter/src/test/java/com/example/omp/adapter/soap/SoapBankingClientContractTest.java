@@ -89,6 +89,14 @@ class SoapBankingClientContractTest {
                                           <reference>order-42</reference>
                                         </TransferFundsRequest>
                                         """)))
+                .andExpect(
+                        (uri, message) ->
+                                assertThat(
+                                                ((org.springframework.ws.soap.SoapMessage) message)
+                                                        .getSoapAction()
+                                                        .replace(String.valueOf((char) 34), ""))
+                                        .isEqualTo(
+                                                "http://legacybank.example.com/ws/TransferFunds"))
                 .andRespond(
                         withPayload(
                                 new StringSource(
@@ -109,6 +117,63 @@ class SoapBankingClientContractTest {
         assertThat(response.transactionId()).isEqualTo("txn-42");
         assertThat(response.status()).isEqualTo("COMPLETED");
         assertThat(response.newBalance()).isEqualByComparingTo("87.66");
+        mockServer.verify();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "timeout,UPSTREAM_TIMEOUT",
+        "connect,UPSTREAM_UNAVAILABLE",
+        "tls,UPSTREAM_AUTHENTICATION",
+        "wrapped-tls,UPSTREAM_AUTHENTICATION",
+        "malformed,UPSTREAM_ERROR"
+    })
+    void redactsAndClassifiesTransportFailures(String type, BankingException.Code expected) {
+        mockServer
+                .expect((uri, message) -> {})
+                .andRespond(
+                        (uri, message, factory) -> {
+                            switch (type) {
+                                case "timeout" ->
+                                        throw new java.net.SocketTimeoutException(
+                                                "password=private");
+                                case "connect" ->
+                                        throw new java.net.ConnectException("password=private");
+                                case "tls" ->
+                                        throw new javax.net.ssl.SSLHandshakeException(
+                                                "password=private");
+                                case "wrapped-tls" ->
+                                        throw new java.io.IOException(
+                                                "private",
+                                                new javax.net.ssl.SSLHandshakeException(
+                                                        "password=private"));
+                                default -> throw new IllegalArgumentException("password=private");
+                            }
+                        });
+        assertThatThrownBy(() -> bankingClient.getBalance("ACC-1"))
+                .isInstanceOfSatisfying(
+                        BankingException.class, ex -> assertThat(ex.getCode()).isEqualTo(expected))
+                .hasMessageNotContaining("private");
+        mockServer.verify();
+    }
+
+    @Test
+    void securityFaultHasAStableCodeWithoutExposingSoapReason() {
+        mockServer
+                .expect((uri, message) -> {})
+                .andRespond(
+                        org.springframework.ws.test.client.ResponseCreators.withSoapEnvelope(
+                                new StringSource(
+                                        """
+          <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"><s:Body><s:Fault><faultcode>wsse:FailedAuthentication</faultcode><faultstring>password=private</faultstring></s:Fault></s:Body></s:Envelope>
+          """)));
+        assertThatThrownBy(() -> bankingClient.getBalance("ACC-1"))
+                .isInstanceOfSatisfying(
+                        BankingException.class,
+                        ex ->
+                                assertThat(ex.getCode())
+                                        .isEqualTo(BankingException.Code.UPSTREAM_AUTHENTICATION))
+                .hasMessageNotContaining("private");
         mockServer.verify();
     }
 }

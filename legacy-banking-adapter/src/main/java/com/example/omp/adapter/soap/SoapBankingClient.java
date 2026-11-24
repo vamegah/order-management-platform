@@ -24,13 +24,26 @@ public class SoapBankingClient implements BankingPort {
     private static final Logger log = LoggerFactory.getLogger(SoapBankingClient.class);
 
     private final WebServiceTemplate webServiceTemplate;
+    private final com.example.omp.adapter.config.BankingResilience resilience;
 
     public SoapBankingClient(WebServiceTemplate webServiceTemplate) {
+        this(webServiceTemplate, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SoapBankingClient(
+            WebServiceTemplate webServiceTemplate,
+            com.example.omp.adapter.config.BankingResilience resilience) {
         this.webServiceTemplate = webServiceTemplate;
+        this.resilience = resilience;
     }
 
     @Override
-    public TransferResponse transfer(TransferRequest request) {
+    public TransferResponse transfer(TransferRequest request, String requestId) {
+        return execute("transfer", () -> transferCall(request, requestId));
+    }
+
+    private TransferResponse transferCall(TransferRequest request, String requestId) {
         TransferFundsRequest soapRequest = new TransferFundsRequest();
         soapRequest.setFromAccount(request.fromAccount());
         soapRequest.setToAccount(request.toAccount());
@@ -40,8 +53,32 @@ public class SoapBankingClient implements BankingPort {
 
         try {
             TransferFundsResponse soapResponse =
-                    (TransferFundsResponse) webServiceTemplate.marshalSendAndReceive(soapRequest);
+                    (TransferFundsResponse)
+                            webServiceTemplate.marshalSendAndReceive(
+                                    soapRequest,
+                                    message -> {
+                                        ((org.springframework.ws.soap.SoapMessage) message)
+                                                .setSoapAction(
+                                                        "http://legacybank.example.com/ws/TransferFunds");
+                                        var header =
+                                                ((org.springframework.ws.soap.SoapMessage) message)
+                                                        .getSoapHeader();
+                                        var identity =
+                                                header.addHeaderElement(
+                                                        new QName(
+                                                                "urn:omp:banking:request:v1",
+                                                                "RequestId"));
+                                        identity.setMustUnderstand(true);
+                                        identity.setText(requestId);
+                                    });
 
+            if (soapResponse == null
+                    || soapResponse.getTransactionId() == null
+                    || soapResponse.getTransactionId().isBlank()
+                    || !"COMPLETED".equals(soapResponse.getStatus())
+                    || soapResponse.getNewBalance() == null
+                    || soapResponse.getNewBalance().signum() < 0)
+                throw new IllegalArgumentException("Invalid bank result");
             return new TransferResponse(
                     soapResponse.getTransactionId(),
                     soapResponse.getStatus(),
@@ -50,21 +87,26 @@ public class SoapBankingClient implements BankingPort {
         } catch (SoapFaultClientException ex) {
             throw mapFault(ex);
         } catch (Exception ex) {
-            log.error("Unexpected SOAP call failure", ex);
-            throw new BankingException(
-                    BankingException.Code.UPSTREAM_ERROR, "Bank communication failed", ex);
+            throw transportFailure(ex);
         }
     }
 
     @Override
     public BalanceResponse getBalance(String accountNumber) {
+        return execute("balance", () -> balanceCall(accountNumber));
+    }
+
+    private BalanceResponse balanceCall(String accountNumber) {
         GetAccountBalanceRequest soapRequest = new GetAccountBalanceRequest();
         soapRequest.setAccountNumber(accountNumber);
 
         try {
             GetAccountBalanceResponse soapResponse =
                     (GetAccountBalanceResponse)
-                            webServiceTemplate.marshalSendAndReceive(soapRequest);
+                            webServiceTemplate.marshalSendAndReceive(
+                                    soapRequest,
+                                    new org.springframework.ws.soap.client.core.SoapActionCallback(
+                                            "http://legacybank.example.com/ws/GetAccountBalance"));
 
             return new BalanceResponse(
                     soapResponse.getAccountNumber(),
@@ -74,9 +116,7 @@ public class SoapBankingClient implements BankingPort {
         } catch (SoapFaultClientException ex) {
             throw mapFault(ex);
         } catch (Exception ex) {
-            log.error("Unexpected SOAP call failure", ex);
-            throw new BankingException(
-                    BankingException.Code.UPSTREAM_ERROR, "Bank communication failed", ex);
+            throw transportFailure(ex);
         }
     }
 
@@ -84,7 +124,15 @@ public class SoapBankingClient implements BankingPort {
 
     /** Maps only structured codes; raw SOAP reasons never cross the REST boundary. */
     private BankingException mapFault(SoapFaultClientException ex) {
-        BankingException.Code code = BankingException.Code.UPSTREAM_ERROR;
+        var faultCode = ex.getFaultCode();
+        BankingException.Code code =
+                faultCode != null
+                                && faultCode
+                                        .getNamespaceURI()
+                                        .equals(
+                                                "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd")
+                        ? BankingException.Code.UPSTREAM_AUTHENTICATION
+                        : BankingException.Code.UPSTREAM_ERROR;
         var detail = ex.getSoapFault().getFaultDetail();
         if (detail != null) {
             var entries = detail.getDetailEntries();
@@ -113,7 +161,31 @@ public class SoapBankingClient implements BankingPort {
         return new BankingException(code, "Bank request failed: " + code.name(), ex);
     }
 
+    private <T> T execute(String operation, java.util.function.Supplier<T> call) {
+        return resilience == null ? call.get() : resilience.execute(operation, call);
+    }
+
+    private BankingException transportFailure(Exception ex) {
+        boolean timeout = false, io = false;
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof javax.net.ssl.SSLException)
+                return new BankingException(
+                        BankingException.Code.UPSTREAM_AUTHENTICATION, "Bank TLS rejected", ex);
+            timeout |= cause instanceof java.net.SocketTimeoutException;
+            io |= cause instanceof java.io.IOException;
+        }
+        if (timeout)
+            return new com.example.omp.adapter.port.BankTransportException(
+                    BankingException.Code.UPSTREAM_TIMEOUT, ex);
+        if (io)
+            return new com.example.omp.adapter.port.BankTransportException(
+                    BankingException.Code.UPSTREAM_UNAVAILABLE, ex);
+        return new BankingException(
+                BankingException.Code.UPSTREAM_ERROR, "Invalid bank response", ex);
+    }
+
     private Instant toInstant(XMLGregorianCalendar xml) {
-        return xml == null ? Instant.now() : xml.toGregorianCalendar().toInstant();
+        if (xml == null) throw new IllegalArgumentException("Missing bank timestamp");
+        return xml.toGregorianCalendar().toInstant();
     }
 }

@@ -177,6 +177,8 @@ services:
   #   - Resource limits, log rotation.
   # ============================================================================
   postgres:
+    volumes:
+      - ${BANK_DATABASE_SECRETS_DIR:-/etc/omp/secrets/bank-database}:/run/secrets/bank-database:ro
     # Build the custom image locally. In CI, this can be pre-built and pushed
     # to a registry; the `image:` tag below is what Compose uses to run it.
     build:
@@ -984,6 +986,9 @@ services:
   #   - TLS terminated by Traefik (already)
   # ============================================================================
   legacy-banking-adapter:
+    volumes:
+      - ${BANK_ADAPTER_SECRETS_DIR:-/etc/omp/secrets/bank-adapter}:/run/secrets/bank:ro
+      - ${BANK_TRUST_DIRECTORY:-/etc/omp/trust/bank}:/run/bank-tls:ro
     environment:
       SPRING_PROFILES_ACTIVE: prod
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN}/realms/omp
@@ -995,6 +1000,13 @@ services:
       - traefik.http.routers.banking-adapter.entrypoints=websecure
       - traefik.http.routers.banking-adapter.tls.certresolver=le
       - traefik.http.services.banking-adapter.loadbalancer.server.port=8085
+
+  legacy-bank-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    volumes:
+      - ${BANK_LEDGER_SECRETS_DIR:-/etc/omp/secrets/bank-ledger}:/run/secrets/bank:ro
+      - ${BANK_TLS_DIRECTORY:-/etc/omp/tls/legacy-bank-service}:/run/bank-tls:ro
 
   keycloak:
     command:

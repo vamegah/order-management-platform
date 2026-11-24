@@ -44,6 +44,7 @@ public class BankingSecurityConfig {
                                                 "/actuator/health",
                                                 "/actuator/health/**",
                                                 "/actuator/info",
+                                                "/actuator/prometheus",
                                                 "/error",
                                                 "/v3/api-docs",
                                                 "/v3/api-docs/**",
@@ -52,8 +53,36 @@ public class BankingSecurityConfig {
                                         .permitAll()
                                         .anyRequest()
                                         .hasRole("admin"))
+                .exceptionHandling(
+                        errors ->
+                                errors.authenticationEntryPoint(
+                                                (request, response, error) ->
+                                                        problem(response, 401, "unauthorized"))
+                                        .accessDeniedHandler(
+                                                (request, response, error) ->
+                                                        problem(response, 403, "forbidden")))
                 .oauth2ResourceServer(
-                        oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
+                        oauth ->
+                                oauth.authenticationEntryPoint(
+                                                (request, response, error) ->
+                                                        problem(response, 401, "unauthorized"))
+                                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
         return http.build();
+    }
+
+    private static void problem(
+            jakarta.servlet.http.HttpServletResponse response, int status, String code)
+            throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType("application/problem+json");
+        response.getWriter()
+                .write(
+                        "{\"type\":\"urn:problem:"
+                                + code
+                                + "\",\"title\":\""
+                                + code.toUpperCase(java.util.Locale.ROOT)
+                                + "\",\"status\":"
+                                + status
+                                + ",\"detail\":\"Banking access denied\"}");
     }
 }

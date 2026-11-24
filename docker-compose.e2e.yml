@@ -54,6 +54,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init/01-schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql:ro
       - ./infrastructure/postgres/init/02-extensions.sql:/docker-entrypoint-initdb.d/02-extensions.sql:ro
+      - ./infrastructure/postgres/init/03-banking.sh:/docker-entrypoint-initdb.d/04-banking.sh:ro
+      - ${BANK_DATABASE_SECRETS_DIR:-./infrastructure/secrets/banking/postgres}:/run/secrets/bank-database:ro
       - ./infrastructure/postgres/e2e/03-service-passwords.sql:/docker-entrypoint-initdb.d/03-service-passwords.sql:ro
       - ./infrastructure/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
   inventory-service:

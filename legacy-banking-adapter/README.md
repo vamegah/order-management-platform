@@ -1,32 +1,19 @@
-# Banking REST-to-SOAP adapter
+# Legacy banking adapter
 
-A Spring REST facade over the legacy bank's generated JAXB/Spring-WS client.
-`POST /api/v1/banking/transfers` and
-`GET /api/v1/banking/accounts/{accountNumber}/balance` map to the SOAP contract.
-Structured business/authentication/transport faults become redacted HTTP problems;
-see [the fault contract](../docs/soap-fault-contract.md).
+An administrator-only REST facade over the SOAP bank. JWT issuer verification
+and the admin realm role protect transfers and balances. The adapter retains
+request hashes and terminal results in PostgreSQL bank_adapter, scopes keys by
+issuer/subject, and forwards mandatory durable identities to the bank.
 
-```sh
-./mvnw -pl legacy-banking-adapter,legacy-bank-service -am -Pstatic-analysis clean verify
-docker build -f legacy-banking-adapter/Dockerfile -t omp/legacy-banking-adapter:local .
-```
+Trusted HTTPS, hostname checks, fresh WS-Security nonces/timestamps, bounded socket
+deadlines, two classified attempts, an eight-call bulkhead and a circuit breaker
+protect the external boundary. Fixed RFC 7807 errors never echo SOAP text or
+transport exceptions. Management/Prometheus run on private port 9090 in Compose.
 
-[Base configuration](src/main/resources/application.yml) sets HTTP 8085 and the
-SOAP URL `https://localhost:8443/ws`. Configure `BANK_WS_URL`, `BANK_WS_USERNAME`
-and `BANK_PASSWORD` for the intended bank. The HTTP message sender uses JVM trust
-and hostname verification. Provision the bank certificate/truststore; disabling
-validation is not a supported trust configuration. The client sends the configured
-UsernameToken and Timestamp.
+Build with the root Docker context. Development setup creates private mounted
+configuration and a public CA-only client truststore; the adapter cannot read the
+bank's server key. Production uses external secret/TLS directories.
 
-The facade does not inherit JWT authorization from Traefik or another service's
-security chain. Its production REST policy, trusted TLS deployment and complete
-REST-to-SOAP journey remain open. Boundary tests use a controlled SOAP transport;
-they prove validation/mapping rather than a deployed bank connection.
-
-Sequential identical transfer retries use the local idempotency cache; a changed
-payload under the same key returns conflict. This is not durable, atomic or shared
-between replicas. Circuit-breaker/retry settings exist, but backend fault injection
-and accepted retry classification/half-open recovery remain work. See
-[banking verification](../docs/banking-verification.md) and
-[contract evolution](../docs/contract-evolution.md) for current evidence and frozen
-WSDL/XSD compatibility.
+[Deployment, rotations and recovery](../docs/soap-operations.md) ·
+[Error contract](../docs/soap-fault-contract.md) ·
+[Declared acceptance limits](../docs/soap-acceptance-objectives.md).

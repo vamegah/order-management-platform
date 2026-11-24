@@ -19,11 +19,17 @@ class BankingExceptionHandlerTest {
         "INVALID_ACCOUNT_FORMAT,400",
         "UNSUPPORTED_CURRENCY,  422",
         "UPSTREAM_UNAVAILABLE,  503",
-        "UPSTREAM_ERROR,        502"
+        "UPSTREAM_ERROR,        502",
+        "UPSTREAM_AUTHENTICATION,502",
+        "UPSTREAM_TIMEOUT,504",
+        "INVALID_REQUEST,400",
+        "IDEMPOTENCY_CONFLICT,409"
     })
     void maps_code_to_status(BankingException.Code code, int expectedStatus) {
-        ProblemDetail problem = handler.handle(new BankingException(code, "test"));
+        ProblemDetail problem =
+                handler.handle(new BankingException(code, "password=private-backend-data"));
 
+        assertThat(problem.getDetail()).doesNotContain("private", "password");
         assertThat(problem.getStatus()).isEqualTo(expectedStatus);
         assertThat(problem.getType().toString()).startsWith("urn:problem:");
     }

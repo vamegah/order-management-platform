@@ -3,7 +3,6 @@ package com.example.omp.bank.endpoint;
 import static org.assertj.core.api.Assertions.*;
 
 import com.example.omp.bank.LegacyBankApplication;
-import com.example.omp.bank.domain.AccountRepository;
 import com.omp.bank.soap.*;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,11 +26,15 @@ import org.springframework.ws.soap.security.wss4j2.Wss4jSecurityInterceptor;
         })
 class BankingSoapBoundaryTest {
     @LocalServerPort private int port;
-    @Autowired private AccountRepository accounts;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate db;
 
     @BeforeEach
     void reset() {
-        accounts.seed();
+        db.update("DELETE FROM bank_transfer");
+        db.update("DELETE FROM bank_nonce");
+        db.update("DELETE FROM bank_account");
+        db.update(
+                "INSERT INTO bank_account VALUES ('ACC-1','USD',10000),('ACC-2','USD',5000),('ACC-3','USD',25000)");
     }
 
     private WebServiceTemplate client(String password) throws Exception {
@@ -51,6 +54,8 @@ class BankingSoapBoundaryTest {
             security.setSecurementUsername(username);
             security.setSecurementPassword(password);
             security.setSecurementPasswordType(type);
+            security.setSecurementUsernameTokenNonce(true);
+            security.setSecurementUsernameTokenCreated(true);
             security.afterPropertiesSet();
             template.setInterceptors(
                     new org.springframework.ws.client.support.interceptor.ClientInterceptor[] {
@@ -93,11 +98,23 @@ class BankingSoapBoundaryTest {
         assertThat(reversed.getTransactionId()).isEqualTo(paid.getTransactionId());
         assertThat(reversed.getStatus()).isEqualTo("REVERSED");
         assertThat(reversed.getTimestamp()).isNotNull();
-        assertThat(accounts.require("ACC-1").getBalance()).isEqualByComparingTo("10000.00");
-        assertThat(accounts.require("ACC-2").getBalance()).isEqualByComparingTo("5000.00");
+        assertThat(
+                        db.queryForObject(
+                                "SELECT balance FROM bank_account WHERE account_number='ACC-1'",
+                                java.math.BigDecimal.class))
+                .isEqualByComparingTo("10000.00");
+        assertThat(
+                        db.queryForObject(
+                                "SELECT balance FROM bank_account WHERE account_number='ACC-2'",
+                                java.math.BigDecimal.class))
+                .isEqualByComparingTo("5000.00");
         assertThatThrownBy(() -> template.marshalSendAndReceive(reverse))
                 .isInstanceOf(SoapFaultClientException.class);
-        assertThat(accounts.require("ACC-1").getBalance()).isEqualByComparingTo("10000.00");
+        assertThat(
+                        db.queryForObject(
+                                "SELECT balance FROM bank_account WHERE account_number='ACC-1'",
+                                java.math.BigDecimal.class))
+                .isEqualByComparingTo("10000.00");
     }
 
     @Test
@@ -107,7 +124,11 @@ class BankingSoapBoundaryTest {
             assertThatThrownBy(() -> template.marshalSendAndReceive(balanceRequest("ACC-1")))
                     .isInstanceOf(SoapFaultClientException.class);
         }
-        assertThat(accounts.require("ACC-1").getBalance()).isEqualByComparingTo("10000.00");
+        assertThat(
+                        db.queryForObject(
+                                "SELECT balance FROM bank_account WHERE account_number='ACC-1'",
+                                java.math.BigDecimal.class))
+                .isEqualByComparingTo("10000.00");
     }
 
     @Test
@@ -133,7 +154,11 @@ class BankingSoapBoundaryTest {
             assertThatThrownBy(() -> template.marshalSendAndReceive(balanceRequest("ACC-1")))
                     .isInstanceOf(SoapFaultClientException.class);
         }
-        assertThat(accounts.require("ACC-1").getBalance()).isEqualByComparingTo("10000.00");
+        assertThat(
+                        db.queryForObject(
+                                "SELECT balance FROM bank_account WHERE account_number='ACC-1'",
+                                java.math.BigDecimal.class))
+                .isEqualByComparingTo("10000.00");
     }
 
     @Test
@@ -203,5 +228,82 @@ class BankingSoapBoundaryTest {
                                         "http://www.w3.org/2001/XMLSchema", "import")
                                 .getLength())
                 .isZero();
+    }
+
+    @Test
+    void unsupportedMandatoryHeadersFailBeforeMoneyMovement() throws Exception {
+        var template = client("boundary-test-password");
+        var transfer = new TransferFundsRequest();
+        transfer.setFromAccount("ACC-1");
+        transfer.setToAccount("ACC-2");
+        transfer.setAmount(java.math.BigDecimal.ONE);
+        transfer.setCurrency("USD");
+        transfer.setReference("mandatory-header");
+        assertThatThrownBy(
+                        () ->
+                                template.marshalSendAndReceive(
+                                        transfer,
+                                        message -> {
+                                            var header =
+                                                    ((org.springframework.ws.soap.SoapMessage)
+                                                                    message)
+                                                            .getSoapHeader()
+                                                            .addHeaderElement(
+                                                                    new javax.xml.namespace.QName(
+                                                                            "urn:unsupported:protocol",
+                                                                            "RequestId"));
+                                            header.setMustUnderstand(true);
+                                            header.setText("key");
+                                        }))
+                .isInstanceOf(SoapFaultClientException.class);
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM bank_transfer", Integer.class)).isZero();
+    }
+
+    @Test
+    void mandatoryDurableHeaderDeduplicatesTransfers() throws Exception {
+        var template = client("boundary-test-password");
+        var transfer = new TransferFundsRequest();
+        transfer.setFromAccount("ACC-1");
+        transfer.setToAccount("ACC-2");
+        transfer.setAmount(java.math.BigDecimal.ONE);
+        transfer.setCurrency("USD");
+        transfer.setReference("mandatory-durable-header");
+        org.springframework.ws.client.core.WebServiceMessageCallback callback =
+                message -> {
+                    var header =
+                            ((org.springframework.ws.soap.SoapMessage) message)
+                                    .getSoapHeader()
+                                    .addHeaderElement(identityHeader());
+                    header.setMustUnderstand(true);
+                    header.setText("x".repeat(identityContract().get("maxLength").asInt()));
+                };
+        var first = (TransferFundsResponse) template.marshalSendAndReceive(transfer, callback);
+        var second = (TransferFundsResponse) template.marshalSendAndReceive(transfer, callback);
+        assertThat(second.getTransactionId()).isEqualTo(first.getTransactionId());
+        assertThat(second.getTimestamp()).isEqualTo(first.getTimestamp());
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM bank_transfer", Integer.class))
+                .isEqualTo(1);
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode identityContract() {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(
+                            java.nio.file.Path.of(
+                                            "..",
+                                            "contracts",
+                                            "soap",
+                                            "extensions",
+                                            "request-identity-v1.json")
+                                    .toFile());
+        } catch (java.io.IOException failure) {
+            throw new IllegalStateException("Published request identity unavailable", failure);
+        }
+    }
+
+    private javax.xml.namespace.QName identityHeader() {
+        var contract = identityContract();
+        return new javax.xml.namespace.QName(
+                contract.get("namespace").asText(), contract.get("element").asText());
     }
 }

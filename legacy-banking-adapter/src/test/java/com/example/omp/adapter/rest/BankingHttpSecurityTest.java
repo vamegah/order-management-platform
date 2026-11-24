@@ -1,5 +1,6 @@
 package com.example.omp.adapter.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -45,13 +46,17 @@ class BankingHttpSecurityTest {
                                             .header("alg", "RS256")
                                             .subject(token)
                                             .claim("scope", "banking.read");
-                            if (token.equals("admin"))
+                            if (token.equals("admin")
+                                    || token.equals("second-admin")
+                                    || token.equals("subjectless-admin"))
                                 jwt.claim(
                                         "realm_access", Map.of("roles", List.of("admin", "", 42)));
                             else if (token.equals("malformed-roles"))
                                 jwt.claim("realm_access", Map.of("roles", "admin"));
                             else if (!token.equals("claimless"))
                                 jwt.claim("realm_access", Map.of("roles", List.of("user")));
+                            if (token.equals("subjectless-admin"))
+                                jwt.claims(claims -> claims.remove("sub"));
                             return jwt.build();
                         });
         when(bank.getBalance("ACC-1"))
@@ -61,7 +66,7 @@ class BankingHttpSecurityTest {
                                 new BigDecimal("10.50"),
                                 "USD",
                                 Instant.parse("2026-11-13T12:00:00Z")));
-        when(bank.transfer(any()))
+        when(bank.transfer(any(), anyString()))
                 .thenReturn(
                         new TransferResponse(
                                 "test-transaction",
@@ -133,6 +138,82 @@ class BankingHttpSecurityTest {
                 .andExpect(
                         jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$['x-implemented-routes'].length()").value(2));
+    }
+
+    @Test
+    void missingVerifiedSubjectCannotShareAnotherAdministratorsIdentity() throws Exception {
+        http.perform(
+                        post("/api/v1/banking/transfers")
+                                .header("Authorization", "Bearer subjectless-admin")
+                                .header("Idempotency-Key", "subjectless")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(transferBody()))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(bank);
+    }
+
+    @Test
+    void identicalClientKeysAreScopedToTheVerifiedPrincipal() throws Exception {
+        String key = java.util.UUID.randomUUID().toString();
+        for (String token : List.of("admin", "second-admin", "admin"))
+            http.perform(
+                            post("/api/v1/banking/transfers")
+                                    .header("Authorization", "Bearer " + token)
+                                    .header("Idempotency-Key", key)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(transferBody()))
+                    .andExpect(status().isOk());
+        var ids = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(bank, times(2)).transfer(any(), ids.capture());
+        assertThat(ids.getAllValues()).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void invalidMetadataOrMonetaryValuesNeverReachSoap() throws Exception {
+        for (String amount : List.of("0.011", "1e1000000"))
+            http.perform(
+                            post("/api/v1/banking/transfers")
+                                    .header("Authorization", "Bearer admin")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(transferBody().replace("1.00", amount)))
+                    .andExpect(status().is4xxClientError());
+        http.perform(
+                        get("/api/v1/banking/accounts/invalid/balance")
+                                .header("Authorization", "Bearer admin"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(bank);
+    }
+
+    @Test
+    void limitDeclinesKeepTheirRequestIdentity() throws Exception {
+        String key = java.util.UUID.randomUUID().toString();
+        http.perform(
+                        post("/api/v1/banking/transfers")
+                                .header("Authorization", "Bearer admin")
+                                .header("Idempotency-Key", key)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(transferBody().replace("1.00", "10001")))
+                .andExpect(status().isTooManyRequests());
+        http.perform(
+                        post("/api/v1/banking/transfers")
+                                .header("Authorization", "Bearer admin")
+                                .header("Idempotency-Key", key)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(transferBody()))
+                .andExpect(status().isConflict());
+        verifyNoInteractions(bank);
+    }
+
+    @Test
+    void opaqueClientKeysRemainCompatibleWithThePublishedContract() throws Exception {
+        http.perform(
+                        post("/api/v1/banking/transfers")
+                                .header("Authorization", "Bearer admin")
+                                .header("Idempotency-Key", "opaque key/with punctuation")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(transferBody()))
+                .andExpect(status().isOk());
+        verify(bank).transfer(any(), anyString());
     }
 
     private String transferBody() {

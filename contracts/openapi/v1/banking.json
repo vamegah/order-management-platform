@@ -218,7 +218,17 @@
                 }
               }
             },
-            "description": "Banking service unavailable"
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bank response deadline exceeded"
           }
         },
         "tags": [
@@ -335,7 +345,17 @@
                 }
               }
             },
-            "description": "Banking service unavailable"
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bank response deadline exceeded"
           }
         },
         "tags": [

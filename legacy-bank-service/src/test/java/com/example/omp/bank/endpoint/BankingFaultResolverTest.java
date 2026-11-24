@@ -28,6 +28,25 @@ class BankingFaultResolverTest {
                 .doesNotContain("password", "secret");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "INVALID_REQUEST",
+                "INVALID_ACCOUNT_FORMAT",
+                "DAILY_LIMIT_EXCEEDED",
+                "UNSUPPORTED_CURRENCY",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_NOT_FOUND",
+                "ALREADY_REVERSED",
+                "ACCOUNT_NOT_FOUND",
+                "UPSTREAM_ERROR"
+            })
+    void allFaultDetailsUseFixedPublicMessages(String code) throws Exception {
+        assertThat(detail(new BankingFaultException(code, "password=private-implementation")))
+                .contains("<code>" + code + "</code>")
+                .doesNotContain("password", "private-implementation");
+    }
+
     private String detail(Exception exception) throws Exception {
         var factory = new SaajSoapMessageFactory();
         factory.afterPropertiesSet();

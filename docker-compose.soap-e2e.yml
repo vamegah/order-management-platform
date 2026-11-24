@@ -1,0 +1,40 @@
+# Disposable SOAP acceptance only; no public simulator controls.
+services:
+  traefik:
+    ports: !override
+      - '127.0.0.1:18086:80'
+    networks:
+      edge:
+        aliases: [banking.localhost, keycloak.localhost]
+  postgres:
+    volumes:
+      - ./coverage/soap-fixtures/secrets/postgres:/run/secrets/bank-database:ro
+    ports: !reset []
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://keycloak.localhost
+      JAVA_OPTS_KC_HEAP: -Xms64m -Xmx256m
+    ports: !override
+      - '127.0.0.1:18089:8080'
+  legacy-bank-service:
+    volumes:
+      - ./coverage/soap-fixtures/secrets/bank:/run/secrets/bank:ro
+      - ./coverage/soap-fixtures/tls/legacy-bank-service:/run/bank-tls:ro
+    image: omp/legacy-bank-service:${SOAP_ACCEPTANCE_IMAGE_TAG:-1.0.0-SNAPSHOT}
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,soap-acceptance
+      BANK_SIMULATOR_CONTROLS_ENABLED: 'true'
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    ports: !override
+      - '127.0.0.1:18443:8443'
+  legacy-banking-adapter:
+    volumes:
+      - ./coverage/soap-fixtures/secrets/adapter:/run/secrets/bank:ro
+      - ./coverage/soap-fixtures/tls/legacy-bank-service/trust:/run/bank-tls:ro
+    image: omp/legacy-banking-adapter:${SOAP_ACCEPTANCE_IMAGE_TAG:-1.0.0-SNAPSHOT}
+    environment:
+      OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
+    ports: !override
+      - '127.0.0.1:19085:9090'

@@ -14,10 +14,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 final class EncodedPasswordTokenValidator extends UsernameTokenValidator {
     private final UserDetailsService users;
     private final PasswordEncoder encoder;
+    private final org.springframework.jdbc.core.JdbcTemplate db;
 
-    EncodedPasswordTokenValidator(UserDetailsService users, PasswordEncoder encoder) {
+    EncodedPasswordTokenValidator(
+            UserDetailsService users,
+            PasswordEncoder encoder,
+            org.springframework.jdbc.core.JdbcTemplate db) {
         this.users = users;
         this.encoder = encoder;
+        this.db = db;
     }
 
     @Override
@@ -30,7 +35,34 @@ final class EncodedPasswordTokenValidator extends UsernameTokenValidator {
                         credential.getUsernametoken().getPasswordType())) {
             throw rejected();
         }
-        return super.validate(credential, data);
+        var validated = super.validate(credential, data);
+        var token = validated.getUsernametoken();
+        try {
+            var created = java.time.Instant.parse(token.getCreated());
+            var now = java.time.Instant.now();
+            if (token.getNonce() == null
+                    || token.getNonce().length() < 16
+                    || token.getNonce().length() > 256
+                    || created.isBefore(now.minusSeconds(60))
+                    || created.isAfter(now.plusSeconds(5))) throw rejected();
+            byte[] nonce = java.util.Base64.getDecoder().decode(token.getNonce());
+            if (nonce.length < 16 || nonce.length > 64) throw rejected();
+            db.update("DELETE FROM bank_nonce WHERE expires_at<CURRENT_TIMESTAMP");
+            String hash =
+                    com.example.omp.bank.service.BankingService.hash(
+                            token.getName() + "\n" + token.getNonce());
+            if (db.update(
+                            "INSERT INTO bank_nonce(nonce_hash,expires_at) VALUES (?,?) ON CONFLICT DO NOTHING",
+                            hash,
+                            java.sql.Timestamp.from(now.plusSeconds(120)))
+                    != 1) throw rejected();
+        } catch (java.time.DateTimeException
+                | IllegalArgumentException
+                | NullPointerException
+                | org.springframework.dao.DataAccessException failure) {
+            throw rejected();
+        }
+        return validated;
     }
 
     @Override

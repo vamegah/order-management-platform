@@ -5,6 +5,7 @@ Other v1 changes require a new version; the existing endpoint remains supported.
 JAXB generation and Java compilation are enforced separately by Maven verification.
 """
 
+import json
 import argparse
 from io import StringIO
 from pathlib import Path
@@ -98,6 +99,13 @@ def check(root, base_root=None):
                 schema = root / module / "src/main/resources/xsd/banking.xsd"
                 if normalized(current, schema_only=True) != normalized(schema):
                     errors.append(f"{module}: WSDL embedded schema differs from banking.xsd")
+    extension=Path("contracts/soap/extensions/request-identity-v1.json")
+    header=json.loads((root/extension).read_text(encoding="utf-8"))
+    fields={"namespace","element","mustUnderstand","minLength","maxLength","pattern","semantics"}
+    if set(header)!=fields or header["mustUnderstand"] is not True or header["semantics"]!="durable-transfer-v1" or not isinstance(header["namespace"],str) or not isinstance(header["element"],str) or not isinstance(header["pattern"],str) or type(header["minLength"]) is not int or type(header["maxLength"]) is not int or not 1<=header["minLength"]<=header["maxLength"]:
+        errors.append("Mandatory durable request identity contract is invalid")
+    if base_root is not None and (base_root/extension).is_file() and json.loads((base_root/extension).read_text(encoding="utf-8"))!=header:
+        errors.append("Request identity v1 changed from the pull request base; add a new version")
     return errors
 
 
