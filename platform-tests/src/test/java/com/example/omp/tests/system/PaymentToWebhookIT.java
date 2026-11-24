@@ -291,9 +291,8 @@ class PaymentToWebhookIT {
             JsonNode webhook = MAPPER.readTree(body);
             if (!webhook.path("eventType").asText().equals(type)) continue;
             assertThat(webhook.path("eventId").asText()).isEqualTo(eventId);
-            // Current outbound contract carries an event reference. Full payload enrichment
-            // remains a separate backlog item; the original payload is verified above.
-            assertThat(webhook.path("data").path("eventId").asText()).isEqualTo(eventId);
+            assertThat(webhook.path("schemaVersion").asInt()).isEqualTo(1);
+            assertThat(webhook.path("data")).isEqualTo(data);
             matched = true;
         }
         assertThat(matched).as("Delivered event %s", type).isTrue();

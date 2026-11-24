@@ -171,3 +171,40 @@ payment service. It records test-token capture/retry/decline, real SDK SCA pendi
 state, and asynchronous refunds without writing credentials or client secrets to
 reports. Deterministic CI additionally completes both SCA outcomes. Never point
 the simulator or this load harness at production or supply real card details.
+
+## Measured acceptance (2026-11-23)
+
+The unchanged profile was committed as `7aece7c` before measurement. The
+[reference run](https://github.com/vamegah/order-management-platform/actions/runs/45308146831)
+at `45279cd` uses four vCPUs and 16,759,431,168 Docker-visible memory bytes.
+All seven required phases pass with clean source and successful cleanup.
+
+| Measure | Objective | Reference result |
+| --- | --- | --- |
+| 500 inbound events at 50/s, p95 / p99 | 500 / 1,000 ms | 7 / 14 ms |
+| 200 outbound events at 10 charges/s, p95 / p99 | 5,000 / 10,000 ms | 2,655 / 2,826 ms |
+| Healthy delivery / duplicate business effects | 200 / 0 | 200 / 0 |
+| Provider monetary identities for 200 charges | 200 | 200 |
+| 200 dead-letter replays | at most 60 s | 2.66 s |
+| Database-unavailable receipt reply | 503 within 6,000 ms | 503 in 3,006 ms |
+| Broker backlog and notification restart recovery | at most 90 s | 27.13 s |
+
+Slow subscribers and lost acknowledgments preserve one durable identity. All
+source outboxes, notification dispatch and provider inbox drain after recovery;
+unauthorized replay and rotation are denied. The final required PR workflow
+repeats these checks after verification fixes; its source-bound archives and hashes
+are retained under `coverage/payments-section5-ci`.
+
+Five actual Stripe checks pass at `d503a8f`: test-token capture with stable replay,
+decline, SDK SCA next-action pending, refund completion, and signed callback
+processing (three receipts). Both test captures are fully refunded at Stripe;
+unused test intents are cancelled. Credentials remain in restricted files outside
+the repository. Deterministic CI additionally completes both SCA outcomes. The real sandbox
+check verifies the private SDK handoff and that payment remains pending until
+authentication.
+
+Stripe clears `payment_method` after a decline. Correlation accepts the token in
+`last_payment_error.payment_method.id` only for a failed-method intent, while still
+requiring the original amount, currency, local identities and provider reference.
+A mismatched/missing token cannot finalize the payment, and a failed token cannot
+prove capture. The durable simulator reproduces this provider response shape.

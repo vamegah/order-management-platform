@@ -2984,3 +2984,56 @@ Artifacts, raw measurements, JUnit and hashes are retained under
 `coverage/events-section4-ci/43682258012`, including the event acceptance and
 unit-coverage comparison archives. The [runbook](events-and-websockets.md) defines
 retention, replay, SLO reproduction and the limits of transient hints.
+
+
+## 2026-11-23 — Section 5 payment and webhook completion
+
+Section 5's six implementation items are complete. Tokenized methods are bound to
+the authenticated owner and immutable intent; SDK SCA actions are private,
+non-cacheable and omitted when absent. Unverified provider confirmation through
+gRPC is rejected. Actual Stripe testing found and fixed the dynamic-method request
+and cleared declined-token response shapes, with strict negative correlation tests.
+
+Verified provider callbacks commit a minimal durable inbox before acknowledgment.
+Raw-byte signatures, timestamp/key overlap, payload bounds and optional direct-peer
+CIDRs are enforced. Duplicate identities are safe, changed-body collisions are
+rejected, and administrator replay is audited. Socket and cancellation-connection
+bounds cover a paused database as well as SQL deadlines. Refund recovery, late
+capture compensation and cancellation retain the existing inventory/payment fence.
+
+Outbound delivery validates registration and revalidates/pins public destinations
+at connection time with normal TLS hostname verification. Redirects, ambient
+proxies and internal/mixed DNS destinations are rejected. Versioned source payloads,
+permanent delivery receipts, overlapping signing keys, Retry-After handling,
+retention and audited DLQ replay preserve durable identities. Row locks precede
+subscription mutation; deterministic PostgreSQL tests reproduce the old concurrent
+rotation failure and verify the corrected 200/409 result and edit preservation.
+The dispatch worker handles fan-out with bounded batches and work time and leaves
+untouched work pending on a transport failure.
+
+The [predeclared seven-phase reference acceptance](https://github.com/vamegah/order-management-platform/actions/runs/45308146831)
+passes at `45279cd`: 500 receipts at 50/s have 7/14 ms p95/p99; all 200 deliveries
+at ten charges/s have 2,655/2,826 ms p95/p99 with no duplicate delivery or provider
+monetary identity. All 200 DLQs replay in 2.66 seconds. Database interruption
+returns 503 in 3,006 ms; broker/notification recovery drains in 27.13 seconds.
+No pending inbox/outbox/dispatch remains, and cleanup succeeds. Hardware and
+limits are documented in [payment operations](payment-webhooks.md).
+
+The follow-up at `d503a8f` passes 118 focused provider/simulator cases. Eleven
+HTTP response cases and eleven PostgreSQL management cases also pass; focused
+counts overlap other suites. Five actual Stripe test-mode checks pass with API
+`livemode=false`, including capture/replay, decline, SCA-pending, a completed refund
+and three processed signed receipts. Interrupted test captures were refunded;
+provider cleanup verifies zero remaining captured balance and cancels unused
+intents. The supported real SCA handoff is verified without accepting raw cards;
+deterministic acceptance completes both authentication outcomes.
+
+The required PR workflow runs the complete reactor, static/dependency gates,
+all fourteen exact-base unit-coverage comparisons, six REST/21 GraphQL consumer
+contracts, independent images and deployed transport/recovery suites. Final run
+status, JUnit totals, source/runtime bindings and downloaded artifact hashes are
+retained in `coverage/payments-section5-ci/latest.json` and its run directory;
+real-provider reports are `coverage/stripe-test-mode.json` and
+`coverage/stripe-test-cleanup.json`. Credentials and listener output remain outside
+published source. [PR #26](https://github.com/vamegah/order-management-platform/pull/26)
+contains this work. No Section 6 implementation is included.
