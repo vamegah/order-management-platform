@@ -120,7 +120,6 @@ public class PaymentController {
     public record ConfirmHttpRequest(
             @NotBlank @Pattern(regexp = "pm_[A-Za-z0-9_]{1,240}") String paymentMethodId) {}
 
-    @io.swagger.v3.oas.annotations.media.Schema(types = {"object", "null"})
     public record NextAction(String type, String clientSecret) {
         @Override
         public String toString() {
@@ -160,7 +159,8 @@ public class PaymentController {
                     String failureMessage,
             @io.swagger.v3.oas.annotations.media.Schema(types = {"string", "null"})
                     String requiresActionUrl,
-            @io.swagger.v3.oas.annotations.media.Schema(types = {"object", "null"})
+            @com.fasterxml.jackson.annotation.JsonInclude(
+                            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
                     NextAction nextAction) {
         static ChargeResponse from(ChargeOutcome o) {
             return new ChargeResponse(

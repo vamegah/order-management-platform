@@ -147,6 +147,11 @@ required `payments-e2e` CI job. Smaller local hosts are diagnostic; acceptance
 uses the declared Linux reference host. An explicit image-tag variable supports
 isolated local artifacts without replacing development images.
 
+Payment database connections use a two-second socket/connect bound and a
+one-second cancellation-connection bound. The receipt transaction also has a
+two-second deadline and a 1.5-second PostgreSQL statement limit. These bounds
+cover a paused database, where a SQL cancellation alone cannot reach the server.
+
 The durable notification drainer claims at most 100 due tasks per transaction,
 works for at most one second between transport calls, and stops on the first
 transport failure. Unattempted rows remain pending. Each charge can create three

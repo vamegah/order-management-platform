@@ -43,8 +43,11 @@ spring:
       connection-timeout: 2000
       validation-timeout: 1000
       data-source-properties:
-        socketTimeout: 5
+        # SQL deadlines also need bounded TCP reads and cancellation connections
+        # when the database process is paused or unreachable.
+        socketTimeout: 2
         connectTimeout: 2
+        cancelSignalTimeout: 1
       pool-name: payment-service-hikari
 
   # ----------------------------------------------------------------------------

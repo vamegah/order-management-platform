@@ -274,6 +274,7 @@ class Acceptance:
         try:yield
         finally:self.docker('unpause',identifier)
     def recovery(self):
+        self.observed={'recoveryStep':'provider-restart-and-refund-lookup'}
         self.control(dropCallbacks=True,delayMs=100)
         result,body=self.payment();identifier=result['paymentId'];assert result['result']=='confirmed'
         refund,_=self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds','POST',{'amountMinor':500,'reason':'recovery','idempotencyKey':str(uuid.uuid4())},expected=(202,))
@@ -282,18 +283,21 @@ class Acceptance:
         wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+refund['id'])[0]['refund']['status']=='COMPLETED')
         self.control(dropCallbacks=False)
         raw,headers=self.signed(self.callback(self.seed))
+        self.observed['recoveryStep']='database-unavailable-acknowledgment'
         with self.paused('postgres'):
             _,failed_ack=self.call(self.args.payment,'/api/v1/payments/webhooks/stripe','POST',role=None,headers=headers,raw=raw,expected=(503,),timeout=8)
             assert failed_ack<=self.profile['objectives']['durableFailureAckMaxMs']
         wait_for(lambda:self.read(identifier)['status']=='PARTIALLY_REFUNDED')
         self.call(self.args.payment,'/api/v1/payments/webhooks/stripe','POST',role=None,headers=headers,raw=raw)
         self.call(self.args.payment,'/api/v1/payments/webhooks/stripe','POST',role=None,headers=headers,raw=raw)
+        self.observed['recoveryStep']='broker-outage-and-outbox-conservation'
         with self.paused('kafka'):
             with ThreadPoolExecutor(max_workers=5) as pool:backlogged=list(pool.map(lambda _:self.payment(),range(20)))
             assert all(result['result']=='confirmed' for result,_ in backlogged)
             time.sleep(self.profile['workload']['databaseFaultSeconds'])
             backlog=self.backlog();assert backlog['outboxPending']>=20
         orders={body['orderId'] for _,body in backlogged};drain_start=time.monotonic()
+        self.observed['recoveryStep']='notification-restart-and-drain'
         self.docker('restart',self.containers['notification-service'])
         wait_for(lambda:orders<=self.subscriber.orders(),self.profile['objectives']['recoverySeconds'])
         wait_for(lambda:self.backlog()['outboxPending']==0 and self.backlog()['dispatchPending']==0)

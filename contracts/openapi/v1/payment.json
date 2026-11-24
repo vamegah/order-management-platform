@@ -85,11 +85,7 @@
             ]
           },
           "nextAction": {
-            "$ref": "#/components/schemas/NextAction",
-            "type": [
-              "object",
-              "null"
-            ]
+            "$ref": "#/components/schemas/NextAction"
           },
           "paymentId": {
             "format": "uuid",
@@ -138,10 +134,7 @@
             "type": "string"
           }
         },
-        "type": [
-          "object",
-          "null"
-        ]
+        "type": "object"
       },
       "PaymentResponse": {
         "properties": {

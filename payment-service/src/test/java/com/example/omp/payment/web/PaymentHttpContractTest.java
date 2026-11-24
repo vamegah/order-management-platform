@@ -84,12 +84,40 @@ class PaymentHttpContractTest {
                 .andExpect(status().is(status))
                 .andExpect(jsonPath("$.paymentId").value(id.toString()))
                 .andExpect(jsonPath("$.result").value(outcome))
+                .andExpect(jsonPath("$.nextAction").doesNotExist())
                 .andExpect(
                         jsonPath("$.requiresActionUrl").value("https://provider.example/action"));
         verify(payments)
                 .charge(
                         new PaymentApplicationService.ChargeCommand(
                                 order, owner, 1250, "USD", "stable-key"));
+    }
+
+    @Test
+    void sdkActionIsPrivateAndPresentOnlyForAnActionRequiredReply() throws Exception {
+        UUID order = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        when(payments.charge(any()))
+                .thenReturn(
+                        new PaymentApplicationService.ChargeOutcome(
+                                "requires_action",
+                                id,
+                                "pi_sca",
+                                null,
+                                null,
+                                null,
+                                "pi_sca_secret_fixture"));
+        mvc.perform(
+                        post("/api/v1/payments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"orderId\":\""
+                                                + order
+                                                + "\",\"amountMinor\":1250,\"currency\":\"USD\",\"idempotencyKey\":\"sca-key\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.nextAction.type").value("use_stripe_sdk"))
+                .andExpect(jsonPath("$.nextAction.clientSecret").value("pi_sca_secret_fixture"));
     }
 
     @Test
