@@ -436,16 +436,42 @@ class StripePaymentProviderTest {
                 .isEqualTo(ProviderChargeResult.Status.ERROR);
     }
 
-    @Test
-    void aCorrelatedHttp402RetainsTheProviderIntentForDuplicateCallbacks() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void aCorrelatedHttp402RetainsTheProviderIntentForDuplicateCallbacks(boolean clearedMethod) {
         var response = new ObjectMapper().createObjectNode();
-        response.putObject("error")
-                .set("payment_intent", chargeResponse("requires_payment_method"));
+        var intent = chargeResponse("requires_payment_method");
+        if (clearedMethod) {
+            intent.putNull("payment_method");
+            intent.withObject("last_payment_error")
+                    .putObject("payment_method")
+                    .put("id", "pm_clientToken");
+        }
+        response.putObject("error").set("payment_intent", intent);
         wireMock.stubFor(
                 post(urlEqualTo("/v1/payment_intents"))
                         .willReturn(aResponse().withStatus(402).withBody(response.toString())));
         var result = provider.charge(chargeRequest(null));
         assertThat(result.status()).isEqualTo(ProviderChargeResult.Status.DECLINED);
         assertThat(result.providerReference()).isEqualTo("pi_verified");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "requires_payment_method,wrong",
+        "requires_payment_method,missing",
+        "succeeded,matching"
+    })
+    void clearedMethodCannotBindAnotherTokenOrProveCapture(String status, String token) {
+        var intent = chargeResponse(status);
+        intent.putNull("payment_method");
+        if (!token.equals("missing"))
+            intent.withObject("last_payment_error")
+                    .putObject("payment_method")
+                    .put("id", token.equals("matching") ? "pm_clientToken" : "pm_other");
+        wireMock.stubFor(
+                post(urlEqualTo("/v1/payment_intents")).willReturn(okJson(intent.toString())));
+        assertThat(provider.charge(chargeRequest(null)).status())
+                .isEqualTo(ProviderChargeResult.Status.ERROR);
     }
 }

@@ -254,6 +254,12 @@ public class StripePaymentProvider implements PaymentProvider {
     // -----------------------------------------------------------------------
 
     private static boolean matchesCharge(ChargeRequest request, JsonNode response) {
+        JsonNode method = response.path("payment_method");
+        // Stripe clears the active method after a decline. The failed attempt's
+        // token remains inside last_payment_error; it cannot prove a capture.
+        if ((method.isNull() || method.isMissingNode())
+                && "requires_payment_method".equals(response.path("status").asText()))
+            method = response.path("last_payment_error").path("payment_method").path("id");
         return response.path("id").asText("").matches("pi_[A-Za-z0-9_]{1,240}")
                 && (request.providerReference() == null
                         || request.providerReference().equals(response.path("id").asText()))
@@ -271,8 +277,7 @@ public class StripePaymentProvider implements PaymentProvider {
                         .toString()
                         .equals(response.path("metadata").path("customer_id").asText(""))
                 && (request.paymentMethodId() == null
-                        || request.paymentMethodId()
-                                .equals(response.path("payment_method").asText("")));
+                        || request.paymentMethodId().equals(method.asText("")));
     }
 
     private ProviderChargeResult classifyCharge(JsonNode response) {

@@ -102,9 +102,7 @@ public class ProviderFixtureLedger {
             payment.putObject("next_action").put("type", "use_stripe_sdk");
         }
         if ("requires_payment_method".equals(status))
-            payment.putObject("last_payment_error")
-                    .put("decline_code", "card_declined")
-                    .put("message", "Payment method declined");
+            decline(payment, "card_declined", "Payment method declined");
         if ("processing".equals(status))
             payment.put("_completeAt", System.currentTimeMillis() + delay())
                     .put(
@@ -185,6 +183,16 @@ public class ProviderFixtureLedger {
         return publicResource(row);
     }
 
+    private void decline(ObjectNode payment, String code, String message) {
+        String method = payment.path("payment_method").asText();
+        payment.putNull("payment_method");
+        payment.putObject("last_payment_error")
+                .put("decline_code", code)
+                .put("message", message)
+                .putObject("payment_method")
+                .put("id", method);
+    }
+
     public synchronized JsonNode complete(String id, boolean success) {
         ObjectNode stored = resources.get(id);
         ObjectNode row = stored == null ? null : stored.deepCopy();
@@ -194,10 +202,7 @@ public class ProviderFixtureLedger {
             throw bad("Action is not pending");
         row.put("status", success ? "succeeded" : "requires_payment_method");
         row.remove("next_action");
-        if (!success)
-            row.putObject("last_payment_error")
-                    .put("decline_code", "authentication_failed")
-                    .put("message", "Authentication failed");
+        if (!success) decline(row, "authentication_failed", "Authentication failed");
         enqueue(row, eventType(row), delay());
         save(row);
         resources.put(id, row);
@@ -292,6 +297,8 @@ public class ProviderFixtureLedger {
             if (row.has("_completeAt") && row.path("_completeAt").asLong() <= now) {
                 row.put("status", row.path("_finalStatus").asText());
                 row.remove("_completeAt");
+                if (row.path("status").asText().equals("requires_payment_method"))
+                    decline(row, "card_declined", "Payment method declined");
                 if (row.path("status").asText().equals("failed"))
                     row.put("failure_reason", "declined");
                 enqueueAt(row, eventType(row), now);

@@ -286,4 +286,25 @@ class ProviderFixtureLedgerTest {
                 .isEqualTo("pending");
         assertThat(controller.stats().get("payments")).isEqualTo(1L);
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {"pm_decline", "pm_fail_late", "pm_action"})
+    void failedAttemptsClearTheActiveMethodButRetainTheCorrelatedToken(String method)
+            throws Exception {
+        var ledger = ledger();
+        ledger.configure(mapper.readTree("{\"delayMs\":0}"));
+        var request = payment(method);
+        var intent = ledger.charge(request, "failed-method-shape");
+        String id = intent.path("id").asText();
+        if (method.equals("pm_action")) ledger.complete(id, false);
+        else ledger.due();
+        var failed = ledger().get(id);
+        assertThat(failed.path("status").asText()).isEqualTo("requires_payment_method");
+        assertThat(failed.path("payment_method").isNull()).isTrue();
+        assertThat(failed.path("last_payment_error").path("payment_method").path("id").asText())
+                .isEqualTo(method);
+        assertThat(ledger.charge(request, "failed-method-shape").path("id").asText()).isEqualTo(id);
+        assertThat(ledger.stats().get("payments")).isEqualTo(1L);
+    }
 }
