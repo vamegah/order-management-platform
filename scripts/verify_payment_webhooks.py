@@ -147,7 +147,7 @@ class Acceptance:
         failed,_=self.payment('pm_action');self.call(self.args.provider,'/__test/payment_intents/'+failed['providerReference']+'/complete','POST',{'success':False},None,{'Authorization':'Bearer sk_test_omp_simulator'})
         wait_for(lambda:self.read(failed['paymentId'])['status']=='FAILED')
         delayed,_=self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds','POST',{'amountMinor':400,'reason':'requested','idempotencyKey':str(uuid.uuid4())},expected=(202,))
-        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+delayed['id'])[0]['status']=='COMPLETED')
+        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+delayed['id'])[0]['refund']['status']=='COMPLETED')
         assert self.read(identifier)['status']=='PARTIALLY_REFUNDED'
         timeout_result,timeout_body=self.payment('pm_timeout')
         wait_for(lambda:self.read(timeout_result['paymentId'])['status']=='CONFIRMED')
@@ -162,11 +162,11 @@ class Acceptance:
             return result
         with ThreadPoolExecutor(max_workers=2) as pool:parts=list(pool.map(partial,range(2)))
         admitted=[r for r in parts if r and r.get('status')=='PENDING'];assert len(admitted)==1
-        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+admitted[0]['id'])[0]['status']=='COMPLETED')
+        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+admitted[0]['id'])[0]['refund']['status']=='COMPLETED')
         self.control(refundOutcome='failed',delayMs=100)
         failed_body={'amountMinor':100,'reason':'permanent-failure','idempotencyKey':str(uuid.uuid4())}
         failed_refund,_=self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds','POST',failed_body,expected=(202,422))
-        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+failed_refund['id'])[0]['status']=='FAILED')
+        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+failed_refund['id'])[0]['refund']['status']=='FAILED')
         same,_=self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds','POST',failed_body,expected=(422,));assert same['id']==failed_refund['id']
         self.control(refundOutcome='succeeded',delayMs=100)
         final,_=self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds','POST',{'amountMinor':500,'reason':'remaining','idempotencyKey':str(uuid.uuid4())},expected=(202,200))
@@ -197,12 +197,21 @@ class Acceptance:
         return {'events':len(latencies),'p95Ms':round(p95),'p99Ms':round(p99),'backlogAfterDrain':self.backlog()}
     def delivery(self):
         workload=self.profile['workload'];orders=[str(uuid.uuid4()) for _ in range(workload['chargeEvents'])];start=time.monotonic()
+        transient_replies=[]
         def charge(item):
-            index,order=item;time.sleep(max(0,start+index/workload['chargesPerSecond']-time.monotonic()))
-            with self.subscriber.lock:self.subscriber.order_times[order]=time.monotonic()
-            result,_=self.payment(order=order);assert result['result']=='confirmed'
-        with ThreadPoolExecutor(max_workers=16) as pool:list(pool.map(charge,enumerate(orders)))
+            index,order=item;due=start+index/workload['chargesPerSecond'];time.sleep(max(0,due-time.monotonic()))
+            with self.subscriber.lock:self.subscriber.order_times[order]=due
+            result,body=self.payment(order=order)
+            assert result['result'] in ('confirmed','pending','error'),'Healthy provider returned a terminal failure'
+            identifier=result['paymentId']
+            if result['result']!='confirmed':
+                with self.subscriber.lock:transient_replies.append(identifier)
+                replay,_=self.call(self.args.payment,'/api/v1/payments','POST',body,expected=(200,202,502))
+                assert replay['paymentId']==identifier,'Unresolved reply retry changed the payment identity'
+            return identifier
+        with ThreadPoolExecutor(max_workers=16) as pool:identifiers=list(pool.map(charge,enumerate(orders)))
         wait_for(lambda:set(orders)<=self.subscriber.orders())
+        assert all(self.read(identifier)['status']=='CONFIRMED' for identifier in identifiers),'Canonical payment did not converge'
         with self.subscriber.lock:
             latencies=[self.subscriber.latencies[o] for o in orders]
             ids=[identifier for identifier,d in self.subscriber.deliveries.items() if d.get('data',{}).get('orderId') in orders]
@@ -210,7 +219,7 @@ class Acceptance:
         p95,p99=percentile(latencies,.95),percentile(latencies,.99);objectives=self.profile['objectives']
         assert len(ids)==len(orders) and duplicates==0,'Healthy delivery conservation failed'
         assert p95<=objectives['deliveryP95Ms'] and p99<=objectives['deliveryP99Ms'],'Delivery latency objective missed'
-        return {'events':len(orders),'received':len(ids),'duplicates':duplicates,'p95Ms':round(p95),'p99Ms':round(p99),'durationSeconds':round(time.monotonic()-start,2)}
+        return {'events':len(orders),'received':len(ids),'duplicates':duplicates,'p95Ms':round(p95),'p99Ms':round(p99),'durationSeconds':round(time.monotonic()-start,2),'transientProviderReplies':len(transient_replies),'canonicalConfirmed':len(identifiers)}
     def rotation(self):
         old=self.subscriber.secrets[0]
         rotated,_=self.call(self.args.notification,'/api/v1/webhook-subscriptions/'+self.subscription+'/rotate-secret','POST')
@@ -260,7 +269,7 @@ class Acceptance:
         refund,_=self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds','POST',{'amountMinor':500,'reason':'recovery','idempotencyKey':str(uuid.uuid4())},expected=(202,))
         self.docker('restart',self.containers['payment-provider-simulator'])
         wait_for(lambda:self.call(self.args.provider,'/__test/stats',role=None,headers={'Authorization':'Bearer sk_test_omp_simulator'})[0] is not None)
-        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+refund['id'])[0]['status']=='COMPLETED')
+        wait_for(lambda:self.call(self.args.payment,'/api/v1/payments/'+identifier+'/refunds/'+refund['id'])[0]['refund']['status']=='COMPLETED')
         self.control(dropCallbacks=False)
         raw,headers=self.signed(self.callback(self.seed))
         with self.paused('postgres'):

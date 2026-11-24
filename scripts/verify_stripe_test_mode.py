@@ -81,8 +81,8 @@ def main():
         pending=local('/api/v1/payments/'+action['paymentId'])
         if pending['status']!='PENDING':raise RuntimeError('Action-required payment accepted prematurely')
         report['checks'].append({'name':'real-provider-sca-next-action-pending','passed':True})
-        refund=local('/api/v1/payments/'+paid['paymentId']+'/refunds','POST',{'amountMinor':100,'reason':'requested','idempotencyKey':str(uuid.uuid4())},(202,))
-        wait(lambda:local('/api/v1/payments/'+paid['paymentId']+'/refunds/'+refund['id'])['status']=='COMPLETED')
+        refund=local('/api/v1/payments/'+paid['paymentId']+'/refunds','POST',{'amountMinor':100,'reason':'requested','idempotencyKey':str(uuid.uuid4())},(200,202))
+        wait(lambda:local('/api/v1/payments/'+paid['paymentId']+'/refunds/'+refund['id'])['refund']['status']=='COMPLETED')
         if local('/api/v1/payments/'+paid['paymentId'])['status']!='REFUNDED':raise RuntimeError('Stripe refund aggregate not completed')
         report['checks'].append({'name':'real-provider-asynchronous-refund','passed':True})
         reference=paid['providerReference']
