@@ -6,7 +6,9 @@ TLS="${BANK_TLS_DIR:-$ROOT/infrastructure/tls}"
 SECRETS="${BANK_DEVELOPMENT_SECRETS:-$ROOT/infrastructure/secrets/banking}"
 umask 027
 mkdir -p "$SECRETS/bank" "$SECRETS/adapter" "$SECRETS/postgres"
-bash "$ROOT/scripts/ci-setup.sh" --output "$TLS" >/dev/null
+# Shared public TLS projections retain traversable directories/readable certificates.
+# Private keys and the banking configtree keep their separate restrictive permissions.
+(umask 022; bash "$ROOT/scripts/ci-setup.sh" --output "$TLS" >/dev/null)
 BANK="$TLS/legacy-bank-service"
 mkdir -p "$BANK/trust"
 if [[ ! -e "$BANK/tls.key" && ! -e "$BANK/tls.crt" ]]; then

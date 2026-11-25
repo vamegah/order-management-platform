@@ -21,6 +21,13 @@ class BankingSetupTest(unittest.TestCase):
                     self.assertTrue(file.stat().st_size>0);self.assertEqual(file.stat().st_mode & 0o007,0)
                     self.assertNotIn(file.read_bytes(),first.stdout+first.stderr+second.stdout+second.stderr)
             self.assertTrue((directory/'tls/legacy-bank-service/trust/truststore.p12').is_file())
+            # Banking setup also prepares the shared gRPC projections. A different
+            # application UID must traverse the directory and read its public cert.
+            for service in ('order-service','inventory-service','payment-service'):
+                projection=directory/'tls'/service
+                self.assertTrue(projection.stat().st_mode & 0o001)
+                self.assertTrue((projection/'tls.crt').stat().st_mode & 0o004)
+                self.assertEqual((projection/'tls.key').stat().st_mode & 0o007,0)
     def test_partial_or_mismatched_credentials_are_not_silently_replaced(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory=Path(temporary);self.assertEqual(self.setup_fixture(directory).returncode,0)
