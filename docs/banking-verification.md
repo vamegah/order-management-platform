@@ -19,5 +19,12 @@ REST/auth/faults/duplicates, WS-Security/replay, lost replies/forced process dea
 retry/breaker/deadline behavior, credential rotation, CA rotation, and bounded
 load/metrics/redaction. Reports bind results to source and runtime image IDs and
 reject skipped/missing phases or unsuccessful cleanup. CI retains no keys or
-configtree credentials. Final executed results are recorded when verification
-finishes; implementation alone does not close the backlog checkboxes.
+configtree credentials. [All seven phases pass](https://github.com/vamegah/order-management-platform/actions/runs/45544438733), including cleanup and source/runtime binding.
+100 healthy balance reads at eight clients pass with 455.40 ms p95; the 20-call failure burst finishes within 4,257.77 ms. The bank has two CPU cores and the adapter one, with 512 MiB each.
+The objectives remain those declared before measurements.
+
+The focused local builds pass 59 bank and 50 adapter cases, plus 45 shared cases;
+counts overlap successive builds. All 74 tooling regressions pass. Full-workflow
+results, JUnit totals, runtime bindings and artifact hashes are retained under
+`coverage/soap-section6-ci`, with the final record in `latest.json`.
+[PR #27](https://github.com/vamegah/order-management-platform/pull/27) contains the implementation. Section 7 remains separate.
