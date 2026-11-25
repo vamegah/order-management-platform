@@ -155,9 +155,10 @@ class Acceptance:
         return result['status'],base64.b64decode(result['body'])
     def assert_tls_rejected(self,ca,hostname='legacy-bank-service'):
         result=self.native_probe('reject',ca,hostname=hostname)
+        self.report.setdefault('tlsRejections',[]).append({'hostname':hostname,**result});self.persist()
         assert result['rejected']
         if hostname!='legacy-bank-service':assert result['verifyCode'] in (62,64)
-        else:assert result['verifyCode'] in (20,21)
+        else:assert result['verifyCode'] in (19,20,21) # Untrusted full chain or unverifiable issuer/leaf.
     def validate_runtime(self):
         revision=self.run(['git','-c','safe.directory='+ROOT.as_posix(),'rev-parse','HEAD']).decode().strip()
         dirty=bool(self.run(['git','-c','safe.directory='+ROOT.as_posix(),'status','--porcelain']).strip())

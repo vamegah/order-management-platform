@@ -16,10 +16,20 @@ import org.springframework.context.annotation.Import;
 @Import(PublishedApiConfiguration.class)
 public class OpenApiConfig {
     @Bean
-    public OpenApiCustomizer bankingAuthenticationProblems() {
+    public OpenApiCustomizer bankingProblemResponses() {
         return document -> {
             for (var path : document.getPaths().values()) {
                 for (var operation : path.readOperations()) {
+                    // Two advice methods contribute these responses; their reflection
+                    // order differs between runtimes, so publish one stable description.
+                    operation
+                            .getResponses()
+                            .get("409")
+                            .setDescription("Conflicting transfer identity");
+                    operation
+                            .getResponses()
+                            .get("503")
+                            .setDescription("Banking service unavailable");
                     for (String status : List.of("401", "403")) {
                         var schema = new Schema<>().$ref("#/components/schemas/ProblemDetail");
                         var content =
