@@ -28,6 +28,16 @@ class BankingFaultResolverTest {
                 .doesNotContain("password", "secret");
     }
 
+    @Test
+    void securityValidationUsesStructuredAuthenticationCodeWithoutPrivateReason() throws Exception {
+        assertThat(
+                        detail(
+                                new org.springframework.ws.soap.security
+                                        .WsSecurityValidationException("password=private") {}))
+                .contains("UPSTREAM_AUTHENTICATION", "Bank authentication rejected")
+                .doesNotContain("password", "private");
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(
             strings = {

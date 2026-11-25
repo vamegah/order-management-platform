@@ -122,7 +122,28 @@ class BankingSoapBoundaryTest {
         for (String password : new String[] {null, "incorrect-password"}) {
             var template = client(password);
             assertThatThrownBy(() -> template.marshalSendAndReceive(balanceRequest("ACC-1")))
-                    .isInstanceOf(SoapFaultClientException.class);
+                    .isInstanceOfSatisfying(
+                            SoapFaultClientException.class,
+                            fault -> {
+                                assertThat(fault.getSoapFault().getFaultStringOrReason())
+                                        .isEqualTo("Bank authentication rejected");
+                                var rendered = new org.springframework.xml.transform.StringResult();
+                                try {
+                                    javax.xml.transform.TransformerFactory.newInstance()
+                                            .newTransformer()
+                                            .transform(
+                                                    fault.getSoapFault()
+                                                            .getFaultDetail()
+                                                            .getSource(),
+                                                    rendered);
+                                } catch (Exception serializationFailure) {
+                                    throw new AssertionError(serializationFailure);
+                                }
+                                assertThat(rendered.toString())
+                                        .contains("UPSTREAM_AUTHENTICATION")
+                                        .doesNotContain(
+                                                "incorrect-password", "boundary-test-password");
+                            });
         }
         assertThat(
                         db.queryForObject(

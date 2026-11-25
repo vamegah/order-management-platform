@@ -155,9 +155,23 @@
             "description": "Invalid banking request"
           },
           "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
             "description": "Missing or invalid authentication credentials."
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
             "description": "The authenticated identity is not authorized for this operation."
           },
           "404": {
@@ -178,7 +192,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflicting transfer identity"
           },
           "422": {
             "content": {
@@ -218,7 +232,7 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Banking service unavailable"
           },
           "504": {
             "content": {
@@ -282,9 +296,23 @@
             "description": "Invalid banking request"
           },
           "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
             "description": "Missing or invalid authentication credentials."
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
             "description": "The authenticated identity is not authorized for this operation."
           },
           "404": {
@@ -305,7 +333,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflicting transfer identity"
           },
           "422": {
             "content": {
@@ -345,7 +373,7 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Banking service unavailable"
           },
           "504": {
             "content": {

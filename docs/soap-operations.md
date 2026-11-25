@@ -52,6 +52,8 @@ The production overlay mounts `/etc/omp/secrets/bank-ledger`,
 `/etc/omp/tls/legacy-bank-service` and `/etc/omp/trust/bank`. Override their paths
 with BANK_LEDGER_SECRETS_DIR, BANK_ADAPTER_SECRETS_DIR,
 BANK_DATABASE_SECRETS_DIR, BANK_TLS_DIRECTORY and BANK_TRUST_DIRECTORY.
+Match bootstrap directory/file ownership to the production PostgreSQL image
+(which differs from the development Alpine image); application mounts use GID 1000.
 Database URLs/users are BANK_DB_URL/BANK_DB_USER and
 BANK_ADAPTER_DB_URL/BANK_ADAPTER_DB_USER. BANK_WS_URL selects the trusted HTTPS
 endpoint; BANK_TRUST_STORE selects the mounted PKCS12 truststore. No production
@@ -156,3 +158,5 @@ material stays under ignored `coverage/soap-fixtures`; retained evidence is
 limited to `coverage/soap-acceptance` and redacts generated secrets. Required CI
 checks source revision, runtime images, all seven phases, JUnit and cleanup.
 See [the predeclared objectives](soap-acceptance-objectives.md).
+The harness allows up to 240 seconds for cold restart/ingress convergence; this
+does not change the per-request deadlines or measured latency objectives.

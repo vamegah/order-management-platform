@@ -30,8 +30,9 @@ Types use the prefix `urn:problem:`. The bank publishes namespaced
 in the frozen v1 schema. The adapter reads exact structured codes, never matches
 text in a SOAP fault reason. Unknown reversal-only codes also map to 502; reversal
 is a SOAP operation and has no public REST route. Authentication faults from the
-SOAP authority are upstream failures; they do not ask the REST caller to supply
-bank passwords.
+SOAP authority use a structured UPSTREAM_AUTHENTICATION detail (including the
+Spring-WS generic Client fault path). They are upstream failures and do not ask
+the REST caller to supply bank passwords.
 
 A timeout never asserts that a transfer failed financially. Retry it with the
 same JWT principal, Idempotency-Key and payload. Durable request/result records

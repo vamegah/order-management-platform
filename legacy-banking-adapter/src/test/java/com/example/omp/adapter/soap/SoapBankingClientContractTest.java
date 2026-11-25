@@ -157,16 +157,22 @@ class SoapBankingClientContractTest {
         mockServer.verify();
     }
 
-    @Test
-    void securityFaultHasAStableCodeWithoutExposingSoapReason() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void securityFaultHasAStableCodeWithoutExposingSoapReason(boolean structured) {
+        String response =
+                structured
+                        ? """
+          <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault><faultcode>s:Client</faultcode><faultstring>password=private</faultstring><detail><BankingFault xmlns="http://legacybank.example.com/ws"><code>UPSTREAM_AUTHENTICATION</code><message>Bank authentication rejected</message></BankingFault></detail></s:Fault></s:Body></s:Envelope>
+          """
+                        : """
+          <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"><s:Body><s:Fault><faultcode>wsse:FailedAuthentication</faultcode><faultstring>password=private</faultstring></s:Fault></s:Body></s:Envelope>
+          """;
         mockServer
                 .expect((uri, message) -> {})
                 .andRespond(
                         org.springframework.ws.test.client.ResponseCreators.withSoapEnvelope(
-                                new StringSource(
-                                        """
-          <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"><s:Body><s:Fault><faultcode>wsse:FailedAuthentication</faultcode><faultstring>password=private</faultstring></s:Fault></s:Body></s:Envelope>
-          """)));
+                                new StringSource(response)));
         assertThatThrownBy(() -> bankingClient.getBalance("ACC-1"))
                 .isInstanceOfSatisfying(
                         BankingException.class,

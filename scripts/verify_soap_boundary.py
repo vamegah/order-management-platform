@@ -85,7 +85,7 @@ class Acceptance:
         def recovered():
             value=self.balance()
             return value if self.state('closed') else None
-        return wait_for(recovered)
+        return wait_for(recovered,240)
     def restart(self,service,kill=False):
         assert service in ('legacy-bank-service','legacy-banking-adapter')
         if kill:self.dc('kill','-s','SIGKILL',service)
@@ -126,7 +126,7 @@ class Acceptance:
     def expect_backend_auth_failure(self):
         # A restarting facade briefly produces Traefik's own 502. First prove
         # ingress reaches the application's authentication filter without SOAP.
-        wait_for(lambda:self.http('/api/v1/banking/accounts/ACC-1/balance',role=None)[0]==401)
+        wait_for(lambda:self.http('/api/v1/banking/accounts/ACC-1/balance',role=None)[0]==401,240)
         def failed():
             result=self.http('/api/v1/banking/accounts/ACC-1/balance')
             return result if result[0]==502 else None
@@ -201,16 +201,30 @@ class Acceptance:
             valid=self.envelope();assert self.soap(valid)[0]==200
             assert self.soap(valid)[0]!=200
             self.restart('legacy-bank-service');assert self.soap(valid)[0]!=200
-            invalid=[self.envelope(password='invalid-password'),self.envelope(username='unknown-user'),self.envelope(offset=-180),self.envelope(offset=180),self.envelope(nonce=False),self.envelope(timestamp=False),self.envelope(digest=True)]
-            invalid.append(re.sub(rb'<wsse:Nonce[^>]*>[^<]*</wsse:Nonce>',b'<wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">invalid_base64_nonce!</wsse:Nonce>',self.envelope()))
-            missing=b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><GetAccountBalanceRequest xmlns="http://legacybank.example.com/ws"><accountNumber>ACC-1</accountNumber></GetAccountBalanceRequest></s:Body></s:Envelope>'
-            for message in [*invalid,missing]:assert self.soap(message)[0]!=200
+            # Create each token immediately before its probe so slow container
+            # startup cannot turn a missing-password/nonce case into an expiry test.
+            invalid={
+                'bad-password':lambda:self.envelope(password='invalid-password'),
+                'unknown-user':lambda:self.envelope(username='unknown-user'),
+                'expired':lambda:self.envelope(offset=-180),
+                'future':lambda:self.envelope(offset=180),
+                'missing-nonce':lambda:self.envelope(nonce=False),
+                'missing-timestamp':lambda:self.envelope(timestamp=False),
+                'password-digest':lambda:self.envelope(digest=True),
+                'missing-password':lambda:re.sub(rb'<wsse:Password[^>]*>[^<]*</wsse:Password>',b'',self.envelope()),
+                'malformed-nonce':lambda:re.sub(rb'<wsse:Nonce[^>]*>[^<]*</wsse:Nonce>',b'<wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">invalid_base64_nonce!</wsse:Nonce>',self.envelope()),
+                'missing-security':lambda:b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><GetAccountBalanceRequest xmlns="http://legacybank.example.com/ws"><accountNumber>ACC-1</accountNumber></GetAccountBalanceRequest></s:Body></s:Envelope>',
+            }
+            phase['rejectedCredentialStatuses']={}
+            for name,message in invalid.items():
+                status=self.soap(message())[0];phase['rejectedCredentialStatuses'][name]=status
+                assert status!=200,name
             self.assert_tls_rejected(ROOT/'coverage/soap-fixtures/tls/ca/ca.crt','wrong-bank.example.invalid')
             original=(self.adapter/'bank.ws.password').read_bytes();bad_password=secrets.token_hex(24);self.sensitive.append(bad_password)
             self.write(self.adapter/'bank.ws.password',bad_password)
             self.dc('restart','legacy-banking-adapter');self.expect_backend_auth_failure()
             self.write(self.adapter/'bank.ws.password',original);self.restart('legacy-banking-adapter')
-            phase.update(rejectedCredentialCases=len(invalid)+1,replayedMessagesRejected=2,hostnameMismatchRejected=True,adapterCredentialFaultStatus=502,authenticationAttempts=1)
+            phase.update(rejectedCredentialCases=len(invalid),replayedMessagesRejected=2,hostnameMismatchRejected=True,adapterCredentialFaultStatus=502,authenticationAttempts=1)
         with self.phase('lost-reply-and-forced-process-recovery') as phase:
             key=uuid.uuid4().hex;body={'fromAccount':'ACC-1','toAccount':'ACC-2','amount':2.34,'currency':'USD','reference':'lost-response-'+key}
             before=float(self.balance()['balance']);attempts=self.metric('banking_soap_attempts_total','transfer')

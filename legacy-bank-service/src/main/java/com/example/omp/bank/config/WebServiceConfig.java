@@ -88,6 +88,12 @@ public class WebServiceConfig implements WsConfigurer {
         interceptor.setValidationTimeToLive(60);
         interceptor.setFutureTimeToLive(5);
         interceptor.setRemoveSecurityHeader(false);
+        var securityFaults = new BankingFaultResolver();
+        var rejected = new SoapFaultDefinition();
+        rejected.setFaultCode(SoapFaultDefinition.CLIENT);
+        rejected.setFaultStringOrReason("Bank authentication rejected");
+        securityFaults.setDefaultFault(rejected);
+        interceptor.setExceptionResolver(securityFaults);
         return interceptor;
     }
 

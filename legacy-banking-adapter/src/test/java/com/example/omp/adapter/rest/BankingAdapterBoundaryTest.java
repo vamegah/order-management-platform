@@ -176,6 +176,39 @@ class BankingAdapterBoundaryTest {
         bank.verify();
     }
 
+    @Test
+    void publishedAuthenticationResponsesDescribeTheActualProblemBodies() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var document = mapper.readTree(http.getForObject("/v3/api-docs", String.class));
+        for (var path : document.get("paths")) {
+            for (var operation : path) {
+                for (String status : java.util.List.of("401", "403")) {
+                    assertThat(
+                                    operation
+                                            .path("responses")
+                                            .path(status)
+                                            .path("content")
+                                            .path("application/problem+json")
+                                            .path("schema")
+                                            .path("$ref")
+                                            .asText())
+                            .isEqualTo("#/components/schemas/ProblemDetail");
+                }
+            }
+        }
+        http.getRestTemplate().setInterceptors(java.util.List.of());
+        var rejected = http.getForEntity("/api/v1/banking/accounts/ACC-1/balance", String.class);
+        assertThat(rejected.getStatusCode().value()).isEqualTo(401);
+        assertThat(rejected.getHeaders().getContentType().toString())
+                .startsWith("application/problem+json");
+        assertThat(mapper.readTree(rejected.getBody()).path("type").asText())
+                .isEqualTo("urn:problem:unauthorized");
+        bank.verify();
+        // Retain the independent live producer export; no checked-in fixture is read.
+        java.nio.file.Files.writeString(
+                java.nio.file.Path.of("target", "soap-boundary-openapi.json"), document.toString());
+    }
+
     private javax.xml.namespace.QName identityHeader() {
         try {
             var contract =
