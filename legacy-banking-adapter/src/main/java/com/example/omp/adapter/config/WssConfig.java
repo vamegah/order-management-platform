@@ -19,6 +19,10 @@ public class WssConfig {
         interceptor.setSecurementUsername(username);
         interceptor.setSecurementPassword(password);
         interceptor.setSecurementPasswordType("PasswordText");
+        if (username.isBlank() || password.isBlank())
+            throw new IllegalStateException("Bank credentials must be mounted");
+        interceptor.setSecurementUsernameTokenNonce(true);
+        interceptor.setSecurementUsernameTokenCreated(true);
         interceptor.setSecurementTimeToLive(60); // seconds
         return interceptor;
     }

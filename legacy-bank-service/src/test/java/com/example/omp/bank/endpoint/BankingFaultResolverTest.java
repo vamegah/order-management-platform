@@ -28,6 +28,35 @@ class BankingFaultResolverTest {
                 .doesNotContain("password", "secret");
     }
 
+    @Test
+    void securityValidationUsesStructuredAuthenticationCodeWithoutPrivateReason() throws Exception {
+        assertThat(
+                        detail(
+                                new org.springframework.ws.soap.security
+                                        .WsSecurityValidationException("password=private") {}))
+                .contains("UPSTREAM_AUTHENTICATION", "Bank authentication rejected")
+                .doesNotContain("password", "private");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "INVALID_REQUEST",
+                "INVALID_ACCOUNT_FORMAT",
+                "DAILY_LIMIT_EXCEEDED",
+                "UNSUPPORTED_CURRENCY",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_NOT_FOUND",
+                "ALREADY_REVERSED",
+                "ACCOUNT_NOT_FOUND",
+                "UPSTREAM_ERROR"
+            })
+    void allFaultDetailsUseFixedPublicMessages(String code) throws Exception {
+        assertThat(detail(new BankingFaultException(code, "password=private-implementation")))
+                .contains("<code>" + code + "</code>")
+                .doesNotContain("password", "private-implementation");
+    }
+
     private String detail(Exception exception) throws Exception {
         var factory = new SaajSoapMessageFactory();
         factory.afterPropertiesSet();

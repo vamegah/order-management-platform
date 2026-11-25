@@ -1,68 +1,30 @@
 # Banking boundary verification
 
-> **Status:** Implemented locally; deployed TLS and operational acceptance pending
-> **Last reviewed:** 2026-10-29
+Section 6 implements a durable bank ledger and adapter request store, trusted
+TLS/WS-Security, fixed REST errors and bounded resilience. The frozen v1 SOAP
+contract remains unchanged. See [the operations runbook](soap-operations.md),
+[fault contract](soap-fault-contract.md) and
+[predeclared deployed objectives](soap-acceptance-objectives.md).
 
-Both banking modules now measure all handwritten production code and enforce
-80% instruction coverage. Only generated `com.omp.bank.soap` JAXB classes are
-excluded. They also participate in the per-module PR coverage regression check.
-See [quality gates](quality-gates.md) for the separate measurement phases.
+Both modules measure all handwritten production code and enforce at least 80%
+instruction coverage, plus the existing per-module PR coverage regression gate.
+Only generated JAXB classes are excluded. Unit and real HTTP/SOAP tests cover
+ledger atomicity, concurrent duplicates, durable declines, reversal rollback,
+credential and nonce rejection, transport classification, breaker transitions,
+public error redaction and unsafe client configuration.
 
-The bank application's corrected package enables normal component scanning of
-its ledger, SOAP endpoints and security configuration. The adapter's retry
-configuration now references the actual exception class, allowing its production
-application context to start.
+Required `soap-e2e` acceptance independently packages both processes and starts
+fresh PostgreSQL, Keycloak and Traefik. It exercises all seven deployment phases:
+REST/auth/faults/duplicates, WS-Security/replay, lost replies/forced process death,
+retry/breaker/deadline behavior, credential rotation, CA rotation, and bounded
+load/metrics/redaction. Reports bind results to source and runtime image IDs and
+reject skipped/missing phases or unsuccessful cleanup. CI retains no keys or
+configtree credentials. [All seven phases pass](https://github.com/vamegah/order-management-platform/actions/runs/45544438733), including cleanup and source/runtime binding.
+100 healthy balance reads at eight clients pass with 455.40 ms p95; the 20-call failure burst finishes within 4,257.77 ms. The bank has two CPU cores and the adapter one, with 512 MiB each.
+The objectives remain those declared before measurements.
 
-The bank's structured fault resolver now runs before the generic Spring-WS
-resolver. Business failures therefore retain their namespaced BankingFault
-detail at the real HTTP boundary, matching the existing fault contract.
-
-## SOAP authentication
-
-The bank requires WS-Security UsernameToken and Timestamp. Its user directory
-continues to store encoded passwords. PasswordText tokens now use Spring's
-PasswordEncoder to verify the incoming password against that encoded value.
-Unknown, disabled, locked or expired users fail authentication. Digest, custom
-and passwordless token types are rejected. Timestamp validation still requires
-a fresh timestamp with a 60-second TTL.
-
-The default WSS4J validator compares PasswordText with the callback's returned
-password directly; it does not interpret a Spring password encoding prefix.
-The custom validator supplies that integration through WSS4J's validation hook.
-See [the WSS4J validator source](https://ws.apache.org/wss4j/xref/org/apache/wss4j/dom/validate/UsernameTokenValidator.html)
-and [Spring password storage](https://docs.spring.io/spring-security/reference/6.5/features/authentication/password-storage.html).
-
-PasswordText requires trusted TLS in deployment. The HTTP tests explicitly
-disable TLS for local socket verification; they do not establish certificate,
-truststore, hostname-validation or rotation acceptance. Existing simulator
-credential/keystore defaults remain development settings.
-
-## Executed boundary scope
-
-`BankingSoapBoundaryTest` starts the actual bank application and calls it over a
-local HTTP socket using JAXB and WS-Security. It exercises transfer, balance,
-reversal, repeated-reversal rejection, structured business faults, WSDL publication,
-and missing/invalid credentials, digest tokens, missing timestamps and unknown users.
-
-`BankingAdapterBoundaryTest` starts the actual adapter application and sends REST
-requests through its controller, validation, JAXB and configured WS-Security
-interceptor. A controlled Spring-WS transport supplies SOAP responses. This
-verifies response mapping and validation before upstream calls without claiming
-a deployed adapter-to-bank journey.
-
-Sequential retries with an unchanged idempotency key/payload return the cached
-transfer response. Reusing that key for another payload now returns HTTP 409
-with `urn:problem:idempotency-conflict`, instead of an unhandled server error.
-The cache remains in memory and is not an atomic, durable or multi-replica
-idempotency guarantee. The broader safe retry/resilience work remains open.
-
-Run the focused boundary tests, static checks and coverage gates with:
-
-```sh
-./mvnw --batch-mode --no-transfer-progress \
-  -pl legacy-bank-service,legacy-banking-adapter -am -Pstatic-analysis clean verify
-```
-
-The implementation report records the executed results. Compose deployment,
-trusted TLS, credential/certificate rotation, backend failure injection and
-full-stack banking acceptance remain separate backlog requirements.
+The focused local builds pass 59 bank and 50 adapter cases, plus 45 shared cases;
+counts overlap successive builds. All 75 tooling regressions pass. Full-workflow
+results, JUnit totals, runtime bindings and artifact hashes are retained under
+`coverage/soap-section6-ci`, with the final record in `latest.json`.
+[PR #27](https://github.com/vamegah/order-management-platform/pull/27) contains the implementation. Section 7 remains separate.

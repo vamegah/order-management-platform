@@ -16,11 +16,25 @@ public class BankingFaultResolver extends SoapFaultMappingExceptionResolver {
         String code =
                 ex instanceof BankingFaultException business
                         ? business.getCode()
-                        : "UPSTREAM_ERROR";
+                        : ex
+                                        instanceof
+                                        org.springframework.ws.soap.security
+                                                .WsSecurityValidationException
+                                ? "UPSTREAM_AUTHENTICATION"
+                                : "UPSTREAM_ERROR";
         String message =
-                ex instanceof BankingFaultException business
-                        ? business.getMessage()
-                        : "Bank service unavailable";
+                switch (code) {
+                    case "UPSTREAM_AUTHENTICATION" -> "Bank authentication rejected";
+                    case "INSUFFICIENT_FUNDS" -> "Insufficient funds";
+                    case "ACCOUNT_NOT_FOUND" -> "Account not found";
+                    case "INVALID_REQUEST", "INVALID_ACCOUNT_FORMAT" -> "Invalid banking request";
+                    case "DAILY_LIMIT_EXCEEDED" -> "Bank transfer limit exceeded";
+                    case "UNSUPPORTED_CURRENCY" -> "Currency is not supported";
+                    case "IDEMPOTENCY_CONFLICT" -> "Idempotency conflict";
+                    case "TRANSACTION_NOT_FOUND" -> "Transaction not found";
+                    case "ALREADY_REVERSED" -> "Transaction already reversed";
+                    default -> "Bank service unavailable";
+                };
         try {
             var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
             var root = document.createElementNS(NAMESPACE, "BankingFault");

@@ -1,0 +1,9 @@
+{
+  "namespace": "urn:omp:banking:request:v1",
+  "element": "RequestId",
+  "mustUnderstand": true,
+  "minLength": 1,
+  "maxLength": 128,
+  "pattern": "[A-Za-z0-9._:-]{1,128}",
+  "semantics": "durable-transfer-v1"
+}

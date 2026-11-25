@@ -812,9 +812,68 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml
           down --volumes --remove-orphans
 
+  soap-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_PROJECT_NAME: omp-soap-acceptance-${{ github.run_id }}
+      KEYCLOAK_URL: http://127.0.0.1:18089
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned acceptance client dependencies
+        run: python -m pip install -r scripts/contracts-requirements.lock
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare separate disposable banking secrets and trusted certificates
+        run: bash scripts/setup-soap-acceptance.sh
+      - name: Build both SOAP processes from clean source
+        run: |
+          for service in legacy-bank-service legacy-banking-adapter; do
+            docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.soap-e2e.yml build --build-arg VCS_REF="$GITHUB_SHA" "$service"
+          done
+      - name: Start fresh banking ledger issuer ingress and facade
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.soap-e2e.yml
+          up -d --no-build --wait --wait-timeout 600 traefik legacy-banking-adapter
+      - name: Execute security rotation durable transfers and bounded resilience
+        run: python scripts/verify_soap_boundary.py --project "$COMPOSE_PROJECT_NAME"
+      - name: Reject incomplete or unbound SOAP acceptance evidence
+        run: |
+          python scripts/check_junit.py coverage/soap-acceptance/soap-acceptance.xml --minimum-tests 7
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report=json.loads(Path('coverage/soap-acceptance/soap-acceptance.json').read_text())
+          assert report['passed'] and report['cleanupPassed'] and not report['sourceDirty']
+          assert report['sourceRevision']==os.environ['GITHUB_SHA']
+          assert len(report['phases'])==7 and all(p['passed'] for p in report['phases'])
+          assert all(image['revision']==report['sourceRevision'] for image in report['runtime'].values())
+          PY
+      - name: Retain redacted diagnostics
+        if: always()
+        run: python scripts/collect_soap_diagnostics.py --project "$COMPOSE_PROJECT_NAME"
+      - name: Retain source-bound SOAP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soap-boundary-acceptance
+          path: coverage/soap-acceptance/**
+          if-no-files-found: error
+      - name: Remove only this disposable topology
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.soap-e2e.yml
+          down --volumes --remove-orphans
+
   quality-gate:
     if: always()
-    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, events-e2e, payments-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
+    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, events-e2e, payments-e2e, soap-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -825,6 +884,7 @@ jobs:
           EXTERNAL_RESULT: ${{ needs['external-e2e'].result }}
           EVENTS_RESULT: ${{ needs['events-e2e'].result }}
           PAYMENTS_RESULT: ${{ needs['payments-e2e'].result }}
+          SOAP_RESULT: ${{ needs['soap-e2e'].result }}
           GRPC_RESULT: ${{ needs['grpc-e2e'].result }}
           PUBLIC_API_RESULT: ${{ needs['public-api-e2e'].result }}
           CLIENT_RESULT: ${{ needs['notification-client'].result }}
@@ -835,7 +895,7 @@ jobs:
           IMAGE_RESULT: ${{ needs.images.result }}
           IDENTITY_RESULT: ${{ needs['workload-identity'].result }}
         run: |
-          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$EVENTS_RESULT" "$PAYMENTS_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$EVENTS_RESULT" "$PAYMENTS_RESULT" "$SOAP_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required verification job failed, was cancelled, or was skipped."
               exit 1

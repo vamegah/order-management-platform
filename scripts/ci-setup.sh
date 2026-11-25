@@ -52,3 +52,8 @@ if [[ ! -e "$TLS_DIR/trust/ca.crt" ]]; then
 fi
 openssl verify -CAfile "$TLS_DIR/trust/ca.crt" "$TLS_DIR/order-service/tls.crt" >/dev/null
 echo "Development identities ready; existing keys were preserved."
+
+# Only the default output prepares Compose banking secrets. Alternate TLS fixtures remain isolated.
+if [[ $# == 0 && "${OMP_BANK_SETUP_ACTIVE:-false}" != true ]]; then
+ OMP_BANK_SETUP_ACTIVE=true bash "$ROOT/scripts/setup-banking-development.sh" >/dev/null
+fi

@@ -29,8 +29,8 @@ checkpoints; its historical open-item counts do not replace TASKS.md.
 | 2. Public APIs | 0 | Published OpenAPI and external REST/GraphQL compatibility tests | Contract drift, authorization, pagination and errors checked in required CI |
 | 3. gRPC | 0 | All streaming patterns, supported replacement behavior and rotating mTLS | Complete RPC coverage matrix and executed transport/replacement tests |
 | 4. Events and WebSockets | 0 | Versioned events, complete outbox coverage, quarantine/replay and secure real-time delivery | Crash/replay/ownership tests and measured 1,000-client run |
-| 5. Payments and webhooks | 6 | Real simulator integration, tokenized payments/SCA, asynchronous refunds and secure delivery | Provider outcome, signature, SSRF, recovery and load scenarios pass |
-| 6. SOAP | 4 | Deployed secured banking flow, stable faults and safe resilience | Trusted-TLS journey, duplicate-transfer prevention and contract gates pass |
+| 5. Payments and webhooks | 0 | Real simulator integration, tokenized payments/SCA, asynchronous refunds and secure delivery | Provider outcome, signature, SSRF, recovery and load scenarios pass |
+| 6. SOAP | 0 | Deployed secured banking flow, stable faults and safe resilience | Trusted-TLS journey, duplicate-transfer prevention and contract gates pass |
 | 7. Operations and release | 7 | Coordinated quotas, security review, telemetry, recovery drills and signed releases | Executed operational evidence and reproducible promotion/rollback |
 
 Finish each stage's acceptance before moving to the next feature stage. Bring
@@ -382,39 +382,39 @@ contracts, banking infrastructure, dashboards and deployed acceptance suites.
 
 ### 6.1 Deploy the banking adapter
 
-- **Implement:** Validate existing Docker/Compose/routing/health/scrape inputs
-  from a fresh environment, add the missing banking dashboard and secure facade
-  access policy, and run REST-to-adapter-to-bank journeys through Traefik.
-- **Close when:** Packaged services complete transfer/balance/fault scenarios
+- **Implemented:** Validated Docker/Compose/routing/health/scrape inputs
+  from a fresh environment, added the banking dashboard and secure facade
+  access policy, and ran REST-to-adapter-to-bank journeys through Traefik.
+- **Accepted:** Packaged services complete transfer/balance/fault scenarios
   with authenticated facade access and useful health/metrics. Deployment has no
   dependency on locally generated classes or an IDE-built artifact.
 
 ### 6.2 Finish WS-Security and TLS configuration
 
-- **Implement:** Supply UsernameToken credentials and trusted TLS material through
-  external secret mounts, enforce timestamps/replay policy, and implement a
+- **Implemented:** Supplied UsernameToken credentials and trusted TLS material through
+  external secret mounts, enforced timestamps/replay policy, and implemented a
   documented credential/truststore rotation procedure with overlap where needed.
-- **Close when:** Missing/bad/expired/replayed credentials and untrusted TLS are
+- **Accepted:** Missing/bad/expired/replayed credentials and untrusted TLS are
   rejected. Trusted secured traffic succeeds before and after the executed
   rotation exercise; logs, traces and artifacts contain no passwords or keys.
 
 ### 6.3 Define REST/SOAP error contracts
 
-- **Implement:** Complete the existing structured fault mapping and published
+- **Implemented:** Completed structured fault mapping and published
   OpenAPI problem schemas for validation, insufficient funds, authorization,
   timeout and backend failures. Keep public codes stable and details redacted.
-- **Close when:** Real adapter/bank tests exercise each fault and its deterministic
+- **Accepted:** Real adapter/bank tests exercise each fault and its deterministic
   HTTP status, problem type and safe body. Backend exception text and SOAP
   implementation details cannot leak through alternative error paths.
 
 ### 6.4 Validate resilience
 
-- **Implement:** Add deterministic backend failure/latency controls and verify
-  circuit-breaker open/half-open/closed behavior and bounded timeouts. Replace
+- **Implemented:** Added deterministic backend failure/latency controls and verified
+  circuit-breaker open/half-open/closed behavior and bounded timeouts. Replaced
   the adapter's in-memory transfer idempotency cache with durable request/result
   records and end-to-end backend duplicate detection before retrying ambiguous
-  transfers. Classify retryable transport errors separately from business faults.
-- **Close when:** Concurrent duplicate requests, adapter/bank restarts and a
+  transfers. Classified retryable transport errors separately from business faults.
+- **Accepted:** Concurrent duplicate requests, adapter/bank restarts and a
   lost transfer reply never duplicate a transfer. Failure injection proves
   bounded work, useful fallback errors and breaker/retry metrics without a
   cascading failure.
@@ -426,11 +426,15 @@ linked above; [TASKS.md](../TASKS.md) records the source-bound evidence.
 
 - **Implemented:** Audited frozen WSDL/XSD fixtures, exact-base comparison,
   published-schema parity, clean JAXB regeneration and Java boundary gates.
-  The seven SOAP guard regressions and all 25 bank/adapter tests pass.
+  The ten SOAP guard regressions and all focused bank/adapter tests pass.
 - **Accepted scope:** Required CI demonstrates fresh generated artifacts and
   rejects incompatible WSDL/XSD changes even when all head fixtures change
   together. TASKS.md links the accepted runs, source-bound reports and
   ownership/version policy.
+
+Acceptance is complete in [PR #27](https://github.com/vamegah/order-management-platform/pull/27) and [the seven-phase workflow](https://github.com/vamegah/order-management-platform/actions/runs/45544438733).
+See [banking verification](banking-verification.md) for results and runbooks.
+Stop before Section 7.
 
 ## 7. Security, operations and release readiness
 

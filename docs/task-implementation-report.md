@@ -3037,3 +3037,47 @@ real-provider reports are `coverage/stripe-test-mode.json` and
 `coverage/stripe-test-cleanup.json`. Credentials and listener output remain outside
 published source. [PR #26](https://github.com/vamegah/order-management-platform/pull/26)
 contains this work. No Section 6 implementation is included.
+
+
+## Section 6 SOAP boundary completion
+
+Section 6's five items are complete in [PR #27](https://github.com/vamegah/order-management-platform/pull/27). The bank persists
+ledger changes, transfer identities, declines, reversals and replay nonces; the
+adapter persists scoped intents and exact results before/after network calls.
+Concurrent duplicates, lost replies and forced bank/adapter death preserve one
+financial movement. Unkeyed requests remain separate intents; a mandatory
+versioned SOAP header rejects authorities that do not support safe retries.
+
+Separate configtrees and CA-only trust projection provide trusted TLS and
+UsernameToken authentication without production secret defaults. All ten token
+negative cases and credential/CA overlap and retirement pass. Structured
+authentication faults cover Spring-WS's generic Client path. Deterministic
+OpenAPI responses and the packaged consumer verify fixed public problem bodies.
+
+[All seven deployed phases pass](https://github.com/vamegah/order-management-platform/actions/runs/45544438733), with matching source/runtime revisions,
+zero skipped phases and successful restoration/cleanup. All 100 healthy reads at
+eight clients succeed at 455.40 ms p95; the 20-call failure burst finishes
+within 4257.77 ms. The bank uses two CPU cores and the adapter one,
+with 512 MiB each. The objectives remain those declared before measurements.
+Breaker transitions and attempt metrics prove transport-only retries and bounded
+failure work. OpenSSL's untrusted full-chain and leaf-only rejection paths are
+both verified, with normal certificate and hostname validation enforced.
+
+Local verification passes 59 bank and 50 adapter cases, plus 45 shared cases,
+coverage thresholds and static checks. Four focused HTTP cases verify the stable
+producer export. Ten SOAP guards and all 75 tooling regressions pass. Exact-base
+unit coverage improves in both banking modules. Final full-workflow results,
+JUnit totals, runtime bindings and artifact hashes are retained under
+`coverage/soap-section6-ci`, with the final record in `latest.json`.
+
+The [operations runbook](soap-operations.md) documents private mounts, role
+bootstrap, production ownership, rotation and draining/reconciling the former
+in-memory prototype. Historical uncertain financial outcomes cannot be inferred
+from its lost memory. Deployment tests use disposable accounts and credentials.
+Section 7 implementation remains outside this change.
+
+Restoration also preserves the store owner and reinstates application group
+1000 with mode 640, without changing key/truststore bytes. The regression fails
+on the former ownership behavior and passes after the fix. A real secured
+request returns 200 after the original Windows/Docker Desktop mounts are
+restored. All 75 tooling regressions pass.

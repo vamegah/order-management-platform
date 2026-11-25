@@ -19,7 +19,7 @@ Published REST/GraphQL artifacts and executable consumer examples are documented
 | gRPC | Complete RPC matrix, bounded streams, replacement recovery and rotating mTLS | Broader operational and release acceptance |
 | Events/WebSocket | Versioned outboxes/inboxes, audited recovery, owned/expiring sessions and measured 1,000-client fan-out | Broader operational and release acceptance; [reference SLO and bounds](docs/events-and-websockets.md) |
 | Payments/webhooks | Idempotency, provider refunds, reconciliation, signing, retries and DLQ management | Complete security, provider delivery and recovery acceptance |
-| SOAP | Banking facade/simulator, WS-Security, fault mapping and frozen contracts | Deployed trusted TLS and resilience acceptance |
+| SOAP | Durable bank/adapter stores, trusted TLS/WS-Security, stable faults and bounded resilience | Broader operational and release acceptance in Section 7 |
 | Operations | Compose, telemetry, alerts and CI workflows | Security/performance/recovery evidence and release approval |
 
 The [security baseline migration](docs/dependency-security-baseline.md) passes its
@@ -77,7 +77,7 @@ role claims. These credentials and password grants belong only to development.
 
 Start additional services explicitly with the same Compose files. GraphQL routes
 at `http://graphql.localhost/graphql`; the banking facade routes at
-`http://banking.localhost`. Their deployed acceptance is tracked in the backlog.
+`http://banking.localhost`. Banking deployment evidence is recorded in [SOAP verification](docs/banking-verification.md).
 
 ## Verification
 

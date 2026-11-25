@@ -81,11 +81,19 @@ public class WebServiceConfig implements WsConfigurer {
         var validators = org.apache.wss4j.dom.engine.WSSConfig.getNewInstance();
         validators.setValidator(
                 org.apache.wss4j.dom.WSConstants.USERNAME_TOKEN,
-                new EncodedPasswordTokenValidator(userDetailsService, passwordEncoder));
+                new EncodedPasswordTokenValidator(userDetailsService, passwordEncoder, db));
         interceptor.setWssConfig(validators);
         // Reject if timestamp is more than 60s old
         interceptor.setTimestampStrict(true);
         interceptor.setValidationTimeToLive(60);
+        interceptor.setFutureTimeToLive(5);
+        interceptor.setRemoveSecurityHeader(false);
+        var securityFaults = new BankingFaultResolver();
+        var rejected = new SoapFaultDefinition();
+        rejected.setFaultCode(SoapFaultDefinition.CLIENT);
+        rejected.setFaultStringOrReason("Bank authentication rejected");
+        securityFaults.setDefaultFault(rejected);
+        interceptor.setExceptionResolver(securityFaults);
         return interceptor;
     }
 
@@ -100,14 +108,19 @@ public class WebServiceConfig implements WsConfigurer {
     @Override
     public void addInterceptors(List<EndpointInterceptor> interceptors) {
         interceptors.add(securityInterceptor(userDetailsService));
+        interceptors.add(new DurableRequestHeaderInterceptor());
     }
 
+    private final org.springframework.jdbc.core.JdbcTemplate db;
     private final UserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder;
 
     public WebServiceConfig(
-            UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+            UserDetailsService userDetailsService,
+            PasswordEncoder passwordEncoder,
+            org.springframework.jdbc.core.JdbcTemplate db) {
         this.userDetailsService = userDetailsService;
         this.passwordEncoder = passwordEncoder;
+        this.db = db;
     }
 }

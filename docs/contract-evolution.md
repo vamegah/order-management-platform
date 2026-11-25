@@ -71,3 +71,11 @@ fails against the base. Missing/malformed contracts fail closed. The workflow
 then regenerates JAXB and runs the actual bank/adapter test suites. GitHub
 execution and repository branch protection require evidence from that repository;
 a local passing script alone does not establish merge protection.
+
+The SOAP banking envelope extension is frozen independently in
+`contracts/soap/extensions/request-identity-v1.json`. Required exact-base checks
+reject changes to its namespace, mandatory marker, bounds or durable semantics.
+Real producer/client boundary tests read that fixture, including the mandatory
+header and the published maximum request identity. Add a new extension version
+for incompatible changes; do not replace the supported v1 fixture. The body
+WSDL/XSD remain frozen separately.

@@ -82,6 +82,9 @@ class BankingAdapterBoundaryTest {
                                                     "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd",
                                                     "Security"));
                             assertThat(security.hasNext()).isTrue();
+                            var identities = header.examineHeaderElements(identityHeader());
+                            assertThat(identities.hasNext()).isTrue();
+                            assertThat(identities.next().getMustUnderstand()).isTrue();
                         })
                 .andExpect(
                         payload(
@@ -137,6 +140,14 @@ class BankingAdapterBoundaryTest {
                       <accountNumber>ACC-1</accountNumber>
                     </GetAccountBalanceRequest>
                     """)))
+                .andExpect(
+                        (uri, message) ->
+                                assertThat(
+                                                ((org.springframework.ws.soap.SoapMessage) message)
+                                                        .getSoapAction()
+                                                        .replace(String.valueOf((char) 34), ""))
+                                        .isEqualTo(
+                                                "http://legacybank.example.com/ws/GetAccountBalance"))
                 .andRespond(
                         withPayload(
                                 new StringSource(
@@ -163,5 +174,57 @@ class BankingAdapterBoundaryTest {
                 http.postForEntity("/api/v1/banking/transfers", transfer("0.00"), String.class);
         assertThat(result.getStatusCode().value()).isEqualTo(400);
         bank.verify();
+    }
+
+    @Test
+    void publishedAuthenticationResponsesDescribeTheActualProblemBodies() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var document = mapper.readTree(http.getForObject("/v3/api-docs", String.class));
+        for (var path : document.get("paths")) {
+            for (var operation : path) {
+                for (String status : java.util.List.of("401", "403")) {
+                    assertThat(
+                                    operation
+                                            .path("responses")
+                                            .path(status)
+                                            .path("content")
+                                            .path("application/problem+json")
+                                            .path("schema")
+                                            .path("$ref")
+                                            .asText())
+                            .isEqualTo("#/components/schemas/ProblemDetail");
+                }
+            }
+        }
+        http.getRestTemplate().setInterceptors(java.util.List.of());
+        var rejected = http.getForEntity("/api/v1/banking/accounts/ACC-1/balance", String.class);
+        assertThat(rejected.getStatusCode().value()).isEqualTo(401);
+        assertThat(rejected.getHeaders().getContentType().toString())
+                .startsWith("application/problem+json");
+        assertThat(mapper.readTree(rejected.getBody()).path("type").asText())
+                .isEqualTo("urn:problem:unauthorized");
+        bank.verify();
+        // Retain the independent live producer export; no checked-in fixture is read.
+        java.nio.file.Files.writeString(
+                java.nio.file.Path.of("target", "soap-boundary-openapi.json"), document.toString());
+    }
+
+    private javax.xml.namespace.QName identityHeader() {
+        try {
+            var contract =
+                    new com.fasterxml.jackson.databind.ObjectMapper()
+                            .readTree(
+                                    java.nio.file.Path.of(
+                                                    "..",
+                                                    "contracts",
+                                                    "soap",
+                                                    "extensions",
+                                                    "request-identity-v1.json")
+                                            .toFile());
+            return new javax.xml.namespace.QName(
+                    contract.get("namespace").asText(), contract.get("element").asText());
+        } catch (java.io.IOException failure) {
+            throw new IllegalStateException("Published request identity unavailable", failure);
+        }
     }
 }

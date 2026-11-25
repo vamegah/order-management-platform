@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -54,6 +55,7 @@ def main():
         command('run', '--detach', '--name', name, '--label', 'omp.task=recovery-identity-verification',
                 '--memory', '768m', '--cpus', '2', '--publish', '127.0.0.1::8080',
                 '--env', 'KEYCLOAK_ADMIN=identity-test-admin', '--env', 'KEYCLOAK_ADMIN_PASSWORD',
+                '--env', 'JAVA_OPTS_KC_HEAP=-Xms64m -Xmx256m',
                 '--mount', 'type=bind,source=' + str(realm.parent) + ',target=/opt/keycloak/data/import,readonly',
                 'quay.io/keycloak/keycloak:25.0', 'start-dev', '--import-realm', '--hostname-strict=false')
         started = True
@@ -61,7 +63,7 @@ def main():
         port = state['NetworkSettings']['Ports']['8080/tcp'][0]['HostPort']
         origin = 'http://127.0.0.1:' + port
         discovery = origin + '/realms/omp/.well-known/openid-configuration'
-        deadline = time.monotonic() + 180
+        deadline = time.monotonic() + 240
         while True:
             try:
                 with opener.open(discovery, timeout=5) as response:
@@ -120,6 +122,25 @@ def main():
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(json.dumps(record, indent=2), encoding='utf-8')
         print(json.dumps({'checks': len(checks), 'container': name, 'scope': record['scope']}), flush=True)
+    except BaseException as failure:
+        record = {'passed': False, 'error_class': type(failure).__name__,
+                  'source_inputs': inputs, 'checks': checks, 'tokens_or_credentials_recorded': False}
+        if started:
+            failed_state = json.loads(command('inspect', name))[0]['State']
+            record['container_state'] = {key: failed_state[key] for key in ('Status', 'Running', 'OOMKilled', 'ExitCode')}
+            result = subprocess.run([docker, 'logs', '--tail', '60', name], env=environment, capture_output=True)
+            log = (result.stdout + result.stderr).decode('utf-8', errors='replace')
+            redactions = [environment['KEYCLOAK_ADMIN_PASSWORD'], 'dev-only-order-recovery-secret',
+                          'alice-dev-password', 'wrong-test-credential', locals().get('first'), locals().get('second')]
+            for value in redactions:
+                if value:
+                    log = log.replace(value, '[REDACTED]')
+            record['startup_log_tail'] = re.sub(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '[REDACTED-JWT]', log)
+
+        report = (root / args.report).resolve()
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(record, indent=2), encoding='utf-8')
+        raise
     finally:
         if started:
             owned = json.loads(command('inspect', name))[0]

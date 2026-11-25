@@ -13,7 +13,25 @@ public class BankingException extends RuntimeException {
         INVALID_ACCOUNT_FORMAT,
         UNSUPPORTED_CURRENCY,
         UPSTREAM_UNAVAILABLE,
-        UPSTREAM_ERROR
+        UPSTREAM_AUTHENTICATION,
+        UPSTREAM_TIMEOUT,
+        INVALID_REQUEST,
+        IDEMPOTENCY_CONFLICT,
+        UPSTREAM_ERROR;
+
+        public boolean business() {
+            return switch (this) {
+                case INSUFFICIENT_FUNDS,
+                        ACCOUNT_NOT_FOUND,
+                        DAILY_LIMIT_EXCEEDED,
+                        INVALID_ACCOUNT_FORMAT,
+                        UNSUPPORTED_CURRENCY,
+                        INVALID_REQUEST,
+                        IDEMPOTENCY_CONFLICT ->
+                        true;
+                default -> false;
+            };
+        }
     }
 
     private final Code code;

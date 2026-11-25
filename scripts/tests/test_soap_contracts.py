@@ -1,6 +1,7 @@
 """Contract drift must fail before service deployment, including baseline replacement."""
 
 from pathlib import Path
+import json
 import shutil
 import sys
 import tempfile
@@ -18,6 +19,9 @@ class SoapContractsTest(unittest.TestCase):
         self.base = Path(directory.name) / "base"
         source = Path(__file__).resolve().parents[2]
         for root in (self.root, self.base):
+            extension=Path("contracts/soap/extensions/request-identity-v1.json")
+            (root/extension).parent.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(source/extension,root/extension)
             for module in MODULES:
                 for relative in CONTRACTS.values():
                     target = root / module / "src/main/resources" / relative
@@ -27,6 +31,22 @@ class SoapContractsTest(unittest.TestCase):
                 target = root / "contracts/soap/v1" / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source / "contracts/soap/v1" / name, target)
+
+    def test_request_identity_cannot_erase_its_base_contract(self):
+        path=self.root/"contracts/soap/extensions/request-identity-v1.json"
+        document=json.loads(path.read_text());document["namespace"]="urn:replacement:v1"
+        path.write_text(json.dumps(document))
+        self.assertTrue(any("identity v1" in error for error in check(self.root,self.base)))
+
+    def test_missing_or_non_mandatory_request_identity_is_rejected(self):
+        path=self.root/"contracts/soap/extensions/request-identity-v1.json"
+        document=json.loads(path.read_text());document["mustUnderstand"]=False
+        path.write_text(json.dumps(document));self.assertTrue(check(self.root))
+        path.unlink();self.assertEqual(main(["--root",str(self.root)]),1)
+
+    def test_base_before_request_identity_remains_supported(self):
+        (self.base/"contracts/soap/extensions/request-identity-v1.json").unlink()
+        self.assertEqual(check(self.root,self.base),[])
 
     def change(self, relative, before, after):
         path = self.root / relative

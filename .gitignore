@@ -334,3 +334,6 @@ clients/public-api/build/
 clients/public-api/*-results.xml
 
 /infrastructure/tls/legacy-bank-service/
+
+# Mounted banking configtree secrets; never publish credentials.
+infrastructure/secrets/banking/
