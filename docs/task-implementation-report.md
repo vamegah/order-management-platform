@@ -3065,7 +3065,7 @@ both verified, with normal certificate and hostname validation enforced.
 
 Local verification passes 59 bank and 50 adapter cases, plus 45 shared cases,
 coverage thresholds and static checks. Four focused HTTP cases verify the stable
-producer export. Ten SOAP guards and all 74 tooling regressions pass. Exact-base
+producer export. Ten SOAP guards and all 75 tooling regressions pass. Exact-base
 unit coverage improves in both banking modules. Final full-workflow results,
 JUnit totals, runtime bindings and artifact hashes are retained under
 `coverage/soap-section6-ci`, with the final record in `latest.json`.
@@ -3075,3 +3075,9 @@ bootstrap, production ownership, rotation and draining/reconciling the former
 in-memory prototype. Historical uncertain financial outcomes cannot be inferred
 from its lost memory. Deployment tests use disposable accounts and credentials.
 Section 7 implementation remains outside this change.
+
+Restoration also preserves the store owner and reinstates application group
+1000 with mode 640, without changing key/truststore bytes. The regression fails
+on the former ownership behavior and passes after the fix. A real secured
+request returns 200 after the original Windows/Docker Desktop mounts are
+restored. All 75 tooling regressions pass.

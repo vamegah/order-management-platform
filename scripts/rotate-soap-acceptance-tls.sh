@@ -7,7 +7,9 @@ ROTATION="$BANK/acceptance-rotation"
 SECRET="$ROOT/coverage/soap-fixtures/secrets"
 export BANK_STORE_PASSWORD="$(cat "$SECRET/bank/server.ssl.key-store-password")"
 export BANK_TRUST_PASSWORD="$(cat "$SECRET/adapter/bank.ws.trust-store-password")"
-OWNER="$(stat -c '%u:%g' "$BANK/tls.p12")"
+# Host-side restoration can reset the projected group on Docker Desktop.
+# Preserve the file owner and always restore the application read group.
+OWNER="$(stat -c '%u' "$BANK/tls.p12"):1000"
 case "${1:-}" in
  prepare)
   [[ ! -e "$ROTATION" ]] || { echo 'Rotation fixture already exists; restore it before rerunning.' >&2; exit 1; }

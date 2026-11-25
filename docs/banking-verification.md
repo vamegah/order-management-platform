@@ -24,7 +24,7 @@ configtree credentials. [All seven phases pass](https://github.com/vamegah/order
 The objectives remain those declared before measurements.
 
 The focused local builds pass 59 bank and 50 adapter cases, plus 45 shared cases;
-counts overlap successive builds. All 74 tooling regressions pass. Full-workflow
+counts overlap successive builds. All 75 tooling regressions pass. Full-workflow
 results, JUnit totals, runtime bindings and artifact hashes are retained under
 `coverage/soap-section6-ci`, with the final record in `latest.json`.
 [PR #27](https://github.com/vamegah/order-management-platform/pull/27) contains the implementation. Section 7 remains separate.
