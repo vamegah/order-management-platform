@@ -177,8 +177,6 @@ services:
   #   - Resource limits, log rotation.
   # ============================================================================
   postgres:
-    volumes:
-      - ${BANK_DATABASE_SECRETS_DIR:-/etc/omp/secrets/bank-database}:/run/secrets/bank-database:ro
     # Build the custom image locally. In CI, this can be pre-built and pushed
     # to a registry; the `image:` tag below is what Compose uses to run it.
     build:
@@ -198,6 +196,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ${BANK_DATABASE_SECRETS_DIR:-/etc/omp/secrets/bank-database}:/run/secrets/bank-database:ro
       - ./infrastructure/postgres/postgresql.prod.conf:/etc/postgresql/postgresql.conf:ro
       # pgBackRest config — same file used by the sidecar container
       - ./infrastructure/postgres/pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro

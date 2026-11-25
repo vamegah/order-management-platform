@@ -124,6 +124,9 @@ class Acceptance:
             if not phase['passed']:ET.SubElement(case,'failure',message='Phase did not satisfy acceptance')
         ET.ElementTree(suite).write(self.out/'soap-acceptance.xml',encoding='utf-8',xml_declaration=True)
     def expect_backend_auth_failure(self):
+        # A restarting facade briefly produces Traefik's own 502. First prove
+        # ingress reaches the application's authentication filter without SOAP.
+        wait_for(lambda:self.http('/api/v1/banking/accounts/ACC-1/balance',role=None)[0]==401)
         def failed():
             result=self.http('/api/v1/banking/accounts/ACC-1/balance')
             return result if result[0]==502 else None
