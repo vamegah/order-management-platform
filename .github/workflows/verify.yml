@@ -721,7 +721,7 @@ jobs:
           context: .
           file: ${{ matrix.service }}/Dockerfile
           push: false
-          outputs: type=docker,rewrite-timestamps=true
+          outputs: type=docker,rewrite-timestamp=true
           provenance: false
           sbom: false
           build-args: SOURCE_DATE_EPOCH=${{ steps.source.outputs.epoch }}
@@ -735,7 +735,7 @@ jobs:
           SOURCE_EPOCH: ${{ steps.source.outputs.epoch }}
         run: >-
           docker buildx build --no-cache --provenance=false --sbom=false
-          --output type=docker,rewrite-timestamps=true
+          --output type=docker,rewrite-timestamp=true
           --build-arg SOURCE_DATE_EPOCH="$SOURCE_EPOCH"
           --file product-service/Dockerfile --tag omp/product-service:reproduced .
       - name: Scan the actual runtime image without unfixed-vulnerability exceptions
@@ -1088,6 +1088,8 @@ jobs:
           cache: npm
           cache-dependency-path: clients/notifications/package-lock.json
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Verify bounded logical callers independently of k6 worker reuse
+        run: node --test scripts/performance/identities.test.mjs
       - name: Prepare private development trust for the disposable journey
         run: |
           bash scripts/ci-setup.sh

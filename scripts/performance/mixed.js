@@ -3,10 +3,12 @@ import { check, fail, sleep } from 'k6';
 import { Rate, Counter } from 'k6/metrics';
 import encoding from 'k6/encoding';
 import execution from 'k6/execution';
+import { logicalCaller } from './identities.mjs';
 
 // All secrets are file-mounted and never emitted in summaries or URLs.
 const identities = JSON.parse(open(__ENV.OMP_IDENTITIES_FILE));
-let token, tokenExpiresAt = 0, reportedFailures = 0;
+const tokens = new Map();
+let identityIndex = 0, reportedFailures = 0;
 const refundSamples = new Counter('refund_completed');
 const readSamples = new Counter('read_completed');
 const checkoutSamples = new Counter('checkout_completed');
@@ -40,10 +42,11 @@ export const options = {
   },
 };
 
-function credential(index = execution.vu.idInTest - 1) {
-  if (token && Date.now() < tokenExpiresAt) return token;
+function credential(index = identityIndex) {
+  const cached = tokens.get(index);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
   const identity = identities.clients[index];
-  if (!identity) fail('A distinct prepared client identity is required for every VU');
+  if (!identity) fail('A prepared logical workload identity is required');
   const response = http.post(identities.tokenUrl, { grant_type: 'client_credentials' }, {
     headers: { Authorization: `Basic ${encoding.b64encode(`${identity.clientId}:${identity.clientSecret}`)}`, Host: 'keycloak.localhost' },
     tags: { name: 'POST workload token' }, timeout: '5s', redirects: 0,
@@ -51,9 +54,8 @@ function credential(index = execution.vu.idInTest - 1) {
   if (response.status !== 200) fail('The isolated issuer rejected a workload client');
   const result = response.json();
   if (!result.access_token || Number(result.expires_in) < 45) fail('Issuer returned an invalid or insufficient token lifetime');
-  token = result.access_token;
-  tokenExpiresAt = Date.now() + (Number(result.expires_in) - 30) * 1000;
-  return token;
+  tokens.set(index, { token: result.access_token, expiresAt: Date.now() + (Number(result.expires_in) - 30) * 1000 });
+  return result.access_token;
 }
 export function setup() {
   if (!/^http:\/\/(localhost|127\.0\.0\.1|traefik)(:\d+)?$/.test(base || '') ||
@@ -93,6 +95,9 @@ function record(response, expected, label) {
   return good;
 }
 export function browse() {
+  // Arrival-rate executors reuse workers; logical callers must use the prepared
+  // user pool rather than concentrating a multi-user profile on one worker JWT.
+  identityIndex = logicalCaller(execution.scenario.iterationInTest, identities.clients.length);
   const graphql = execution.scenario.iterationInTest % 2 === 1;
   const request = params(graphql ? 'POST catalog GraphQL' : 'GET products');
   if (graphql) request.headers.Host = __ENV.OMP_GRAPHQL_HOST || 'graphql.localhost';
@@ -111,6 +116,7 @@ export function browse() {
   if (execution.scenario.name === 'warmup') sleep(1);
 }
 export function checkout() {
+  identityIndex = logicalCaller(execution.scenario.iterationInTest, identities.clients.length, 16);
   const response = http.post(`${base}/api/v1/orders`, JSON.stringify({ customerId: data.customerId,
     shippingAddress: { line1: 'Isolated operations load', city: 'Test', postalCode: '10001', country: 'US' },
     lines: [{ productId: data.productId, quantity: 1 }], notes: `operations-${execution.scenario.iterationInTest}` }), params('POST order'));

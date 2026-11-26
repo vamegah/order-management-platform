@@ -227,7 +227,7 @@ def execute(args):
         drain_limit = objective["recovery"]["maximumBacklogDrainSeconds"]
         backlog_sql = "SELECT " + "+".join(
             "(SELECT count(*) FROM " + schema + ".outbox_event WHERE status<>'PUBLISHED')"
-            for schema in ("products", "customers", "orders", "inventory", "payments")) + "+(SELECT count(*) FROM notifications.notification_dispatch WHERE state<>'PUBLISHED')"
+            for schema in ("orders", "inventory", "payments")) + "+(SELECT count(*) FROM notifications.notification_dispatch WHERE state<>'PUBLISHED')"
         while True:
             backlog = int(subprocess.check_output(
                 [args.docker, "exec", database, "psql", "-XAtq", "--set=ON_ERROR_STOP=1",
