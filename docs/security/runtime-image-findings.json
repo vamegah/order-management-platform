@@ -1,0 +1,757 @@
+{
+  "reviewedAt": "2026-11-26",
+  "scope": "Measured infrastructure release blockers; scanner severity does not establish exposure or exploitability.",
+  "runtimeImageLockSha256": "c57902df749eccff8ecb0d53224df3d3be519a0f53e6f3f410d1e0eea0721806",
+  "policy": {
+    "maximumAcceptedHighCritical": 0,
+    "unfixedFindingsBlockRelease": true,
+    "approvedExceptions": []
+  },
+  "distinctRuntimeImagesScanned": 16,
+  "affectedImageGroups": 9,
+  "images": [
+    {
+      "services": [
+        "prometheus"
+      ],
+      "image": "prom/prometheus:v3.16.0@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06",
+      "scanSha256": "59aadbd00e331581334bccb6eb14449a156bcf9c67160c0f9aabda4b71529089",
+      "highCriticalOccurrences": 2,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.61.0",
+          "fixedVersions": [
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-78661"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "keycloak"
+      ],
+      "image": "quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3",
+      "scanSha256": "7101dfe3a5018e9d33116e238ef5749c252c1950c06a0a67b40bc8af000810d3",
+      "highCriticalOccurrences": 6,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "java-21-openjdk-headless",
+          "installedVersion": "1:21.0.13.1.2-1.2.el9",
+          "fixedVersions": [],
+          "vulnerabilityIds": [
+            "CVE-2026-91403"
+          ]
+        },
+        {
+          "package": "sqlite-libs",
+          "installedVersion": "3.34.1-11.el9_8",
+          "fixedVersions": [],
+          "vulnerabilityIds": [
+            "CVE-2026-119373",
+            "CVE-2026-119374",
+            "CVE-2026-119379",
+            "CVE-2026-119586"
+          ]
+        },
+        {
+          "package": "com.google.guava:guava",
+          "installedVersion": "33.6.0-jre",
+          "fixedVersions": [
+            "33.7.2"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-102554"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "kafka",
+        "kafka-2",
+        "kafka-3",
+        "kafka-bootstrap"
+      ],
+      "image": "apache/kafka:3.9.2@sha256:05b4616e0702ef2729327705d54ad6b50ea70b271c4b730fabd2320789fb7b02",
+      "scanSha256": "c0b2a54fbce960b2d3cfdab4e761557b93a75dca2b218a7d100d4793c03c3ce0",
+      "highCriticalOccurrences": 76,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "brotli-libs",
+          "installedVersion": "1.2.0-r0",
+          "fixedVersions": [
+            "1.2.1-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-111497"
+          ]
+        },
+        {
+          "package": "gnutls",
+          "installedVersion": "3.8.11-r0",
+          "fixedVersions": [
+            "3.8.12-r0",
+            "3.8.13-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-1584",
+            "CVE-2026-33845",
+            "CVE-2026-33846",
+            "CVE-2026-3833",
+            "CVE-2026-42009",
+            "CVE-2026-42010"
+          ]
+        },
+        {
+          "package": "libcrypto3",
+          "installedVersion": "3.5.5-r0",
+          "fixedVersions": [
+            "3.5.6-r0",
+            "3.5.7-r0",
+            "3.5.8-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-14456",
+            "CVE-2026-28387",
+            "CVE-2026-28388",
+            "CVE-2026-28389",
+            "CVE-2026-28390",
+            "CVE-2026-31789",
+            "CVE-2026-45447"
+          ]
+        },
+        {
+          "package": "libexpat",
+          "installedVersion": "2.7.4-r0",
+          "fixedVersions": [
+            "2.10.0-r0",
+            "2.8.1-r0",
+            "2.8.4-r0",
+            "2.8.5-r0",
+            "2.9.0-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-113351",
+            "CVE-2026-115506",
+            "CVE-2026-117610",
+            "CVE-2026-118370",
+            "CVE-2026-45186",
+            "CVE-2026-66046",
+            "CVE-2026-76641",
+            "CVE-2026-76956",
+            "CVE-2026-76957",
+            "CVE-2026-77214",
+            "CVE-2026-93990"
+          ]
+        },
+        {
+          "package": "libfontenc",
+          "installedVersion": "1.1.8-r0",
+          "fixedVersions": [
+            "1.1.10-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-109908"
+          ]
+        },
+        {
+          "package": "libpng",
+          "installedVersion": "1.6.54-r0",
+          "fixedVersions": [
+            "1.6.55-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-25646"
+          ]
+        },
+        {
+          "package": "libssl3",
+          "installedVersion": "3.5.5-r0",
+          "fixedVersions": [
+            "3.5.6-r0",
+            "3.5.7-r0",
+            "3.5.8-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-14456",
+            "CVE-2026-28387",
+            "CVE-2026-28388",
+            "CVE-2026-28389",
+            "CVE-2026-28390",
+            "CVE-2026-31789",
+            "CVE-2026-45447"
+          ]
+        },
+        {
+          "package": "musl",
+          "installedVersion": "1.2.5-r21",
+          "fixedVersions": [
+            "1.2.5-r23",
+            "1.2.5-r24"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-107891",
+            "CVE-2026-40200"
+          ]
+        },
+        {
+          "package": "musl-utils",
+          "installedVersion": "1.2.5-r21",
+          "fixedVersions": [
+            "1.2.5-r23",
+            "1.2.5-r24"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-107891",
+            "CVE-2026-40200"
+          ]
+        },
+        {
+          "package": "openssl",
+          "installedVersion": "3.5.5-r0",
+          "fixedVersions": [
+            "3.5.6-r0",
+            "3.5.7-r0",
+            "3.5.8-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-14456",
+            "CVE-2026-28387",
+            "CVE-2026-28388",
+            "CVE-2026-28389",
+            "CVE-2026-28390",
+            "CVE-2026-31789",
+            "CVE-2026-45447"
+          ]
+        },
+        {
+          "package": "p11-kit",
+          "installedVersion": "0.25.5-r2",
+          "fixedVersions": [
+            "0.26.2-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-2100"
+          ]
+        },
+        {
+          "package": "p11-kit-trust",
+          "installedVersion": "0.25.5-r2",
+          "fixedVersions": [
+            "0.26.2-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-2100"
+          ]
+        },
+        {
+          "package": "sqlite-libs",
+          "installedVersion": "3.51.2-r0",
+          "fixedVersions": [
+            "3.53.4-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-11822",
+            "CVE-2026-11824"
+          ]
+        },
+        {
+          "package": "zlib",
+          "installedVersion": "1.3.1-r2",
+          "fixedVersions": [
+            "1.3.2-r0",
+            "1.3.2-r1"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-22184",
+            "CVE-2026-85091"
+          ]
+        },
+        {
+          "package": "at.yawk.lz4:lz4-java",
+          "installedVersion": "1.10.1",
+          "fixedVersions": [
+            "1.11.4"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-106451"
+          ]
+        },
+        {
+          "package": "com.fasterxml.jackson.core:jackson-core",
+          "installedVersion": "2.16.2",
+          "fixedVersions": [
+            "2.18.8, 2.21.4",
+            "2.21.7, 2.22.3, 2.18.11"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-68494",
+            "CVE-2026-89425"
+          ]
+        },
+        {
+          "package": "com.fasterxml.jackson.core:jackson-databind",
+          "installedVersion": "2.16.2",
+          "fixedVersions": [
+            "2.18.10, 2.21.6, 2.22.2",
+            "2.18.11, 2.21.7, 2.22.3",
+            "2.18.8, 2.21.4, 3.1.4",
+            "2.18.8, 3.1.4, 2.21.4",
+            "2.21.7, 2.18.11, 2.22.3"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-54512",
+            "CVE-2026-54513",
+            "CVE-2026-68497",
+            "CVE-2026-91776",
+            "CVE-2026-91777"
+          ]
+        },
+        {
+          "package": "io.netty:netty-codec",
+          "installedVersion": "4.1.125.Final",
+          "fixedVersions": [
+            "4.1.133.Final",
+            "4.1.136.Final"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-42583",
+            "CVE-2026-59901"
+          ]
+        },
+        {
+          "package": "io.netty:netty-handler",
+          "installedVersion": "4.1.125.Final",
+          "fixedVersions": [
+            "4.2.15.Final, 4.1.135.Final",
+            "4.2.17.Final, 4.1.137.Final"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-44249",
+            "CVE-2026-45416",
+            "CVE-2026-50010",
+            "CVE-2026-75595"
+          ]
+        },
+        {
+          "package": "org.apache.zookeeper:zookeeper",
+          "installedVersion": "3.8.4",
+          "fixedVersions": [
+            "3.8.6, 3.9.5",
+            "3.9.5, 3.8.6"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-24281",
+            "CVE-2026-24308"
+          ]
+        },
+        {
+          "package": "org.codehaus.plexus:plexus-utils",
+          "installedVersion": "3.5.1",
+          "fixedVersions": [
+            "4.0.3, 3.6.1"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2025-67030"
+          ]
+        },
+        {
+          "package": "org.eclipse.jetty:jetty-http",
+          "installedVersion": "9.4.57.v20241219",
+          "fixedVersions": [
+            "12.1.7, 12.0.33, 11.0.29, 10.0.28, 9.4.60"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-2332"
+          ]
+        },
+        {
+          "package": "org.eclipse.jetty:jetty-security",
+          "installedVersion": "9.4.57.v20241219",
+          "fixedVersions": [
+            "9.4.63, 10.0.31, 11.0.31, 12.0.36, 12.1.10"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-10050"
+          ]
+        },
+        {
+          "package": "org.jline:jline-builtins",
+          "installedVersion": "3.25.1",
+          "fixedVersions": [
+            "3.30.15, 4.3.1",
+            "4.3.1, 3.30.15"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-77422",
+            "CVE-2026-77423"
+          ]
+        },
+        {
+          "package": "org.jline:jline-remote-telnet",
+          "installedVersion": "3.25.1",
+          "fixedVersions": [
+            "4.2.1, 4.0.16, 3.30.14"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-56740",
+            "CVE-2026-56741"
+          ]
+        },
+        {
+          "package": "org.xerial.snappy:snappy-java",
+          "installedVersion": "1.1.10.5",
+          "fixedVersions": [
+            "1.1.10.9"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-108106",
+            "CVE-2026-93451"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "alertmanager"
+      ],
+      "image": "prom/alertmanager:v0.35.1@sha256:4e3d029e69c7f61dd53a2b31a3dc427a2b81736cffca185c0854075e07969e36",
+      "scanSha256": "cd128effb11e6085c5e45009869f0d229c45beb7d07e220064833ce6ec4fa19d",
+      "highCriticalOccurrences": 2,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.61.0",
+          "fixedVersions": [
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-78661"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "tempo"
+      ],
+      "image": "grafana/tempo:3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044",
+      "scanSha256": "e12bd0f571e676df99cc02ff3d4e65b0cef1a7f19f095c4fccd14dd86a28877f",
+      "highCriticalOccurrences": 2,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "github.com/go-jose/go-jose/v4",
+          "installedVersion": "v4.1.4",
+          "fixedVersions": [
+            "4.1.6"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-116587"
+          ]
+        },
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.60.0",
+          "fixedVersions": [
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-78661"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "kafka-exporter"
+      ],
+      "image": "danielqsj/kafka-exporter:v1.9.0@sha256:4150e46b2e9697ac30e4be8de03ec1704b4bdc7037577b83b8d35a32be298c16",
+      "scanSha256": "d9787f9535faf78b2dfb6175cea40d5c08036aaaad7fcc52b695b4a0d4944e81",
+      "highCriticalOccurrences": 48,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "github.com/klauspost/compress",
+          "installedVersion": "v1.17.11",
+          "fixedVersions": [
+            "1.18.7"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-63209"
+          ]
+        },
+        {
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.32.0",
+          "fixedVersions": [
+            "0.35.0",
+            "0.43.0",
+            "0.52.0",
+            "0.55.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2025-22869",
+            "CVE-2025-47913",
+            "CVE-2026-39828",
+            "CVE-2026-39829",
+            "CVE-2026-39830",
+            "CVE-2026-39831",
+            "CVE-2026-39832",
+            "CVE-2026-39835",
+            "CVE-2026-42508",
+            "CVE-2026-46597",
+            "CVE-2026-56854"
+          ]
+        },
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.34.0",
+          "fixedVersions": [
+            "0.53.0",
+            "0.55.0",
+            "0.56.0",
+            "0.57.0",
+            "0.60.0",
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-25681",
+            "CVE-2026-27136",
+            "CVE-2026-33814",
+            "CVE-2026-39821",
+            "CVE-2026-46600",
+            "CVE-2026-78661",
+            "CVE-2026-78669"
+          ]
+        },
+        {
+          "package": "golang.org/x/text",
+          "installedVersion": "v0.21.0",
+          "fixedVersions": [
+            "0.39.0",
+            "0.41.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-56851",
+            "CVE-2026-56852"
+          ]
+        },
+        {
+          "package": "stdlib",
+          "installedVersion": "v1.24.0",
+          "fixedVersions": [
+            "1.24.11, 1.25.5",
+            "1.24.12, 1.25.6",
+            "1.24.13, 1.25.7, 1.26.0-rc.3",
+            "1.24.4",
+            "1.25.10, 1.26.3",
+            "1.25.11, 1.26.4",
+            "1.25.12, 1.26.5, 1.27.0-rc.2",
+            "1.25.13, 1.26.6, 1.27.0-rc.3",
+            "1.25.8, 1.26.1",
+            "1.25.9, 1.26.2",
+            "1.26.10, 1.27.3",
+            "1.26.9, 1.27.2"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2025-22874",
+            "CVE-2025-61726",
+            "CVE-2025-61729",
+            "CVE-2025-68121",
+            "CVE-2026-111943",
+            "CVE-2026-25679",
+            "CVE-2026-27145",
+            "CVE-2026-32280",
+            "CVE-2026-32281",
+            "CVE-2026-32283",
+            "CVE-2026-33811",
+            "CVE-2026-33814",
+            "CVE-2026-33818",
+            "CVE-2026-39820",
+            "CVE-2026-39821",
+            "CVE-2026-39822",
+            "CVE-2026-39836",
+            "CVE-2026-42499",
+            "CVE-2026-42504",
+            "CVE-2026-56853",
+            "CVE-2026-56858",
+            "CVE-2026-56859",
+            "CVE-2026-56860",
+            "CVE-2026-56862",
+            "CVE-2026-78667",
+            "CVE-2026-78669",
+            "CVE-2026-97031"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "certificate-exporter"
+      ],
+      "image": "python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89",
+      "scanSha256": "bb0021aaa835f92b0e71323ba0c5d02d2eb160a1b0ef3eb8b5e216bce5e3723f",
+      "highCriticalOccurrences": 16,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "krb5-libs",
+          "installedVersion": "1.22.2-r1",
+          "fixedVersions": [
+            "1.22.3-r0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-107364",
+            "CVE-2026-112315",
+            "CVE-2026-112316",
+            "CVE-2026-112317",
+            "CVE-2026-112318",
+            "CVE-2026-112319",
+            "CVE-2026-112320",
+            "CVE-2026-112321",
+            "CVE-2026-112322",
+            "CVE-2026-112323",
+            "CVE-2026-118380",
+            "CVE-2026-119079",
+            "CVE-2026-40355",
+            "CVE-2026-40356",
+            "CVE-2026-71199",
+            "CVE-2026-71200"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "redis",
+        "redis-replica-1",
+        "redis-replica-2",
+        "redis-sentinel-1",
+        "redis-sentinel-2",
+        "redis-sentinel-3"
+      ],
+      "image": "redis:7.4-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe",
+      "scanSha256": "7344942cbf560f8c9f30f35e7fd20b945c5c7e94ebe276c2ca744e1bb1cf23d5",
+      "highCriticalOccurrences": 2,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "libcrypto3",
+          "installedVersion": "3.5.9-r0",
+          "fixedVersions": [
+            "3.5.9-r2"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-124709"
+          ]
+        },
+        {
+          "package": "libssl3",
+          "installedVersion": "3.5.9-r0",
+          "fixedVersions": [
+            "3.5.9-r2"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-124709"
+          ]
+        }
+      ]
+    },
+    {
+      "services": [
+        "grafana"
+      ],
+      "image": "grafana/grafana:13.3.2@sha256:81556409ba48b2b922e0adb69a2511337d8ba7578f11962eefa6149a2d815101",
+      "scanSha256": "e043a0291c5d86fa9f29751f4f16cba8776fd83c359036cb9088b1c45d01ed62",
+      "highCriticalOccurrences": 15,
+      "status": "RELEASE_BLOCKED",
+      "owner": "platform maintainers",
+      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "components": [
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.61.0",
+          "fixedVersions": [
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-78661"
+          ]
+        },
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.60.0",
+          "fixedVersions": [
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-78661"
+          ]
+        },
+        {
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersions": [
+            "0.60.0",
+            "0.62.0"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-78661",
+            "CVE-2026-78669"
+          ]
+        },
+        {
+          "package": "stdlib",
+          "installedVersion": "v1.26.7",
+          "fixedVersions": [
+            "1.26.10, 1.27.3",
+            "1.26.9, 1.27.2"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-111943",
+            "CVE-2026-78667",
+            "CVE-2026-78669",
+            "CVE-2026-97031"
+          ]
+        },
+        {
+          "package": "github.com/grafana/tempo",
+          "installedVersion": "v1.5.1-0.20260910130453-bcfe9f230c1d",
+          "fixedVersions": [
+            "2.10.3",
+            "2.8.4, 2.9.2, 2.10.2"
+          ],
+          "vulnerabilityIds": [
+            "CVE-2026-21728",
+            "CVE-2026-28377"
+          ]
+        }
+      ]
+    }
+  ]
+}

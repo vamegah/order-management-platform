@@ -171,7 +171,8 @@ SERVER_PORT	8000	HTTP port
 Development
 Build
 bash
-./mvnw -pl graphql-gateway clean package
+python scripts/bootstrap_graphql_backport.py
+./mvnw -pl graphql-gateway -am clean package
 Run locally
 Requires the three REST services to be up:
 
@@ -271,3 +272,5 @@ ADR-0002: Promtail for logs
 ADR-0003: Dev + prod overlay
 
 Published SDL, scalar formats, generated consumers and deployed compatibility checks are documented in [public API contracts](../docs/public-api-contracts.md).
+
+The [GraphQL dependency backport](../infrastructure/dependencies/graphql-java/README.md) removes a vulnerable embedded Guava version. Docker builds and full-reactor CI bootstrap and verify it automatically; host Maven builds require the bootstrap command above.

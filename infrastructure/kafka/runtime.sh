@@ -43,6 +43,6 @@ unset password
 if [ ! -f /var/lib/kafka/data/meta.properties ]; then
     arguments=()
     while IFS= read -r record; do [ -z "$record" ] || arguments+=(--add-scram "$record"); done < /run/secrets/kafka_scram_bootstrap
-    /opt/kafka/bin/kafka-storage.sh format -t "$(cat /run/secrets/kafka_cluster_id)" -c "$config" "${arguments[@]}" >/dev/null
+    /opt/kafka/bin/kafka-storage.sh format --cluster-id="$(cat /run/secrets/kafka_cluster_id)" -c "$config" "${arguments[@]}" >/dev/null
 fi
 exec /opt/kafka/bin/kafka-server-start.sh "$config"

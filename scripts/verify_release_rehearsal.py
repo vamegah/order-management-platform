@@ -35,7 +35,21 @@ def execute(args):
     if args.comparison:
         comparison = json.loads(run("docker", "image", "inspect", args.comparison))[0]
         if image["Id"] != comparison["Id"]:
-            raise AssertionError("Independent deterministic image builds differ")
+            args.output.mkdir(parents=True, exist_ok=True)
+            difference = {"passed": False, "images": []}
+            for item in (image, comparison):
+                files = run("docker", "run", "--rm", "--network", "none", "--read-only",
+                            "--cap-drop", "ALL", "--user", "0", "--entrypoint", "find", item["Id"],
+                            "/app", "/etc", "-type", "f", "-exec", "sha256sum", "{}", ";")
+                values = {line.split(maxsplit=1)[1]: line.split(maxsplit=1)[0]
+                          for line in files.splitlines() if len(line.split(maxsplit=1)) == 2
+                          and line.split(maxsplit=1)[1] not in ("/etc/hostname", "/etc/hosts", "/etc/resolv.conf")}
+                difference["images"].append({"id": item["Id"], "created": item["Created"],
+                                             "layers": item["RootFS"]["Layers"], "fileHashes": values})
+            first, second = [i["fileHashes"] for i in difference["images"]]
+            difference["changedPaths"] = sorted(name for name in first.keys() | second.keys() if first.get(name) != second.get(name))
+            (args.output / "reproduction-diff.json").write_text(json.dumps(difference, indent=2), encoding="utf-8")
+            raise AssertionError("Independent deterministic image builds differ; exact config/layer/file diagnostics retained")
     output = args.output
     output.mkdir(parents=True, exist_ok=True)
     scan = json.loads((output / "scan.json").read_text(encoding="utf-8"))

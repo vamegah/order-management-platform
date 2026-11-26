@@ -1,0 +1,5 @@
+// Archive timestamps and order must not depend on the build host or wall clock.
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}

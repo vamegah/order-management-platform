@@ -11,7 +11,8 @@ WORKDIR /layers
 RUN java -Djarmode=tools -jar application.jar extract --layers --launcher --destination /extracted
 
 FROM eclipse-temurin:21-jre-alpine@sha256:5d7689f47d670aca766b9503a70bccc2d73b4eb9221ae8f714ae958313c4ce70
-RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
+ARG SOURCE_DATE_EPOCH=315532800
+RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app && sed -i 's/^app:\([^:]*\):[0-9]*:/app:\1:0:/' /etc/shadow
 RUN mkdir -p /data/provider && chown app:app /data/provider
 WORKDIR /app
 COPY --from=build --chown=app:app /extracted/dependencies/ ./

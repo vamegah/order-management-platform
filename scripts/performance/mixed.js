@@ -6,7 +6,7 @@ import execution from 'k6/execution';
 
 // All secrets are file-mounted and never emitted in summaries or URLs.
 const identities = JSON.parse(open(__ENV.OMP_IDENTITIES_FILE));
-let token, tokenExpiresAt = 0;
+let token, tokenExpiresAt = 0, reportedFailures = 0;
 const refundSamples = new Counter('refund_completed');
 const readSamples = new Counter('read_completed');
 const checkoutSamples = new Counter('checkout_completed');
@@ -20,7 +20,7 @@ const params = (name) => ({ headers: { Authorization: `Bearer ${credential()}`, 
 export const options = {
   discardResponseBodies: false,
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
-  systemTags: ['method', 'name', 'status', 'scenario', 'expected_response'],
+  systemTags: ['method', 'name', 'status', 'scenario', 'expected_response', 'check'],
   scenarios: {
     warmup: { executor: 'constant-vus', exec: 'browse', vus: 1, duration: '30s', gracefulStop: '5s' },
     reads: { executor: 'constant-arrival-rate', exec: 'browse', rate: 8, timeUnit: '1s', duration,
@@ -81,6 +81,14 @@ export function setup() {
 function record(response, expected, label) {
   const good = expected.includes(response.status);
   unexpected.add(!good);
+  if (!good && reportedFailures++ < 3) {
+    let code;
+    try { code = response.json().code; } catch (_) { /* No response bodies are logged. */ }
+    console.error(JSON.stringify({ stage: 'unexpected-http-status', label, status: response.status,
+      code: /^[A-Z_]{1,64}$/.test(code || '') ? code : undefined,
+      requestId: /^[0-9a-f-]{36}$/i.test(response.headers['X-Request-Id'] || '') ? response.headers['X-Request-Id'] : undefined,
+      scenario: execution.scenario.name, iteration: execution.scenario.iterationInTest }));
+  }
   check(response, { [label]: () => good });
   return good;
 }
@@ -114,9 +122,18 @@ export function checkout() {
   if (record(http.post(`${base}/api/v1/orders/${order.id}/cancel`, JSON.stringify({ reason: 'isolated load cleanup' }), params('POST cancel')), [200,202], 'cleanup accepted')) checkoutSamples.add(1);
   // Every prepared captured payment is used at most once; fixture preparation owns the exact budget.
   const payment = data.refundPayments[execution.scenario.iterationInTest];
-  if (payment && record(http.post(`${base}/api/v1/payments/${payment.id}/refunds`, JSON.stringify({ amountMinor: payment.amountMinor,
+  if (payment) {
+    const refund = http.post(`${base}/api/v1/payments/${payment.id}/refunds`, JSON.stringify({ amountMinor: payment.amountMinor,
       idempotencyKey: `operations-refund-${payment.id}`, reason: 'isolated load' }), { ...params('POST refund'), headers: { ...params('POST refund').headers,
-      'Idempotency-Key': `operations-refund-${payment.id}` } }), [200,201,202], 'refund accepted')) refundSamples.add(1);
+      'Idempotency-Key': `operations-refund-${payment.id}` } });
+    if (record(refund, [200], 'noop refund completed')) {
+      const body = refund.json();
+      const complete = body.status === 'COMPLETED' && body.paymentId === payment.id && body.amountMinor === payment.amountMinor && !!body.id;
+      unexpected.add(!complete);
+      check(body, { 'correlated refund completed': () => complete });
+      if (complete) refundSamples.add(1);
+    }
+  }
 }
 export function handleSummary(value) {
   return { '/results/k6-summary.json': JSON.stringify(value, null, 2) };

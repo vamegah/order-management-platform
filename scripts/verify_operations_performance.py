@@ -212,10 +212,37 @@ def execute(args):
         conservation = len(invariants) == 4 and all(
             value == 0 for value in invariants.values()
         )
+        # Confirm money outcomes in durable state as well as HTTP responses.
+        data_value = load if name == "load" else soak
+        payment_ids = ",".join("'" + p["id"] + "'::uuid" for p in data_value["refundPayments"])
+        money = subprocess.check_output(
+            [args.docker, "exec", database, "psql", "-XAtq", "--set=ON_ERROR_STOP=1",
+             "-U", "omp_admin", "-d", "omp", "-c",
+             "SELECT count(*),count(DISTINCT payment_id),coalesce(sum(amount*100),0)::bigint,bool_and(status='COMPLETED' AND currency='USD') FROM payments.refund "
+             "WHERE payment_id=ANY(ARRAY[" + payment_ids + "])"] ,
+            text=True, timeout=30).strip()
+        expected_money = str(len(data_value["refundPayments"])) + "|" + str(len(data_value["refundPayments"])) + "|" + str(sum(p["amountMinor"] for p in data_value["refundPayments"])) + "|t"
+        money_passed = money == expected_money
+        drain_started = time.monotonic()
+        drain_limit = objective["recovery"]["maximumBacklogDrainSeconds"]
+        backlog_sql = "SELECT " + "+".join(
+            "(SELECT count(*) FROM " + schema + ".outbox_event WHERE status<>'PUBLISHED')"
+            for schema in ("products", "customers", "orders", "inventory", "payments")) + "+(SELECT count(*) FROM notifications.notification_dispatch WHERE state<>'PUBLISHED')"
+        while True:
+            backlog = int(subprocess.check_output(
+                [args.docker, "exec", database, "psql", "-XAtq", "--set=ON_ERROR_STOP=1",
+                 "-U", "omp_admin", "-d", "omp", "-c", backlog_sql], text=True, timeout=30).strip())
+            if backlog == 0 or time.monotonic() - drain_started >= drain_limit:
+                break
+            time.sleep(1)
+        drain_seconds = time.monotonic() - drain_started
         minimum = 1200 if name == "load" else 6000
         passed = (
             result.returncode == 0
             and conservation
+            and money_passed
+            and backlog == 0
+            and drain_seconds <= drain_limit
             and requests >= minimum
             and bool(metrics)
             and all(
@@ -231,6 +258,10 @@ def execute(args):
             "httpRequests": requests,
             "invariants": invariants,
             "conservationPassed": conservation,
+            "refundConservationPassed": money_passed,
+            "completedFixtureRefunds": len(data_value["refundPayments"]) if money_passed else None,
+            "pendingOrFailedDispatches": backlog,
+            "backlogDrainSeconds": round(drain_seconds, 2),
             "summarySha256": hashlib.sha256(summary_path.read_bytes()).hexdigest()
             if summary_path.is_file()
             else None,

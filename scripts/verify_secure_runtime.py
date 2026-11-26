@@ -73,6 +73,13 @@ def execute(args):
             0 if os.name == "posix" else None,
             2000 if os.name == "posix" else None,
         )
+        # Kafka UUIDs are URL-safe base64 and may legitimately start with '-'.
+        # Always cover that argument-boundary case rather than relying on chance.
+        cluster = private / "kafka_cluster_id"
+        cluster.chmod(0o600)
+        cluster.write_text("-" + cluster.read_text().strip()[1:], encoding="ascii")
+        cluster.chmod(0o440)
+        report["leadingHyphenClusterIdCovered"] = True
         env.update(
             {
                 "OMP_DOMAIN": "acceptance.invalid",

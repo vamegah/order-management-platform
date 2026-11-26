@@ -12,7 +12,8 @@ RUN java -Djarmode=tools -jar application.jar extract --layers --launcher --dest
 
 # Netty's bundled native TLS library requires glibc.
 FROM eclipse-temurin:21-jre-jammy@sha256:a8bff88f760e87e0c8844f8461f807c203fd5e8f78c951c843024647e965eaf5
-RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --no-create-home app
+ARG SOURCE_DATE_EPOCH=315532800
+RUN groupadd --gid 1000 app && useradd --no-log-init --uid 1000 --gid app --no-create-home app && sed -i 's/^app:\([^:]*\):[0-9]*:/app:\1:0:/' /etc/shadow
 WORKDIR /app
 COPY --from=build --chown=app:app /extracted/dependencies/ ./
 COPY --from=build --chown=app:app /extracted/spring-boot-loader/ ./
