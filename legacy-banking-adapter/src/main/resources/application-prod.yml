@@ -1,6 +1,19 @@
-
 springdoc:
   api-docs:
     enabled: false
   swagger-ui:
     enabled: false
+
+# Quotas share Redis server time across replicas. Anonymous requests share a bounded bucket.
+app.quota.enabled: ${API_QUOTAS_ENABLED:false}
+app.quota.namespace: ${spring.application.name}
+app.quota.host: ${QUOTA_REDIS_HOST:redis}
+app.quota.port: ${QUOTA_REDIS_PORT:6379}
+app.quota.username: ${QUOTA_REDIS_USERNAME:}
+app.quota.password-file: ${QUOTA_REDIS_PASSWORD_FILE:/run/secrets/redis_password}
+app.quota.tls: ${QUOTA_REDIS_TLS:false}
+# Services derive identity only from verified JWTs, never forwarding headers.
+server.forward-headers-strategy: none
+
+# Tokens must be intended for this platform or the explicit RPC service audience.
+spring.security.oauth2.resourceserver.jwt.audiences: ${API_JWT_AUDIENCES:omp-api}

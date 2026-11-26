@@ -14,13 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Test verification tooling
@@ -35,14 +40,17 @@ jobs:
           ACME_EMAIL: acceptance@example.invalid
           TRAEFIK_ADMIN_BASICAUTH: unused-for-config-validation
         run: |
-          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --format json | python scripts/check_grpc_transport.py
+          python scripts/check_production_configuration.py
+          python scripts/check_security_inventory.py
+      - name: Rebuild and verify the pinned GraphQL security backport
+        run: python3 scripts/bootstrap_graphql_backport.py
       - name: Build and test reactor, including container integration tests
         run: bash mvnw --batch-mode --no-transfer-progress --fail-at-end clean verify
       - name: Reject missing, skipped or incomplete test and coverage evidence
         run: python scripts/check_verification.py
       - name: Publish test and coverage evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verification-reports
           path: |
@@ -55,13 +63,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Package dependencies and run authenticated service containers
@@ -80,7 +93,7 @@ jobs:
           PY
       - name: Publish packaged journey evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: packaged-payment-journey-reports
           path: platform-tests/target/failsafe-reports/**
@@ -97,16 +110,21 @@ jobs:
         run: |
           printf 'ORDER_RECOVERY_TOKEN_DIRECTORY=%s/scheduled-recovery/projection\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           printf 'ORDER_RECOVERY_CLIENT_SECRET_FILE=%s/scheduled-recovery/client-secret\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Prepare isolated development identities and local routing
         shell: bash
         run: |
@@ -155,7 +173,7 @@ jobs:
           -pl integration-tests -am -Pe2e verify
       - name: Reject missing or skipped external suites
         run: python scripts/check_verification.py --root integration-tests --include-e2e
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -208,7 +226,7 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.recovery.yml -f docker-compose.recovery-projector.yml -f docker-compose.recovery-acceptance.yml logs --no-color > external-stack.log
       - name: Publish external acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: external-e2e-reports
           path: |
@@ -230,16 +248,21 @@ jobs:
       E2E_GRPC_ISSUER_SUDO: 'true'
       GRPC_TLS_ENABLED: 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Prepare isolated issuer and production-profile workload identities
         shell: bash
         run: |
@@ -278,7 +301,7 @@ jobs:
         run: >-
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml
           -f docker-compose.grpc-e2e.yml logs --no-color > grpc-stack.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: grpc-production-acceptance
@@ -304,16 +327,21 @@ jobs:
         run: |
           printf 'ORDER_RECOVERY_TOKEN_DIRECTORY=%s/scheduled-recovery/projection\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           printf 'ORDER_RECOVERY_CLIENT_SECRET_FILE=%s/scheduled-recovery/client-secret\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Prepare isolated development identities and local routing
         shell: bash
         run: |
@@ -382,7 +410,7 @@ jobs:
           -f docker-compose.public-api-e2e.yml logs --no-color > public-api-stack.log
       - name: Publish public API contract and consumer evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: public-api-contract-reports
           path: |
@@ -404,13 +432,13 @@ jobs:
       run:
         working-directory: clients/notifications
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: clients/notifications/package-lock.json
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - run: npm ci --ignore-scripts
@@ -422,7 +450,7 @@ jobs:
         run: npm sbom --sbom-format cyclonedx --omit=dev > client-sbom.json
       - name: Package JavaScript and declarations
         run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: notification-client-package
           path: |
@@ -435,22 +463,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
+      - name: Rebuild and verify the pinned GraphQL security backport
+        run: python3 scripts/bootstrap_graphql_backport.py
       - name: Compile and enforce high-confidence SpotBugs findings
         run: bash mvnw --batch-mode --no-transfer-progress -Pstatic-analysis clean test-compile spotbugs:check
       - name: Reject incomplete analysis and missing classpaths
         run: python scripts/check_static_analysis.py
       - name: Publish static analysis reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: static-analysis-reports
           path: '**/target/spotbugsXml.xml'
@@ -460,20 +495,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Check out the exact PR base for contract comparison
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: baseline
@@ -518,7 +558,7 @@ jobs:
           -pl legacy-bank-service,legacy-banking-adapter -am clean verify
       - name: Publish generated contract and test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: contract-compatibility-reports
           path: |
@@ -534,19 +574,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Test coverage comparison tooling
         run: python -m unittest discover -s scripts/tests -v
+      - name: Rebuild and verify the pinned GraphQL security backport
+        run: python3 scripts/bootstrap_graphql_backport.py
       - name: Measure clean head unit coverage
         if: github.event_name == 'pull_request'
         run: >-
@@ -560,7 +607,7 @@ jobs:
           --revision "$GITHUB_SHA" --output coverage/head.json
       - name: Check out the exact PR base revision
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: baseline
@@ -586,7 +633,7 @@ jobs:
           --base coverage/base.json --head coverage/head.json >> "$GITHUB_STEP_SUMMARY"
       - name: Publish comparison evidence
         if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: unit-coverage-comparison
           path: coverage/*.json
@@ -596,8 +643,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
@@ -605,11 +657,13 @@ jobs:
       - name: Set vulnerability cache date
         id: cache-date
         run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
           key: nvd-13-${{ runner.os }}-${{ steps.cache-date.outputs.day }}-${{ github.run_id }}
           restore-keys: nvd-13-${{ runner.os }}-
+      - name: Rebuild and verify the pinned GraphQL security backport
+        run: python3 scripts/bootstrap_graphql_backport.py
       - name: Resolve packaged reactor artifacts for aggregate analysis
         # Tests/coverage run in the independent required verify job.
         run: bash mvnw --batch-mode --no-transfer-progress clean install -DskipTests -DskipITs -Djacoco.skip=true
@@ -621,7 +675,7 @@ jobs:
         run: bash mvnw --batch-mode --no-transfer-progress -Psupply-chain dependency-check:aggregate
       - name: Publish SBOM and dependency policy evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: supply-chain-reports
           path: |
@@ -632,7 +686,10 @@ jobs:
 
   images:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -648,33 +705,87 @@ jobs:
           - legacy-bank-service
           - legacy-banking-adapter
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Set immutable source timestamp
+        id: source
+        run: |
+          echo "epoch=$(git show -s --format=%ct HEAD)" >> "$GITHUB_OUTPUT"
+          mkdir -p "coverage/operations/release/${{ matrix.service }}"
       - name: Build service image from the reactor root
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ${{ matrix.service }}/Dockerfile
           push: false
+          outputs: type=docker,rewrite-timestamp=true
+          provenance: false
+          sbom: false
+          build-args: SOURCE_DATE_EPOCH=${{ steps.source.outputs.epoch }}
           tags: omp/${{ matrix.service }}:verification
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Independently reproduce the representative application image
+        if: matrix.service == 'product-service'
+        env:
+          SOURCE_EPOCH: ${{ steps.source.outputs.epoch }}
+        run: >-
+          docker buildx build --no-cache --provenance=false --sbom=false
+          --output type=docker,rewrite-timestamp=true
+          --build-arg SOURCE_DATE_EPOCH="$SOURCE_EPOCH"
+          --file product-service/Dockerfile --tag omp/product-service:reproduced .
+      - name: Scan the actual runtime image without unfixed-vulnerability exceptions
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          cache-dir: ${{ runner.temp }}/omp-trivy-cache
+          image-ref: omp/${{ matrix.service }}:verification
+          format: json
+          output: coverage/operations/release/${{ matrix.service }}/scan.json
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          scanners: vuln
+          ignore-unfixed: false
+      - name: Inventory actual runtime components
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: trivy image --scanners vuln --format cyclonedx --output "coverage/operations/release/$SERVICE/sbom.json" "omp/$SERVICE:verification"
+      - name: Install the signing tool from its reviewed image digest
+        run: python scripts/install_cosign.py --directory "$RUNNER_TEMP/omp-cosign"
+      - name: Verify keyless signing and deny tampering or foreign identities
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          comparison=()
+          if [ "$SERVICE" = product-service ]; then comparison=(--comparison omp/product-service:reproduced); fi
+          python scripts/verify_release_rehearsal.py --image "omp/$SERVICE:verification" "${comparison[@]}" --output "coverage/operations/release/$SERVICE"
+      - name: Retain scanning signing and reproduction evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-security-${{ matrix.service }}
+          path: coverage/operations/release/**
+          if-no-files-found: error
 
   workload-identity:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Verify imported recovery identity and atomic token rotation
         run: python scripts/verify_recovery_identity.py --report coverage/recovery-identity-issuer.json
       - name: Retain issuer verification evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: workload-identity-reports
           path: coverage/recovery-identity-issuer.json
@@ -687,18 +798,23 @@ jobs:
       COMPOSE_PROJECT_NAME: omp-events-acceptance-${{ github.run_id }}
       E2E_EVENTS_CONTROLS: 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: clients/notifications/package-lock.json
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Prepare isolated development trust and routing
         run: |
           bash scripts/ci-setup.sh
@@ -741,7 +857,7 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.events-e2e.yml logs --no-color --tail 200 > coverage/events-acceptance/services.log
       - name: Publish measured event and realtime acceptance
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: events-realtime-acceptance
           path: coverage/events-acceptance
@@ -759,13 +875,13 @@ jobs:
       COMPOSE_PROJECT_NAME: omp-payments-acceptance-${{ github.run_id }}
       KEYCLOAK_URL: http://127.0.0.1:18089
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Install pinned acceptance-client dependencies
         run: python -m pip install -r scripts/contracts-requirements.lock
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Prepare isolated development trust
         run: |
           bash scripts/ci-setup.sh
@@ -801,7 +917,7 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.payments-e2e.yml logs --no-color --tail 200 > coverage/payment-webhooks/services.log
       - name: Publish source-bound payment acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: payment-webhook-acceptance
           path: coverage/payment-webhooks/**
@@ -819,17 +935,22 @@ jobs:
       COMPOSE_PROJECT_NAME: omp-soap-acceptance-${{ github.run_id }}
       KEYCLOAK_URL: http://127.0.0.1:18089
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache the checksum-verified Maven distribution
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper/dists
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Install pinned acceptance client dependencies
         run: python -m pip install -r scripts/contracts-requirements.lock
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Prepare separate disposable banking secrets and trusted certificates
         run: bash scripts/setup-soap-acceptance.sh
       - name: Build both SOAP processes from clean source
@@ -860,7 +981,7 @@ jobs:
         run: python scripts/collect_soap_diagnostics.py --project "$COMPOSE_PROJECT_NAME"
       - name: Retain source-bound SOAP evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: soap-boundary-acceptance
           path: coverage/soap-acceptance/**
@@ -871,9 +992,202 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.soap-e2e.yml
           down --volumes --remove-orphans
 
+  operations-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Check the production inventory and OWASP review
+        run: |
+          python scripts/check_production_configuration.py
+          python scripts/check_security_inventory.py
+      - name: Build the pinned backup-capable PostgreSQL image
+        run: docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t omp/postgres:section7-recovery infrastructure/postgres
+      - name: Execute alert delivery and bounded tracing
+        run: python scripts/verify_operations_monitoring.py --project "omp-operations-mon${{ github.run_id }}"
+      - name: Execute broker and quota authentication ACLs and durable restart
+        run: sudo "$(command -v python)" scripts/verify_secure_runtime.py --project "omp-operations-auth${{ github.run_id }}"
+      - name: Execute encrypted backup and isolated point-in-time restore
+        run: python scripts/verify_postgres_recovery.py --project "omp-operations-pitr${{ github.run_id }}"
+      - name: Require complete source-bound evidence and successful cleanup
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          for name,count in (("monitoring",5),("secure-runtime",6),("postgres-recovery",4)):
+              report=json.loads(Path("coverage/operations",name+".json").read_text())
+              assert report["passed"] and report["cleanupPassed"] and not report["sourceDirty"]
+              assert report["sourceRevision"]==os.environ["GITHUB_SHA"] and len(report["sourceTreeSha256"])==64
+              assert len(report["phases"])==count and all(p["passed"] for p in report["phases"])
+          PY
+      - name: Retain operational measurements and redacted diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: operations-core-acceptance
+          path: coverage/operations/**
+          if-no-files-found: error
+
+  operations-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Bind both production-profile images to the exact source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          tree=$(python -c 'import pathlib,sys; sys.path.insert(0,"scripts"); from operations.evidence import evidence; print(evidence("docker",pathlib.Path.cwd())["sourceTreeSha256"])')
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" --label "com.omp.source-tree=$tree" -f product-service/Dockerfile -t omp/product-service:operations-acceptance .
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" --label "com.omp.source-tree=$tree" -t omp/postgres:section7-recovery infrastructure/postgres
+      - name: Exercise issuer audience metrics authorization shared quotas and store outage
+        run: sudo "$(command -v python)" scripts/verify_production_api.py --project "omp-operations-api${{ github.run_id }}"
+      - name: Require all real production-profile phases and cleanup
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          report=json.loads(Path("coverage/operations/production-api.json").read_text())
+          assert report["passed"] and report["cleanupPassed"] and not report["sourceDirty"]
+          assert report["sourceRevision"]==os.environ["GITHUB_SHA"] and len(report["sourceTreeSha256"])==64
+          assert len(report["ownedImages"])==2 and len(report["phases"])==3 and all(p["passed"] for p in report["phases"])
+          PY
+      - name: Retain redacted API acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: operations-api-acceptance
+          path: coverage/operations/**
+          if-no-files-found: error
+
+  operations-journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: omp-operations-journey${{ github.run_id }}
+      OMP_ACCEPTANCE_FIXTURES: 'true'
+    steps:
+      - name: Define isolated recovery projection paths
+        run: |
+          printf 'ORDER_RECOVERY_TOKEN_DIRECTORY=%s/operations-recovery/projection\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'ORDER_RECOVERY_CLIENT_SECRET_FILE=%s/operations-recovery/client-secret\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: clients/notifications/package-lock.json
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Verify bounded logical callers independently of k6 worker reuse
+        run: node --test scripts/performance/identities.test.mjs
+      - name: Prepare private development trust for the disposable journey
+        run: |
+          bash scripts/ci-setup.sh
+          for service in order-service inventory-service payment-service; do
+            sudo chgrp 1000 "infrastructure/tls/$service/tls.key"
+            chmod 640 "infrastructure/tls/$service/tls.key"
+          done
+      - name: Provision private development recovery identity for application UID 1000
+        shell: bash
+        run: |
+          sudo --preserve-env=ORDER_RECOVERY_TOKEN_DIRECTORY,ORDER_RECOVERY_CLIENT_SECRET_FILE "$(command -v python)" - <<'PY'
+          import json, os
+          from pathlib import Path
+          projection = Path(os.environ['ORDER_RECOVERY_TOKEN_DIRECTORY'])
+          secret = Path(os.environ['ORDER_RECOVERY_CLIENT_SECRET_FILE'])
+          assert projection.is_absolute() and secret.parent == projection.parent
+          projection.parent.mkdir(mode=0o700)
+          projection.mkdir(mode=0o700)
+          realm = json.loads(Path('infrastructure/keycloak/import/omp-realm.json').read_text())
+          credential = next(c['secret'] for c in realm['clients'] if c['clientId'] == 'order-recovery')
+          with secret.open('x', encoding='utf-8') as target:
+              os.fchmod(target.fileno(), 0o400)
+              target.write(credential)
+              os.fchown(target.fileno(), 1000, 1000)
+          for path in (projection.parent, projection):
+              os.chown(path, 1000, 1000)
+          PY
+      - name: Build source-bound protocol participants
+        run: |
+          for service in product-service customer-service order-service inventory-service payment-service notification-service graphql-gateway; do
+            docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -f "$service/Dockerfile" -t "omp/$service:1.0.0-SNAPSHOT" .
+          done
+      - name: Start the isolated protocol and telemetry topology
+        id: operations-stack
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml
+          up -d --no-build --wait --wait-timeout 600 traefik product-service customer-service order-service inventory-service payment-service notification-service graphql-gateway tempo
+      - name: Trace a real checkout through every applicable asynchronous boundary
+        working-directory: clients/notifications
+        run: |
+          npm ci --ignore-scripts
+          node test/operations-journey.mjs
+      - name: Measure and recover a failing downstream HTTP dependency
+        if: always() && steps.operations-stack.outcome == 'success'
+        run: python scripts/verify_downstream_http_fault.py --project "$COMPOSE_PROJECT_NAME"
+      - name: Rehearse failed application replacement and immutable rollback
+        if: always() && steps.operations-stack.outcome == 'success'
+        run: python scripts/verify_deployment_rollback.py --project "$COMPOSE_PROJECT_NAME"
+      - name: Prepare isolated workload clients and captured noop payments
+        id: load-fixtures
+        if: always() && steps.operations-stack.outcome == 'success'
+        run: python scripts/prepare_performance_fixtures.py --project "$COMPOSE_PROJECT_NAME" --directory "$RUNNER_TEMP/operations-load-fixtures"
+      - name: Measure the declared k6 load and ten-minute soak with conservation checks
+        if: always() && steps.load-fixtures.outcome == 'success'
+        run: >-
+          python scripts/verify_operations_performance.py --project "$COMPOSE_PROJECT_NAME"
+          --identities "$RUNNER_TEMP/operations-load-fixtures/identities.json"
+          --load-data "$RUNNER_TEMP/operations-load-fixtures/load.json"
+          --soak-data "$RUNNER_TEMP/operations-load-fixtures/soak.json"
+      - name: Require the complete trace exemplar logs and cleanup evidence
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          report=json.loads(Path("coverage/operations/protocol-journey.json").read_text())
+          assert report["passed"] and report["cleanupPassed"] and not report["sourceDirty"]
+          assert report["sourceRevision"]==os.environ["GITHUB_SHA"] and len(report["sourceTreeSha256"])==64
+          assert len(report["ownedImages"])==7 and len(report["phases"])==3 and all(p["passed"] for p in report["phases"])
+          fault=json.loads(Path("coverage/operations/downstream-http.json").read_text())
+          assert fault["passed"] and fault["cleanupPassed"] and not fault["sourceDirty"] and fault["sourceRevision"]==os.environ["GITHUB_SHA"]
+          rollback=json.loads(Path("coverage/operations/deployment-rollback.json").read_text())
+          assert rollback["passed"] and rollback["cleanupPassed"] and not rollback["sourceDirty"] and rollback["sourceRevision"]==os.environ["GITHUB_SHA"]
+          performance=json.loads(Path("coverage/operations/performance/performance.json").read_text())
+          assert performance["passed"] and not performance["sourceDirty"] and performance["sourceRevision"]==os.environ["GITHUB_SHA"]
+          assert len(performance["phases"])==2 and all(p["passed"] and p["conservationPassed"] for p in performance["phases"])
+          PY
+      - name: Retain isolated deployment diagnostics
+        if: always()
+        run: |
+          mkdir -p coverage/operations
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml ps -a > coverage/operations/protocol-containers.txt
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml logs --no-color --tail 120 > coverage/operations/protocol-services.log
+      - name: Retain source-bound protocol journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: operations-protocol-journey
+          path: coverage/operations/**
+          if-no-files-found: error
+      - name: Remove only the disposable journey topology
+        if: always()
+        run: >-
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml
+          down --volumes --remove-orphans
+
   quality-gate:
     if: always()
-    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, events-e2e, payments-e2e, soap-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity]
+    needs: [verify, packaged-payment-journey, external-e2e, public-api-e2e, grpc-e2e, events-e2e, payments-e2e, soap-e2e, notification-client, static-analysis, contract-compatibility, coverage-regression, dependency-policy, images, workload-identity, operations-core, operations-api, operations-journey]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -893,9 +1207,12 @@ jobs:
           COVERAGE_RESULT: ${{ needs['coverage-regression'].result }}
           DEPENDENCY_RESULT: ${{ needs['dependency-policy'].result }}
           IMAGE_RESULT: ${{ needs.images.result }}
+          OPERATIONS_RESULT: ${{ needs['operations-core'].result }}
+          OPERATIONS_API_RESULT: ${{ needs['operations-api'].result }}
+          OPERATIONS_JOURNEY_RESULT: ${{ needs['operations-journey'].result }}
           IDENTITY_RESULT: ${{ needs['workload-identity'].result }}
         run: |
-          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$EVENTS_RESULT" "$PAYMENTS_RESULT" "$SOAP_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT"; do
+          for result in "$TEST_RESULT" "$JOURNEY_RESULT" "$EXTERNAL_RESULT" "$PUBLIC_API_RESULT" "$GRPC_RESULT" "$EVENTS_RESULT" "$PAYMENTS_RESULT" "$SOAP_RESULT" "$CLIENT_RESULT" "$STATIC_RESULT" "$CONTRACT_RESULT" "$COVERAGE_RESULT" "$DEPENDENCY_RESULT" "$IMAGE_RESULT" "$IDENTITY_RESULT" "$OPERATIONS_RESULT" "$OPERATIONS_API_RESULT" "$OPERATIONS_JOURNEY_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required verification job failed, was cancelled, or was skipped."
               exit 1

@@ -79,10 +79,15 @@ class InventorySecurityConfigurationTest {
     }
 
     private static String token(RSAKey key, String issuerClaim, Instant expiry) {
+        return token(key, issuerClaim, expiry, "");
+    }
+
+    private static String token(RSAKey key, String issuerClaim, Instant expiry, String scope) {
         var claims =
                 JwtClaimsSet.builder()
                         .issuer(issuerClaim)
                         .subject("inventory-caller")
+                        .claim("scope", scope)
                         .issuedAt(Instant.now().minusSeconds(300))
                         .expiresAt(expiry)
                         .build();
@@ -164,7 +169,7 @@ class InventorySecurityConfigurationTest {
     }
 
     @Test
-    void healthIsPublicWhileMetricsRequireAValidSignedToken() {
+    void healthIsPublicWhileMetricsRequireAValidSignedScopedToken() {
         context()
                 .run(
                         context -> {
@@ -188,6 +193,19 @@ class InventorySecurityConfigurationTest {
                                                                             Instant.now()
                                                                                     .plusSeconds(
                                                                                             60))))
+                                    .andExpect(status().isForbidden());
+                            mvc.perform(
+                                            get("/actuator/prometheus")
+                                                    .header(
+                                                            "Authorization",
+                                                            "Bearer "
+                                                                    + token(
+                                                                            signingKey,
+                                                                            issuerUri,
+                                                                            Instant.now()
+                                                                                    .plusSeconds(
+                                                                                            60),
+                                                                            "metrics.read")))
                                     .andExpect(status().isOk());
                         });
     }

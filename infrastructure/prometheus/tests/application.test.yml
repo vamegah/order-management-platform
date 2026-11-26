@@ -1,0 +1,197 @@
+rule_files:
+- ../rules/application.yml
+evaluation_interval: 15s
+tests:
+- name: ServiceDown
+  interval: 1m
+  input_series:
+  - series: up{tier="app",service="test"}
+    values: 0+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: ServiceDown
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        service: test
+        tier: app
+      exp_annotations:
+        summary: Application cannot be scraped
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#servicedown
+- name: AvailabilityBudgetFastBurn
+  interval: 1m
+  input_series:
+  - series: http_server_requests_seconds_count{service="test",status="500",uri="/api"}
+    values: 0+10x500
+  - series: http_server_requests_seconds_count{service="test",status="200",uri="/api"}
+    values: 0+90x500
+  alert_rule_test:
+  - eval_time: 70m
+    alertname: AvailabilityBudgetFastBurn
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        service: test
+      exp_annotations:
+        summary: Availability budget burning above 14.4x
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#availabilitybudgetfastburn
+- name: AvailabilityBudgetSlowBurn
+  interval: 1m
+  input_series:
+  - series: http_server_requests_seconds_count{service="test",status="500",uri="/api"}
+    values: 0+1x500
+  - series: http_server_requests_seconds_count{service="test",status="200",uri="/api"}
+    values: 0+99x500
+  alert_rule_test:
+  - eval_time: 7h
+    alertname: AvailabilityBudgetSlowBurn
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+      exp_annotations:
+        summary: Availability budget burning above 6x
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#availabilitybudgetslowburn
+- name: LatencyBudgetFastBurn
+  interval: 1m
+  input_series:
+  - series: http_server_requests_seconds_count{service="test",status="200",uri="/api"}
+    values: 0+100x500
+  - series: http_server_requests_seconds_bucket{service="test",uri="/api",le="1.0"}
+    values: 0+50x500
+  alert_rule_test:
+  - eval_time: 70m
+    alertname: LatencyBudgetFastBurn
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        service: test
+      exp_annotations:
+        summary: Latency budget burning above 14.4x
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#latencybudgetfastburn
+- name: JvmHeapSaturation
+  interval: 1m
+  input_series:
+  - series: jvm_memory_used_bytes{service="test",area="heap"}
+    values: 90+0x500
+  - series: jvm_memory_max_bytes{service="test",area="heap"}
+    values: 100+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: JvmHeapSaturation
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+      exp_annotations:
+        summary: JVM heap saturation
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#jvmheapsaturation
+- name: DatabasePoolSaturation
+  interval: 1m
+  input_series:
+  - series: hikaricp_connections_active{service="test"}
+    values: 10+0x500
+  - series: hikaricp_connections_max{service="test"}
+    values: 10+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: DatabasePoolSaturation
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+      exp_annotations:
+        summary: Database connection pool saturation
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#databasepoolsaturation
+- name: RedisBlockedClients
+  interval: 1m
+  input_series:
+  - series: redis_blocked_clients{service="test"}
+    values: 6+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: RedisBlockedClients
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+      exp_annotations:
+        summary: Redis clients blocked
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#redisblockedclients
+- name: KafkaConsumerLagHigh
+  interval: 1m
+  input_series:
+  - series: kafka_consumergroup_lag{consumergroup="test",topic="orders"}
+    values: 1001+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: KafkaConsumerLagHigh
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        consumergroup: test
+        topic: orders
+      exp_annotations:
+        summary: Kafka consumer backlog
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#kafkaconsumerlaghigh
+- name: OutboxLagHigh
+  interval: 1m
+  input_series:
+  - series: outbox_oldest_pending_seconds{service="test"}
+    values: 121+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: OutboxLagHigh
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+      exp_annotations:
+        summary: Durable outbox age exceeds recovery objective
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#outboxlaghigh
+- name: WebhookDlqNonEmpty
+  interval: 1m
+  input_series:
+  - series: omp_queue_pending{service="test",queue="webhook_dlq"}
+    values: 1+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: WebhookDlqNonEmpty
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+        queue: webhook_dlq
+      exp_annotations:
+        summary: Webhook DLQ requires authorized replay
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#webhookdlqnonempty
+- name: TlsCertificateExpiryCritical
+  interval: 1m
+  input_series:
+  - series: omp_tls_certificate_not_after_seconds{service="test"}
+    values: 100000+0x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: TlsCertificateExpiryCritical
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        service: test
+      exp_annotations:
+        summary: Certificate expires within seven days
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#tlscertificateexpirycritical
+- name: TelemetryExportFailures
+  interval: 1m
+  input_series:
+  - series: otelcol_exporter_send_failed_spans_total{service="test"}
+    values: 0+1x500
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: TelemetryExportFailures
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: test
+      exp_annotations:
+        summary: Trace export dropping spans
+        runbook_url: https://github.com/vamegah/order-management-platform/blob/main/docs/runbooks/operations.md#telemetryexportfailures

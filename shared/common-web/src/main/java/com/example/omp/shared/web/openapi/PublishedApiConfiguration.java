@@ -1,5 +1,10 @@
 package com.example.omp.shared.web.openapi;
 
+import io.swagger.v3.oas.models.headers.Header;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.IntegerSchema;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import java.util.TreeSet;
@@ -75,6 +80,34 @@ public class PublishedApiConfiguration {
                             new ApiResponse()
                                     .description(
                                             "The authenticated identity is not authorized for this operation."));
+            for (String code : new String[] {"429", "503"}) {
+                operation
+                        .getResponses()
+                        .putIfAbsent(
+                                code,
+                                new ApiResponse()
+                                        .description(
+                                                code.equals("429")
+                                                        ? "The shared identity quota is exhausted."
+                                                        : "The quota store is unavailable; retry safely.")
+                                        .addHeaderObject(
+                                                "Retry-After",
+                                                new Header()
+                                                        .description(
+                                                                "Minimum delay in seconds before retrying.")
+                                                        .schema(
+                                                                new IntegerSchema()
+                                                                        .minimum(
+                                                                                java.math.BigDecimal
+                                                                                        .ONE)))
+                                        .content(
+                                                new Content()
+                                                        .addMediaType(
+                                                                "application/problem+json",
+                                                                new MediaType()
+                                                                        .schema(
+                                                                                new ObjectSchema()))));
+            }
             return operation;
         };
     }

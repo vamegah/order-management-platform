@@ -41,7 +41,9 @@ public class SubscriptionMatcher {
         for (String candidate : WebhookEventTypes.matchingTypes(eventType)) {
             for (WebhookSubscription sub :
                     subscriptionRepository.findEnabledByEventType(candidate)) {
-                matches.putIfAbsent(sub.getId(), new MatchedSubscription(sub, candidate));
+                if (com.example.omp.notification.webhook.WebhookEventOwnership.allows(
+                        sub, envelope))
+                    matches.putIfAbsent(sub.getId(), new MatchedSubscription(sub, candidate));
             }
         }
 

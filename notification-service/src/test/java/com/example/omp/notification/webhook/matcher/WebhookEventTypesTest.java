@@ -46,8 +46,10 @@ class WebhookEventTypesTest {
                 new SubscriptionMatcher(repository, publisher, ids, mock(WebhookMetrics.class));
         var both = new WebhookSubscription();
         both.setId(UUID.randomUUID());
+        both.setOwnerType(com.example.omp.notification.webhook.SubscriptionOwnerType.ADMIN);
         var dotted = new WebhookSubscription();
         dotted.setId(UUID.randomUUID());
+        dotted.setOwnerType(com.example.omp.notification.webhook.SubscriptionOwnerType.ADMIN);
         when(repository.findEnabledByEventType("PAYMENT_REFUNDED")).thenReturn(List.of(both));
         when(repository.findEnabledByEventType("payment.refunded"))
                 .thenReturn(List.of(both, dotted));
@@ -62,5 +64,58 @@ class WebhookEventTypesTest {
                 .containsExactly("PAYMENT_REFUNDED", "payment.refunded");
         assertThat(messages.getAllValues().get(1).deliveryId())
                 .isEqualTo(ids.generate(dotted.getId(), "event"));
+    }
+
+    @Test
+    void matchingAnEventTypeNeverGrantsAccessToAnotherCustomersEvents() {
+        var repository = mock(WebhookSubscriptionRepository.class);
+        var publisher = mock(WebhookDeliveryPublisher.class);
+        var matcher =
+                new SubscriptionMatcher(
+                        repository,
+                        publisher,
+                        new DeliveryIdGenerator(),
+                        mock(WebhookMetrics.class));
+        var owner = new WebhookSubscription();
+        owner.setId(UUID.randomUUID());
+        owner.setOwnerType(com.example.omp.notification.webhook.SubscriptionOwnerType.CUSTOMER);
+        owner.setOwnerId(UUID.randomUUID());
+        var foreign = new WebhookSubscription();
+        foreign.setId(UUID.randomUUID());
+        foreign.setOwnerType(com.example.omp.notification.webhook.SubscriptionOwnerType.CUSTOMER);
+        foreign.setOwnerId(UUID.randomUUID());
+        var unknown = new WebhookSubscription();
+        unknown.setId(UUID.randomUUID());
+        var absentOwner = new WebhookSubscription();
+        absentOwner.setId(UUID.randomUUID());
+        absentOwner.setOwnerType(
+                com.example.omp.notification.webhook.SubscriptionOwnerType.CUSTOMER);
+        var operator = new WebhookSubscription();
+        operator.setId(UUID.randomUUID());
+        operator.setOwnerType(com.example.omp.notification.webhook.SubscriptionOwnerType.ADMIN);
+        when(repository.findEnabledByEventType("ORDER_CREATED"))
+                .thenReturn(List.of(owner, foreign, unknown, absentOwner, operator));
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        matcher.matchAndPublish(
+                "owned",
+                "ORDER_CREATED",
+                mapper.valueToTree(java.util.Map.of("customerId", owner.getOwnerId().toString())));
+        var messages = ArgumentCaptor.forClass(DeliveryMessage.class);
+        verify(publisher, times(2)).enqueue(messages.capture());
+        assertThat(messages.getAllValues())
+                .extracting(DeliveryMessage::subscriptionId)
+                .containsExactly(owner.getId(), operator.getId());
+        clearInvocations(publisher);
+        for (var data :
+                List.of(
+                        mapper.createObjectNode(),
+                        mapper.valueToTree(java.util.Map.of("customerId", 42)),
+                        mapper.valueToTree(java.util.Map.of("customerId", "not-a-customer")))) {
+            matcher.matchAndPublish(UUID.randomUUID().toString(), "ORDER_CREATED", data);
+        }
+        matcher.matchAndPublish("missing", "ORDER_CREATED", null);
+        verify(publisher, times(4))
+                .enqueue(argThat(message -> message.subscriptionId().equals(operator.getId())));
+        verifyNoMoreInteractions(publisher);
     }
 }

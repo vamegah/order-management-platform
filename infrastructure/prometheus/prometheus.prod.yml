@@ -1,0 +1,155 @@
+{
+  "global": {
+    "scrape_interval": "15s",
+    "evaluation_interval": "15s",
+    "external_labels": {
+      "env": "prod"
+    }
+  },
+  "rule_files": [
+    "/etc/prometheus/rules/*.yml"
+  ],
+  "alerting": {
+    "alertmanagers": [
+      {
+        "static_configs": [
+          {
+            "targets": [
+              "alertmanager:9093"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scrape_configs": [
+    {
+      "job_name": "prometheus",
+      "static_configs": [
+        {
+          "targets": [
+            "prometheus:9090"
+          ],
+          "labels": {
+            "tier": "observability",
+            "service": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "traefik",
+      "static_configs": [
+        {
+          "targets": [
+            "traefik:8082"
+          ],
+          "labels": {
+            "tier": "observability",
+            "service": "traefik"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "otel-collector",
+      "static_configs": [
+        {
+          "targets": [
+            "otel-collector:8888"
+          ],
+          "labels": {
+            "tier": "observability",
+            "service": "otel-collector"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "keycloak",
+      "static_configs": [
+        {
+          "targets": [
+            "keycloak:9000"
+          ],
+          "labels": {
+            "tier": "observability",
+            "service": "keycloak"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "postgres-exporter",
+      "static_configs": [
+        {
+          "targets": [
+            "postgres-exporter:9187"
+          ],
+          "labels": {
+            "tier": "data"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "redis-exporter",
+      "static_configs": [
+        {
+          "targets": [
+            "redis-exporter:9121"
+          ],
+          "labels": {
+            "tier": "data",
+            "service": "redis"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "kafka-exporter",
+      "static_configs": [
+        {
+          "targets": [
+            "kafka-exporter:9308"
+          ],
+          "labels": {
+            "tier": "data",
+            "service": "kafka"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "certificate-exporter",
+      "static_configs": [
+        {
+          "targets": [
+            "certificate-exporter:9188"
+          ],
+          "labels": {
+            "tier": "data"
+          }
+        }
+      ]
+    },
+    {
+      "job_name": "omp-services",
+      "authorization": {
+        "credentials_file": "/run/metrics-token/token"
+      },
+      "scrape_timeout": "5s",
+      "sample_limit": 50000,
+      "label_limit": 32,
+      "label_value_length_limit": 256,
+      "file_sd_configs": [
+        {
+          "files": [
+            "/etc/prometheus/targets/*.yml"
+          ],
+          "refresh_interval": "30s"
+        }
+      ]
+    }
+  ]
+}

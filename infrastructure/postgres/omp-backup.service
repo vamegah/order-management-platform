@@ -1,0 +1,9 @@
+[Unit]
+Description=Encrypted OMP full backup and repository check
+After=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/omp
+Environment=OMP_STATE_DIRECTORY=/var/lib/omp/promotions/production
+ExecStart=/usr/bin/python3 scripts/operations/backup_active_release.py --state-directory ${OMP_STATE_DIRECTORY}
+NoNewPrivileges=true

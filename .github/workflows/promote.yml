@@ -1,0 +1,117 @@
+name: Approved immutable promotion
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Existing signed semantic release tag
+        type: string
+        required: true
+      environment:
+        description: Protected destination environment
+        type: choice
+        options: [staging, production]
+        required: true
+      action:
+        description: Promote or restore an earlier compatible signed release
+        type: choice
+        options: [promote, rollback]
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: promotion-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  policy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Require the configured environment approval and immutable release identity
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          RELEASE: ${{ inputs.release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os,re
+          assert re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.]+)?",os.environ["RELEASE"])
+          assert os.environ["TARGET_ENVIRONMENT"] in ("staging","production")
+          assert os.environ.get("GH_TOKEN"), "Configure the read-only release policy credential"
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/environments/$TARGET_ENVIRONMENT" > "$RUNNER_TEMP/environment-policy.json"
+          python scripts/release_policy.py environment "$RUNNER_TEMP/environment-policy.json"
+  deploy:
+    needs: policy
+    environment: ${{ inputs.environment }}
+    runs-on: [self-hosted, linux, x64, omp-release]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the signing tool from its reviewed image digest
+        run: python scripts/install_cosign.py --directory "$RUNNER_TEMP/omp-cosign"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Install the digest-pinned scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=$(python3 -c 'import json; print(json.load(open("infrastructure/release/images.lock.json"))["toolsAndBases"]["aquasec/trivy:0.76.2"])')
+          tools="$RUNNER_TEMP/omp-release-tools"
+          mkdir -p "$tools"
+          container=$(docker create "$image")
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/local/bin/trivy" "$tools/trivy"
+          chmod 755 "$tools/trivy"
+          echo "$tools" >> "$GITHUB_PATH"
+      - name: Verify signed inputs before checking out deployment configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination=$(mktemp -d "$RUNNER_TEMP/omp-release.XXXXXX")
+          gh release download "$RELEASE" --repo "$GITHUB_REPOSITORY" --dir "$destination"
+          python3 scripts/release_policy.py verify --bundle "$destination/release.json" --signature "$destination/release.sigstore.json" --artifacts "$destination" --output "$destination/verified-compose.yml"
+          revision=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceRevision"])' "$destination/release.json")
+          git merge-base --is-ancestor "$revision" origin/main
+          sources="/var/lib/omp/promotions/$TARGET_ENVIRONMENT/sources"
+          mkdir -p "$sources"
+          chmod 700 "$sources"
+          source="$sources/$revision"
+          if [ ! -d "$source" ]; then
+            git clone --no-checkout "https://github.com/$GITHUB_REPOSITORY.git" "$source"
+            git -C "$source" checkout --detach "$revision"
+          fi
+          test "$(git -C "$source" rev-parse HEAD)" = "$revision"
+          test -z "$(git -C "$source" status --porcelain)"
+          echo "OMP_RELEASE_ARTIFACTS=$destination" >> "$GITHUB_ENV"
+          echo "OMP_RELEASE_SOURCE=$source" >> "$GITHUB_ENV"
+      - name: Execute the approved digest promotion or compatible rollback
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          PROMOTION_ACTION: ${{ inputs.action }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/promote_release.py --bundle "$OMP_RELEASE_ARTIFACTS/release.json" --signature "$OMP_RELEASE_ARTIFACTS/release.sigstore.json" --artifacts "$OMP_RELEASE_ARTIFACTS" --source-directory "$OMP_RELEASE_SOURCE" --env-file "/etc/omp/$TARGET_ENVIRONMENT.env" --project "omp-$TARGET_ENVIRONMENT" --state-directory "/var/lib/omp/promotions/$TARGET_ENVIRONMENT" --action "$PROMOTION_ACTION" --execute

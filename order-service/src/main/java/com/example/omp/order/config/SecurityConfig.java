@@ -80,7 +80,8 @@ public class SecurityConfig {
 
                                         // Protected: Prometheus metrics (internal-only via Traefik)
                                         .requestMatchers("/actuator/prometheus")
-                                        .authenticated()
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
 
                                         // --- Order-service-specific rules ---
                                         // All order endpoints require authentication.

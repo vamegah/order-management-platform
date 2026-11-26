@@ -1,16 +1,18 @@
 # Build from the repository root: docker build -f legacy-banking-adapter/Dockerfile .
 # Parent POM and shared modules are resolved by the same Maven reactor as CI.
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:21-jdk@sha256:8ad118b146aa92da815b576441acd6b42b38236797ad0b6edc8c200b85bb0734 AS build
+ARG SOURCE_DATE_EPOCH=315532800
 WORKDIR /build
 COPY . .
 RUN --mount=type=cache,target=/root/.m2 \
-    bash mvnw --batch-mode --no-transfer-progress -pl legacy-banking-adapter -am -DskipTests package
+    bash mvnw --batch-mode --no-transfer-progress -pl legacy-banking-adapter -am -Dproject.build.outputTimestamp=${SOURCE_DATE_EPOCH} -DskipTests package
 RUN mkdir /layers && cp legacy-banking-adapter/target/*-exec.jar /layers/application.jar
 WORKDIR /layers
 RUN java -Djarmode=tools -jar application.jar extract --layers --launcher --destination /extracted
 
-FROM eclipse-temurin:21-jre-alpine
-RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
+FROM eclipse-temurin:21-jre-alpine@sha256:5d7689f47d670aca766b9503a70bccc2d73b4eb9221ae8f714ae958313c4ce70
+ARG SOURCE_DATE_EPOCH=315532800
+RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app && sed -i 's/^app:\([^:]*\):[0-9]*:/app:\1:0:/' /etc/shadow
 WORKDIR /app
 COPY --from=build --chown=app:app /extracted/dependencies/ ./
 COPY --from=build --chown=app:app /extracted/spring-boot-loader/ ./
@@ -23,4 +25,4 @@ ENV MANAGEMENT_SERVER_PORT=9090
 EXPOSE 8085
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=10 \
     CMD wget -q -O- http://localhost:9090/actuator/health/readiness || exit 1
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "org.springframework.boot.loader.launch.JarLauncher"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=55.0", "-XX:+ExitOnOutOfMemoryError", "org.springframework.boot.loader.launch.JarLauncher"]

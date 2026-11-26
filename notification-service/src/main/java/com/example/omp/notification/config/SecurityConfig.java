@@ -67,7 +67,8 @@ public class SecurityConfig {
 
                                         // Actuator prometheus — authenticated.
                                         .requestMatchers("/actuator/prometheus")
-                                        .authenticated()
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
 
                                         // Everything else — authenticated.
                                         .anyRequest()

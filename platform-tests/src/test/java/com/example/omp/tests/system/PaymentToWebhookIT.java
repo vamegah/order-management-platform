@@ -16,6 +16,7 @@ import com.example.omp.testsupport.TestRetryScheduler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
@@ -98,6 +99,42 @@ class PaymentToWebhookIT {
                     SharedContainers.kafkaBootstrap(), "platform-tests");
         } finally {
             if (subscriber != null) subscriber.close();
+        }
+    }
+
+    @Test
+    void matchingSubscriptionsCannotReceiveOrQueueAnotherCustomersPayment() throws Exception {
+        subscribe("payment.confirmed");
+        try (var foreign = new MockSubscriber()) {
+            var authorization = new HttpHeaders();
+            authorization.setContentType(MediaType.APPLICATION_JSON);
+            authorization.setBearerAuth(issuer.token(UUID.randomUUID()));
+            var registration =
+                    rest.exchange(
+                            notificationUrl("/api/v1/webhook-subscriptions"),
+                            HttpMethod.POST,
+                            new HttpEntity<>(
+                                    Map.of(
+                                            "name",
+                                            "foreign-interest",
+                                            "targetUrl",
+                                            foreign.url(),
+                                            "eventTypes",
+                                            List.of("payment.confirmed", "PAYMENT_CONFIRMED")),
+                                    authorization),
+                            Map.class);
+            assertThat(registration.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            String foreignId = (String) registration.getBody().get("id");
+            var payment = charge(101L, UUID.randomUUID().toString());
+            assertThat(payment.getStatusCode()).isEqualTo(HttpStatus.OK);
+            awaitDelivery("payment.confirmed", (String) payment.getBody().get("paymentId"), 1);
+            assertThat(
+                            notificationJdbc.queryForObject(
+                                    "SELECT count(*) FROM notifications.notification_dispatch WHERE transport='KAFKA' AND payload::jsonb->>'subscriptionId'=?",
+                                    Integer.class,
+                                    foreignId))
+                    .isZero();
+            assertThat(foreign.requestCount.get()).isZero();
         }
     }
 

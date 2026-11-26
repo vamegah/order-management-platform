@@ -134,8 +134,8 @@ management.opentelemetry:
   tracing:
     export:
       otlp:
-        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
-        transport: grpc
+        endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4318/v1/traces}
+        transport: http
   resource-attributes:
     service.name: ${spring.application.name}
     service.namespace: omp
@@ -169,3 +169,11 @@ app:
     max-size: 100
     allowed-sort-fields:
       - createdAt
+
+# Export the real bounded HTTP histogram used by latency SLOs and trace exemplars.
+management.metrics.distribution.percentiles-histogram.http.server.requests: true
+management.metrics.distribution.slo.http.server.requests: 1s,2500ms
+
+# Preserve request observations across blocking GraphQL resolver and Reactor boundaries.
+spring.task.execution.propagate-context: true
+spring.reactor.context-propagation: auto

@@ -30,6 +30,9 @@ public class GraphQlErrorResolver extends DataFetcherExceptionResolverAdapter {
                                                                 ConstraintViolationException
                                                 ? "VALIDATION_FAILED"
                                                 : failure instanceof DownstreamServiceException
+                                                                || failure
+                                                                        instanceof
+                                                                        feign.RetryableException
                                                         ? "DOWNSTREAM_SERVICE_ERROR"
                                                         : "INTERNAL_ERROR";
         return GraphqlErrorBuilder.newError(environment)

@@ -47,6 +47,7 @@ class PaymentToWebhookContainerIT {
     private static TestJwtIssuer issuer;
     private static GenericContainer<?> subscriber;
     private static String token;
+    private static String metricsToken;
 
     @BeforeAll
     static void startStack() throws Exception {
@@ -101,6 +102,7 @@ class PaymentToWebhookContainerIT {
             subscriber.start();
             Testcontainers.exposeHostPorts(issuer.port());
             token = issuer.token(CUSTOMER_ID);
+            metricsToken = issuer.metricsToken(CUSTOMER_ID);
             notifications = service("notification-service", "notifications");
             notifications.start();
             payments = service("payment-service", "payments");
@@ -206,7 +208,13 @@ class PaymentToWebhookContainerIT {
                 .untilAsserted(
                         () ->
                                 assertThat(
-                                                get(service, path, token, Duration.ofSeconds(30))
+                                                get(
+                                                                service,
+                                                                path,
+                                                                path.equals("/actuator/prometheus")
+                                                                        ? metricsToken
+                                                                        : token,
+                                                                Duration.ofSeconds(30))
                                                         .statusCode())
                                         .isEqualTo(200));
     }

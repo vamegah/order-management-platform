@@ -27,6 +27,14 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
  */
 @Configuration
 public class KafkaConsumerConfig {
+    private org.springframework.boot.kafka.autoconfigure.KafkaProperties connectionProperties =
+            new org.springframework.boot.kafka.autoconfigure.KafkaProperties();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureConnectionProperties(
+            org.springframework.boot.kafka.autoconfigure.KafkaProperties properties) {
+        this.connectionProperties = properties;
+    }
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumerConfig.class);
 
@@ -41,7 +49,7 @@ public class KafkaConsumerConfig {
 
     @Bean
     public ConsumerFactory<String, String> consumerFactory() {
-        Map<String, Object> props = new HashMap<>();
+        Map<String, Object> props = new HashMap<>(connectionProperties.buildConsumerProperties());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -76,6 +84,7 @@ public class KafkaConsumerConfig {
         factory.setConsumerFactory(consumerFactory());
         factory.setCommonErrorHandler(errorHandler);
         factory.getContainerProperties().setAckMode(AckMode.MANUAL_IMMEDIATE);
+        factory.getContainerProperties().setObservationEnabled(true);
         return factory;
     }
 }

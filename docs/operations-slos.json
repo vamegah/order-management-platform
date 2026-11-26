@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "referenceHost": {
+    "minimumCpus": 4,
+    "minimumMemoryMiB": 5632,
+    "topology": "isolated single-host Compose, sequential fault stages, two API replicas for quota tests"
+  },
+  "load": {
+    "tool": "k6",
+    "warmupSeconds": 30,
+    "durationSeconds": 120,
+    "soakSeconds": 600,
+    "requestsPerSecond": 10,
+    "maximumVus": 16,
+    "httpP95Ms": 1000,
+    "httpP99Ms": 2500,
+    "maximumUnexpectedErrorRatio": 0.001,
+    "quotaExceededStatus": 429,
+    "callbackBackpressureStatus": 503
+  },
+  "recovery": {
+    "maximumRpoSeconds": 60,
+    "maximumRtoSeconds": 300,
+    "maximumBacklogDrainSeconds": 120,
+    "maximumAlertDeliverySeconds": 45,
+    "maximumQuotaOutageDecisionMs": 2000,
+    "maximumCollectorRecoverySeconds": 60,
+    "maximumDownstreamHttpFailureMs": 5000,
+    "maximumDownstreamHttpRecoverySeconds": 20
+  },
+  "invariants": [
+    "No duplicate charge, refund, reservation, transfer or durable history identity",
+    "No foreign-tenant delivery or ownership changes",
+    "No acknowledged provider callback without a durable inbox row",
+    "Pending work and DLQ entries survive restart and restore",
+    "Rollbacks reuse verified digests and never reverse database migrations"
+  ],
+  "faults": [
+    "postgres",
+    "kafka",
+    "redis",
+    "provider",
+    "soap",
+    "downstream-http",
+    "downstream-grpc",
+    "collector"
+  ],
+  "policy": "A failed objective is a failed acceptance result with a recorded remediation; missing stages and samples fail."
+}

@@ -41,9 +41,19 @@ public class PaymentSecurityConfig {
                                                 "/actuator/health/**",
                                                 "/actuator/info")
                                         .permitAll()
+                                        .requestMatchers("/actuator/prometheus")
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
                                         .anyRequest()
                                         .authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
+                .oauth2ResourceServer(
+                        oauth2 ->
+                                oauth2.jwt(
+                                        jwt ->
+                                                jwt.jwtAuthenticationConverter(
+                                                        com.example.omp.shared.grpc
+                                                                .GrpcJwtAuthentication
+                                                                .converter())));
         return http.build();
     }
 }

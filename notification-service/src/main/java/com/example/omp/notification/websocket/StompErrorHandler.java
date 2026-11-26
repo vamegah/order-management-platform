@@ -18,10 +18,16 @@ public final class StompErrorHandler extends StompSubProtocolErrorHandler {
     public Message<byte[]> handleClientMessageProcessingError(
             Message<byte[]> message, Throwable failure) {
         String code = "INTERNAL";
+        long retryAfter = 0;
         Throwable cause = failure;
         Throwable deepest = failure;
         for (int depth = 0; cause != null && depth < 10; depth++, cause = cause.getCause()) {
             deepest = cause;
+            if (cause instanceof StompQuotaInterceptor.Rejected rejection) {
+                code = rejection.code();
+                retryAfter = rejection.retryAfterSeconds();
+                break;
+            }
             if (cause instanceof AuthenticationException) {
                 code = "UNAUTHENTICATED";
                 break;
@@ -36,6 +42,7 @@ public final class StompErrorHandler extends StompSubProtocolErrorHandler {
                 "STOMP frame rejected: code={} cause={}", code, deepest.getClass().getSimpleName());
         var headers = StompHeaderAccessor.create(StompCommand.ERROR);
         headers.setMessage(code);
+        if (retryAfter > 0) headers.setNativeHeader("retry-after", Long.toString(retryAfter));
         headers.setLeaveMutable(true);
         return MessageBuilder.createMessage(new byte[0], headers.getMessageHeaders());
     }

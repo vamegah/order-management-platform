@@ -33,8 +33,9 @@ public final class ServiceTestProperties {
         properties.put("spring.data.redis.password", "");
         properties.put("server.port", 0);
         properties.put("management.server.port", 0);
-        // gRPC arrives transitively with payment-service; notification has no RPC server.
-        properties.put("grpc.server.port", schema.equals("notifications") ? -1 : 0);
+        // These contexts exercise HTTP and Kafka. Dedicated deployed suites verify real gRPC.
+        // Disable its transitive listener to avoid racing the random HTTP bind.
+        properties.put("grpc.server.port", -1);
         properties.put("grpc.server.security.enabled", false);
         properties.put("webhook.kafka.replication-factor", 1);
         properties.put("webhook.kafka.delivery-concurrency", 1);

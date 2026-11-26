@@ -117,7 +117,7 @@ groups:
       # ----------------------------------------------------------------------
       - alert: OTelCollectorExportFailures
         expr: |
-          rate(otelcol_exporter_send_failed_spans[5m]) > 0
+          rate(otelcol_exporter_send_failed_spans_total[5m]) > 0
         for: 5m
         labels:
           severity: warning

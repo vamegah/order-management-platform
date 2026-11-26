@@ -1,0 +1,72 @@
+name: ${COMPOSE_PROJECT_NAME:?A fresh isolated recovery project is required}
+services:
+  postgres:
+    image: omp/postgres:section7-recovery
+    environment:
+      POSTGRES_DB: omp
+      POSTGRES_USER: omp_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    command:
+    - postgres
+    - -c
+    - wal_level=replica
+    - -c
+    - archive_mode=on
+    - -c
+    - archive_timeout=60s
+    - -c
+    - archive_command=/usr/local/bin/omp-pgbackrest archive-push %p
+    - -c
+    - shared_buffers=128MB
+    volumes:
+    - primary:/var/lib/postgresql/data
+    - repository:/var/lib/pgbackrest
+    - private:/run/secrets:ro
+    - ./infrastructure/postgres/pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+    networks:
+    - recovery
+    labels:
+      com.omp.acceptance: operations
+    mem_limit: 512m
+  restored:
+    image: omp/postgres:section7-recovery
+    profiles:
+    - restore
+    environment:
+      PGDATA: /restore/data
+    command:
+    - postgres
+    - -D
+    - /restore/data
+    - -c
+    - shared_buffers=128MB
+    - -c
+    - archive_mode=off
+    - -c
+    - hot_standby=on
+    volumes:
+    - restored:/restore/data
+    - repository:/var/lib/pgbackrest:ro
+    - private:/run/secrets:ro
+    - ./infrastructure/postgres/pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+    networks:
+    - recovery
+    labels:
+      com.omp.acceptance: operations
+    mem_limit: 512m
+volumes:
+  primary:
+    labels:
+      com.omp.acceptance: operations
+  restored:
+    labels:
+      com.omp.acceptance: operations
+  repository:
+    labels:
+      com.omp.acceptance: operations
+  private:
+    labels:
+      com.omp.acceptance: operations
+networks:
+  recovery:
+    internal: true

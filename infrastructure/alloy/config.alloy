@@ -1,0 +1,44 @@
+// Dedicated Linux Docker host. No Docker socket or API access is granted.
+// Docker json-file attrs must include the two Compose labels below.
+local.file_match "containers" {
+  path_targets = [{__path__ = "/var/lib/docker/containers/*/*-json.log", job = "omp", env = "prod"}]
+}
+loki.source.file "containers" {
+  targets = local.file_match.containers.targets
+  forward_to = [loki.process.platform.receiver]
+  tail_from_end = true
+}
+loki.process "platform" {
+  forward_to = [loki.write.local.receiver]
+  stage.json {
+    expressions = {service = "attrs.\"com.docker.compose.service\"", project = "attrs.\"com.docker.compose.project\""}
+  }
+  stage.labels { values = {service = "", project = ""} }
+  stage.match {
+    selector = "{service!~\"product-service|customer-service|order-service|inventory-service|payment-service|notification-service|graphql-gateway|legacy-banking-adapter|legacy-bank-service|traefik\"}"
+    action = "drop"
+  }
+  stage.docker {}
+  // Defense in depth for accidental credentials in otherwise structured messages.
+  stage.replace {
+    expression = "(?i)(bearer|basic)[ \\t]+[A-Za-z0-9._~+/=-]+"
+    replace = "[REDACTED]"
+  }
+  stage.replace {
+    expression = "(?i)(authorization|cookie|password|secret|api[_-]?key|access[_-]?token)[=:\" ]+[^ ,\\s\"]+"
+    replace = "[REDACTED]"
+  }
+  stage.label_drop { values = ["filename"] }
+  stage.limit {
+    rate = 500
+    burst = 1000
+    drop = true
+  }
+}
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+    remote_timeout = "3s"
+    max_backoff_retries = 3
+  }
+}

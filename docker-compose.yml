@@ -7,10 +7,8 @@
 #   caps, no external secrets.
 #
 # PRODUCTION
-#   Apply the overlay:  docker compose -f docker-compose.yml \
-#                                       -f docker-compose.prod.yml up -d
-#   The overlay adds TLS (Traefik), resource limits, replicas, Docker secrets,
-#   backup sidecars, and HA for Kafka/Redis. See docker-compose.prod.yml.
+#   Use the standalone docker-compose.prod.yml with a verified immutable image overlay.
+#   Follow docs/runbooks/release.md for private files, approval and rollback.
 #
 # QUICK START
 #   cp .env.example .env
@@ -353,7 +351,7 @@ services:
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
       # OpenTelemetry Collector for trace export.
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       # Inherits env=dev from the parent. Overridden to `prod` in the
       # prod overlay.
@@ -418,7 +416,7 @@ services:
       OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
     networks:
@@ -479,6 +477,8 @@ services:
       otel-collector:
         condition: service_started
     environment:
+      # Keep native buffers, stacks and JIT code within the 512 MiB service limit.
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m
       GRPC_CERTIFICATE_RELOAD_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: local
 
@@ -493,7 +493,7 @@ services:
       PRODUCT_SERVICE_URL: http://product-service:8081
       CUSTOMER_SERVICE_URL: http://customer-service:8082
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
     networks:
@@ -572,7 +572,7 @@ services:
       ORDER_SERVICE_URL: http://order-service:8083
 
       # Observability
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
     networks:
       - edge
@@ -652,7 +652,7 @@ services:
       OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
 
       NOTIFICATION_SERVICE_DB_PASSWORD: ${NOTIFICATION_SERVICE_DB_PASSWORD:-local-dev-notifications-password}
@@ -732,7 +732,7 @@ services:
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
       # OpenTelemetry Collector for trace export.
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       # Metrics environment label.
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
@@ -818,7 +818,7 @@ services:
       OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
 
       GRPC_PORT: "9093"
@@ -1169,6 +1169,17 @@ services:
   # Receives firing alerts from Prometheus and routes them to receivers.
   # Dev: logs to a local webhook. Prod overlay: Slack/PagerDuty/email.
   # ============================================================================
+  alert-receiver:
+    image: python:3.12-alpine
+    profiles: [operations-dev]
+    command: [python, /app/alert_receiver.py]
+    volumes:
+      - ./scripts/operations/alert_receiver.py:/app/alert_receiver.py:ro
+    networks: [data]
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 128m
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     restart: unless-stopped
@@ -1180,7 +1191,7 @@ services:
     volumes:
       - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     environment:
-      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-http://localhost:5001/alerts}
+      OMP_RECEIVER_CONFIGURATION: file-mounted
     networks:
       - edge
       - data
@@ -1216,7 +1227,7 @@ services:
       # `env` external label (see infrastructure/prometheus/prometheus.yml,
       # global.external_labels). Without this flag, ${PROMETHEUS_ENV} would
       # be treated as a literal string, not expanded.
-      - --enable-feature=expand-external-labels
+      - --enable-feature=expand-external-labels,exemplar-storage
     environment:
       # Environment label applied to every metric as an external label.
       # Used in Grafana queries like `up{env="dev"}` to distinguish

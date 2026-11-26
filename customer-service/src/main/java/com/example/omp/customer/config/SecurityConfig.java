@@ -81,7 +81,8 @@ public class SecurityConfig {
 
                                         // Protected: Prometheus metrics (internal-only via Traefik)
                                         .requestMatchers("/actuator/prometheus")
-                                        .authenticated()
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
 
                                         // Reads: any authenticated user
                                         .requestMatchers(HttpMethod.GET, "/api/v1/**")

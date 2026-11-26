@@ -229,7 +229,7 @@ class WebhookDeliveryEndToEndIT extends AbstractNotificationTest {
         // 1. Register a subscription pointing at the mock endpoint.
         WebhookSubscription sub = new WebhookSubscription();
         sub.setOwnerType(SubscriptionOwnerType.CUSTOMER);
-        sub.setOwnerId(UUID.randomUUID());
+        sub.setOwnerId(TestTokens.ALICE_CUSTOMER_ID);
         sub.setName("e2e-test");
         sub.setTargetUrl("http://127.0.0.1:" + subscriberPort + "/hook");
         sub.setSecret("abcdefghijklmnopqrstuvwxyz0123456789");

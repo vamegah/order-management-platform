@@ -23,6 +23,14 @@ import org.springframework.kafka.core.*;
  */
 @Configuration
 public class WebhookKafkaConfig {
+    private org.springframework.boot.kafka.autoconfigure.KafkaProperties connectionProperties =
+            new org.springframework.boot.kafka.autoconfigure.KafkaProperties();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureConnectionProperties(
+            org.springframework.boot.kafka.autoconfigure.KafkaProperties properties) {
+        this.connectionProperties = properties;
+    }
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -51,7 +59,7 @@ public class WebhookKafkaConfig {
 
     @Bean
     public ProducerFactory<String, String> webhookProducerFactory() {
-        Map<String, Object> props = new HashMap<>();
+        Map<String, Object> props = new HashMap<>(connectionProperties.buildProducerProperties());
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -66,7 +74,9 @@ public class WebhookKafkaConfig {
 
     @Bean
     public KafkaTemplate<String, String> kafkaTemplate() {
-        return new KafkaTemplate<>(webhookProducerFactory());
+        var template = new KafkaTemplate<>(webhookProducerFactory());
+        template.setObservationEnabled(true);
+        return template;
     }
 
     // -----------------------------------------------------------------------
@@ -74,7 +84,7 @@ public class WebhookKafkaConfig {
     // -----------------------------------------------------------------------
 
     private Map<String, Object> baseConsumerProps(String groupSuffix) {
-        Map<String, Object> props = new HashMap<>();
+        Map<String, Object> props = new HashMap<>(connectionProperties.buildConsumerProperties());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId + "-" + groupSuffix);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -109,6 +119,7 @@ public class WebhookKafkaConfig {
         factory.setCommonErrorHandler(quarantine.handler("webhook", false));
         factory.getContainerProperties()
                 .setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setObservationEnabled(true);
         return factory;
     }
 
@@ -133,6 +144,7 @@ public class WebhookKafkaConfig {
         factory.setCommonErrorHandler(quarantine.handler("delivery", false));
         factory.getContainerProperties()
                 .setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setObservationEnabled(true);
         return factory;
     }
 
@@ -147,6 +159,7 @@ public class WebhookKafkaConfig {
         factory.setCommonErrorHandler(quarantine.handler("delivery-dlq", false));
         factory.getContainerProperties()
                 .setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setObservationEnabled(true);
         return factory;
     }
 

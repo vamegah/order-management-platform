@@ -42,15 +42,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final SubscriptionInterceptor subscriptionInterceptor;
     private final com.example.omp.notification.websocket.WebSocketSessions sessions;
 
+    private final com.example.omp.notification.websocket.StompQuotaInterceptor quotaInterceptor;
+
     public WebSocketConfig(
             NotificationProperties properties,
             StompAuthChannelInterceptor authInterceptor,
             SubscriptionInterceptor subscriptionInterceptor,
-            com.example.omp.notification.websocket.WebSocketSessions sessions) {
+            com.example.omp.notification.websocket.WebSocketSessions sessions,
+            com.example.omp.notification.websocket.StompQuotaInterceptor quotaInterceptor) {
         this.properties = properties;
         this.authInterceptor = authInterceptor;
         this.subscriptionInterceptor = subscriptionInterceptor;
         this.sessions = sessions;
+        this.quotaInterceptor = quotaInterceptor;
     }
 
     /**
@@ -92,7 +96,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // Order matters: auth must run before subscription handling.
         registration.taskExecutor().corePoolSize(4).maxPoolSize(8).queueCapacity(2048);
-        registration.interceptors(authInterceptor, subscriptionInterceptor);
+        registration.interceptors(authInterceptor, quotaInterceptor, subscriptionInterceptor);
     }
 
     @Override

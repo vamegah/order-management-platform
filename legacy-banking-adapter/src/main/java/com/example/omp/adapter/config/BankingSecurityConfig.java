@@ -44,13 +44,15 @@ public class BankingSecurityConfig {
                                                 "/actuator/health",
                                                 "/actuator/health/**",
                                                 "/actuator/info",
-                                                "/actuator/prometheus",
                                                 "/error",
                                                 "/v3/api-docs",
                                                 "/v3/api-docs/**",
                                                 "/swagger-ui/**",
                                                 "/swagger-ui.html")
                                         .permitAll()
+                                        .requestMatchers("/actuator/prometheus")
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
                                         .anyRequest()
                                         .hasRole("admin"))
                 .exceptionHandling(

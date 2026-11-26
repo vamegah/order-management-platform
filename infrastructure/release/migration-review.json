@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "ea17ba547c7f13eea809b16036e78fa30fc802b4",
+  "additions": {
+    "notification-service/src/main/resources/db/migration/V6__durable_trace_context.sql": {
+      "sha256": "079d7a6ad35c389aa7bc4b9cdca2dd967b3ba2380b12facced675b4e3393de2f",
+      "rollbackCompatible": true,
+      "reason": "Nullable trace metadata and a NULL-compatible format constraint; earlier application writes remain valid."
+    }
+  }
+}

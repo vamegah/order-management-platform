@@ -10,6 +10,12 @@ import org.springframework.ws.transport.http.HttpUrlConnectionMessageSender;
 
 @Configuration
 public class SoapClientConfig {
+    private io.micrometer.tracing.Tracer tracer;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureTracing(io.micrometer.tracing.Tracer tracer) {
+        this.tracer = tracer;
+    }
 
     @Value("${bank.ws.url}")
     private String bankWsUrl;
@@ -98,7 +104,8 @@ public class SoapClientConfig {
         template.setMessageSender(messageSender);
         template.setInterceptors(
                 new org.springframework.ws.client.support.interceptor.ClientInterceptor[] {
-                    wssConfig.securityInterceptor()
+                    wssConfig.securityInterceptor(),
+                    new com.example.omp.adapter.soap.SoapTraceInterceptor(tracer)
                 });
         return template;
     }

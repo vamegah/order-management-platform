@@ -35,3 +35,7 @@ if (cd "$TEST_DIR/project" && PATH="$TEST_DIR/bin" bash mvnw --version > "$TEST_
 fi
 grep -q 'Failed to validate Maven distribution SHA-256' "$TEST_DIR/rejected.log"
 echo 'Verified ZIP extraction without unzip and rejected an incorrect checksum.'
+
+# Exercise the real curl retry path, including an initially missing CDN object.
+ln -s "$(command -v curl)" "$TEST_DIR/bin/curl"
+python3 "$ROOT/scripts/tests/maven_wrapper_http_retry.py" "$TEST_DIR" "$CHECKSUM"

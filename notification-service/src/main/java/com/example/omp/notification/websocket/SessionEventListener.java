@@ -18,13 +18,13 @@ import org.springframework.web.socket.messaging.SessionUnsubscribeEvent;
  * <p>Events:
  *
  * <ul>
- *   <li>{@code SessionConnectedEvent} — a new STOMP session is established (post-CONNECT). We log
+ *   <li>{@code SessionConnectedEvent} â€” a new STOMP session is established (post-CONNECT). We log
  *       and, in future phases, might record the connection in a metrics registry.
- *   <li>{@code SessionDisconnectEvent} — session closed. We remove all subscriptions for this
+ *   <li>{@code SessionDisconnectEvent} â€” session closed. We remove all subscriptions for this
  *       session.
- *   <li>{@code SessionSubscribeEvent} — the framework has registered a subscription. Our {@link
+ *   <li>{@code SessionSubscribeEvent} â€” the framework has registered a subscription. Our {@link
  *       SubscriptionInterceptor} already handled it; this is for logging.
- *   <li>{@code SessionUnsubscribeEvent} — a subscription was removed. Same — we log but the
+ *   <li>{@code SessionUnsubscribeEvent} â€” a subscription was removed. Same â€” we log but the
  *       SubscriptionInterceptor already removed the matching session/subscription ID.
  * </ul>
  */
@@ -42,10 +42,7 @@ public class SessionEventListener {
     @EventListener
     public void onConnected(SessionConnectedEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        log.info(
-                "STOMP session connected: sessionId={} user={}",
-                accessor.getSessionId(),
-                accessor.getUser() != null ? accessor.getUser().getName() : "?");
+        log.info("STOMP session connected: sessionId={}", accessor.getSessionId());
     }
 
     @EventListener

@@ -15,7 +15,7 @@ public class CorsProperties {
     private List<String> allowedOrigins = List.of();
 
     /** Exposed response headers. */
-    private List<String> exposedHeaders = List.of("X-Request-Id", "Location");
+    private List<String> exposedHeaders = List.of("X-Request-Id", "Location", "Retry-After");
 
     /** Preflight cache duration in seconds. */
     private long maxAge = 3600;

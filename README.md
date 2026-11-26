@@ -81,11 +81,12 @@ at `http://graphql.localhost/graphql`; the banking facade routes at
 
 ## Verification
 
-Run from the repository root:
+Run from the repository root. The [pinned GraphQL security backport](infrastructure/dependencies/graphql-java/README.md) is built from upstream source and installed locally before Maven verification:
 
 ```bash
 python -m unittest discover -s scripts/tests -v
 bash scripts/tests/test_maven_wrapper.sh
+python scripts/bootstrap_graphql_backport.py
 ./mvnw -Pstatic-analysis clean verify
 python scripts/check_verification.py
 python scripts/check_static_analysis.py
