@@ -100,7 +100,7 @@ class ProvisioningGuardTest(unittest.TestCase):
                             "Env": ["PAYMENT_PROVIDER=stripe"],
                         }
                     }
-                    for name in ("keycloak", "payment-service", "traefik")
+                    for name in ("keycloak", "payment-service", "traefik", "postgres")
                 ]
                 execute.side_effect = ["owned\n", json.dumps(items)]
                 with self.assertRaisesRegex(ValueError, "external charges"):

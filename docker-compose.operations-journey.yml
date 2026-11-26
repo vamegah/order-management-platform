@@ -1,5 +1,8 @@
 # Isolated cross-protocol acceptance; never merge this overlay into production.
 services:
+  order-recovery-token:
+    labels:
+      com.omp.acceptance: operations
   product-service:
     environment:
       TRACING_SAMPLE_RATE: "1.0"

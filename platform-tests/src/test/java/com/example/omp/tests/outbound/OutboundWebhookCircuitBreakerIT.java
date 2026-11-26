@@ -50,8 +50,15 @@ class OutboundWebhookCircuitBreakerIT extends OutboundWebhookBase {
         sub.setDisabledReason("test");
         subscriptions.save(sub);
 
-        // Exercise a delivery queued before the circuit opened; the matcher
-        // deliberately excludes subscriptions that are already disabled.
+        // Retain the original owner-bound source, as a delivery queued before
+        // the circuit opened would. Missing/foreign payloads are quarantined earlier.
+        String eventId = java.util.UUID.randomUUID().toString();
+        jdbc.update(
+                "INSERT INTO notifications.webhook_event_payload(event_id,event_type,payload,occurred_at) VALUES (?, 'payment.confirmed', ?::jsonb, clock_timestamp())",
+                eventId,
+                "{\"customerId\":\"" + sub.getOwnerId() + "\"}");
+
+        // The matcher deliberately excludes subscriptions that are already disabled.
         applicationContext
                 .getBean(
                         com.example.omp.notification.webhook.matcher.WebhookDeliveryPublisher.class)
@@ -59,7 +66,7 @@ class OutboundWebhookCircuitBreakerIT extends OutboundWebhookBase {
                         new com.example.omp.notification.webhook.matcher.DeliveryMessage(
                                 java.util.UUID.randomUUID(),
                                 sub.getId(),
-                                java.util.UUID.randomUUID().toString(),
+                                eventId,
                                 "payment.confirmed",
                                 1,
                                 null));

@@ -19,6 +19,7 @@ const params = (name) => ({ headers: { Authorization: `Bearer ${credential()}`, 
 
 export const options = {
   discardResponseBodies: false,
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   systemTags: ['method', 'name', 'status', 'scenario', 'expected_response'],
   scenarios: {
     warmup: { executor: 'constant-vus', exec: 'browse', vus: 1, duration: '30s', gracefulStop: '5s' },
@@ -39,12 +40,12 @@ export const options = {
   },
 };
 
-function credential() {
+function credential(index = execution.vu.idInTest - 1) {
   if (token && Date.now() < tokenExpiresAt) return token;
-  const identity = identities.clients[execution.vu.idInTest - 1];
+  const identity = identities.clients[index];
   if (!identity) fail('A distinct prepared client identity is required for every VU');
   const response = http.post(identities.tokenUrl, { grant_type: 'client_credentials' }, {
-    headers: { Authorization: `Basic ${encoding.b64encode(`${identity.clientId}:${identity.clientSecret}`)}` },
+    headers: { Authorization: `Basic ${encoding.b64encode(`${identity.clientId}:${identity.clientSecret}`)}`, Host: 'keycloak.localhost' },
     tags: { name: 'POST workload token' }, timeout: '5s', redirects: 0,
   });
   if (response.status !== 200) fail('The isolated issuer rejected a workload client');
@@ -62,6 +63,20 @@ export function setup() {
   if (!data.customerId || !data.productId || !Array.isArray(data.refundPayments) || data.refundPayments.length < 10) fail('Prepared isolated checkout and captured refund fixtures are required');
   if (!/^http:\/\/(localhost|127\.0\.0\.1|keycloak)(:\d+)?\/realms\/omp\/protocol\/openid-connect\/token$/.test(identities.tokenUrl || '') || !Array.isArray(identities.clients) || identities.clients.length < 32) fail('The isolated issuer and at least 32 distinct workload clients are required');
   if (new Set(identities.clients.map(i => i.clientId)).size !== identities.clients.length) fail('Load identities must be distinct');
+  // Use the same workload credential, issuer Host and ingress path as measured VUs.
+  // Reject authentication/routing mistakes before a long, meaningless load run.
+  const authorization = `Bearer ${credential(0)}`;
+  const rest = http.get(`${base}/api/v1/products?size=1`, {
+    headers: { Authorization: authorization, Host: __ENV.OMP_PRODUCT_HOST }, timeout: '5s', redirects: 0,
+    tags: { name: 'GET workload preflight' },
+  });
+  const graphql = http.post(`${base}/graphql`, JSON.stringify({ query: '{ products(size: 1) { content { id } } }' }), {
+    headers: { Authorization: authorization, Host: __ENV.OMP_GRAPHQL_HOST, 'Content-Type': 'application/json' },
+    timeout: '5s', redirects: 0, tags: { name: 'POST workload preflight' },
+  });
+  if (rest.status !== 200 || graphql.status !== 200 || graphql.json().errors || !Array.isArray(graphql.json().data?.products?.content)) {
+    fail(`Authenticated workload preflight failed (REST ${rest.status}, GraphQL ${graphql.status}); no load was started`);
+  }
 }
 function record(response, expected, label) {
   const good = expected.includes(response.status);

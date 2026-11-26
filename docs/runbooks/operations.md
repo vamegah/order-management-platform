@@ -101,3 +101,10 @@ Inspect the public leaf projection and execute overlapping-trust rotation. A mis
 Check collector/Tempo availability and bounded export queues. Application correctness must survive telemetry loss. Restore collection and verify a new error/slow trace without exporting credentials or request payloads.
 
 The backup timer invokes `scripts/operations/backup_active_release.py` against the accepted persistent promotion record. It uses the retained source/overlay/environment and database UID/GID `70:2000`; run it only after a successful promotion has written `current.json`.
+
+
+## Isolated application rollback rehearsal
+
+On the disposable operations journey topology, run `python scripts/verify_deployment_rollback.py --project "$COMPOSE_PROJECT_NAME"` before load measurement. It verifies ownership and the healthy source-labelled image, replaces only the stateless product service with a deliberately invalid local database configuration, requires deployment failure, then restores the original immutable image ID and configuration within the declared 300-second recovery objective. Product data, migration history and all stateful/stream-owner containers must remain unchanged. Restoration runs even if the fault check fails; the complete report is `coverage/operations/deployment-rollback.json`.
+
+This executed local drill demonstrates application replacement recovery. Production promotion still requires the signed release workflow and configured environment approvals described in [release operations](release.md); the rehearsal does not create those approvals or publish a release.

@@ -28,8 +28,9 @@ def execute(args):
         raise ValueError("Unexpected verification source")
     root = Path(__file__).resolve().parents[1]
     current = run("git", "rev-parse", "HEAD").strip()
-    if current != revision or run("git", "status", "--porcelain").strip():
-        raise ValueError("A clean exact-source checkout is required")
+    changes = run("git", "status", "--porcelain").strip()
+    if current != revision or changes:
+        raise ValueError("A clean exact-source checkout is required; HEAD=" + current + "; expected=" + revision + "; changed paths=" + changes[:1200])
     image = json.loads(run("docker", "image", "inspect", args.image))[0]
     if args.comparison:
         comparison = json.loads(run("docker", "image", "inspect", args.comparison))[0]

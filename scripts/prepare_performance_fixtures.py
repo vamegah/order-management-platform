@@ -1,5 +1,5 @@
 """Prepare short-lived workload identities and captured noop payments in an owned local drill only."""
-import argparse, json, os, re, secrets, subprocess, uuid
+import argparse, json, os, re, secrets, subprocess, time, uuid
 from pathlib import Path
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 from urllib.parse import urlencode
@@ -43,7 +43,7 @@ def prepare(args):
         if labels.get("com.omp.acceptance") != "operations":
             raise ValueError("Refusing an unowned fixture service")
         services[labels.get("com.docker.compose.service")] = item
-    for name in ("keycloak", "payment-service", "traefik"):
+    for name in ("keycloak", "payment-service", "traefik", "postgres"):
         if name not in services:
             raise ValueError("Required fixture service absent: " + name)
 
@@ -233,6 +233,20 @@ def prepare(args):
             "refundPayments": payments,
             "provider": "noop",
         }
+    # Exercise the deployed upgrade worker rather than ignoring legacy violations.
+    # An unplaced draft needs no reservation/payment; accepted historical orders
+    # require verified references or the explicitly approved audited disposition.
+    deadline = time.monotonic() + 120
+    while True:
+        unresolved = docker("exec", services["postgres"]["Id"], "psql", "-XAtq",
+                            "--set=ON_ERROR_STOP=1", "-U", "omp_admin", "-d", "omp",
+                            "-c", "SELECT count(*) FROM orders.legacy_lifecycle_resolution WHERE resolved_at IS NULL").strip()
+        if unresolved == "0":
+            break
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Deployed legacy reconciliation did not finish within the declared 120-second recovery objective")
+        time.sleep(1)
+
     destination.mkdir(mode=0o700, parents=True)
     os.chmod(destination, 0o700)
 
@@ -256,6 +270,7 @@ def prepare(args):
                 "isolatedWorkloadClients": 32,
                 "capturedNoopPayments": 20,
                 "externalMoneyCalls": 0,
+                "unresolvedLegacyOrders": 0,
                 "credentialValuesPrinted": False,
             }
         )

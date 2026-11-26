@@ -734,6 +734,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.2
+          cache-dir: ${{ runner.temp }}/omp-trivy-cache
           image-ref: omp/${{ matrix.service }}:verification
           format: json
           output: coverage/operations/release/${{ matrix.service }}/scan.json
@@ -1065,6 +1066,10 @@ jobs:
       COMPOSE_PROJECT_NAME: omp-operations-journey${{ github.run_id }}
       OMP_ACCEPTANCE_FIXTURES: 'true'
     steps:
+      - name: Define isolated recovery projection paths
+        run: |
+          printf 'ORDER_RECOVERY_TOKEN_DIRECTORY=%s/operations-recovery/projection\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'ORDER_RECOVERY_CLIENT_SECRET_FILE=%s/operations-recovery/client-secret\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -1082,6 +1087,26 @@ jobs:
             sudo chgrp 1000 "infrastructure/tls/$service/tls.key"
             chmod 640 "infrastructure/tls/$service/tls.key"
           done
+      - name: Provision private development recovery identity for application UID 1000
+        shell: bash
+        run: |
+          sudo --preserve-env=ORDER_RECOVERY_TOKEN_DIRECTORY,ORDER_RECOVERY_CLIENT_SECRET_FILE "$(command -v python)" - <<'PY'
+          import json, os
+          from pathlib import Path
+          projection = Path(os.environ['ORDER_RECOVERY_TOKEN_DIRECTORY'])
+          secret = Path(os.environ['ORDER_RECOVERY_CLIENT_SECRET_FILE'])
+          assert projection.is_absolute() and secret.parent == projection.parent
+          projection.parent.mkdir(mode=0o700)
+          projection.mkdir(mode=0o700)
+          realm = json.loads(Path('infrastructure/keycloak/import/omp-realm.json').read_text())
+          credential = next(c['secret'] for c in realm['clients'] if c['clientId'] == 'order-recovery')
+          with secret.open('x', encoding='utf-8') as target:
+              os.fchmod(target.fileno(), 0o400)
+              target.write(credential)
+              os.fchown(target.fileno(), 1000, 1000)
+          for path in (projection.parent, projection):
+              os.chown(path, 1000, 1000)
+          PY
       - name: Build source-bound protocol participants
         run: |
           for service in product-service customer-service order-service inventory-service payment-service notification-service graphql-gateway; do
@@ -1090,7 +1115,7 @@ jobs:
       - name: Start the isolated protocol and telemetry topology
         id: operations-stack
         run: >-
-          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.operations-journey.yml
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml
           up -d --no-build --wait --wait-timeout 600 traefik product-service customer-service order-service inventory-service payment-service notification-service graphql-gateway tempo
       - name: Trace a real checkout through every applicable asynchronous boundary
         working-directory: clients/notifications
@@ -1100,6 +1125,9 @@ jobs:
       - name: Measure and recover a failing downstream HTTP dependency
         if: always() && steps.operations-stack.outcome == 'success'
         run: python scripts/verify_downstream_http_fault.py --project "$COMPOSE_PROJECT_NAME"
+      - name: Rehearse failed application replacement and immutable rollback
+        if: always() && steps.operations-stack.outcome == 'success'
+        run: python scripts/verify_deployment_rollback.py --project "$COMPOSE_PROJECT_NAME"
       - name: Prepare isolated workload clients and captured noop payments
         id: load-fixtures
         if: always() && steps.operations-stack.outcome == 'success'
@@ -1122,6 +1150,8 @@ jobs:
           assert len(report["ownedImages"])==7 and len(report["phases"])==3 and all(p["passed"] for p in report["phases"])
           fault=json.loads(Path("coverage/operations/downstream-http.json").read_text())
           assert fault["passed"] and fault["cleanupPassed"] and not fault["sourceDirty"] and fault["sourceRevision"]==os.environ["GITHUB_SHA"]
+          rollback=json.loads(Path("coverage/operations/deployment-rollback.json").read_text())
+          assert rollback["passed"] and rollback["cleanupPassed"] and not rollback["sourceDirty"] and rollback["sourceRevision"]==os.environ["GITHUB_SHA"]
           performance=json.loads(Path("coverage/operations/performance/performance.json").read_text())
           assert performance["passed"] and not performance["sourceDirty"] and performance["sourceRevision"]==os.environ["GITHUB_SHA"]
           assert len(performance["phases"])==2 and all(p["passed"] and p["conservationPassed"] for p in performance["phases"])
@@ -1130,8 +1160,8 @@ jobs:
         if: always()
         run: |
           mkdir -p coverage/operations
-          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.operations-journey.yml ps -a > coverage/operations/protocol-containers.txt
-          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.operations-journey.yml logs --no-color --tail 120 > coverage/operations/protocol-services.log
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml ps -a > coverage/operations/protocol-containers.txt
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml logs --no-color --tail 120 > coverage/operations/protocol-services.log
       - name: Retain source-bound protocol journey evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -1142,7 +1172,7 @@ jobs:
       - name: Remove only the disposable journey topology
         if: always()
         run: >-
-          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.operations-journey.yml
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.lifecycle.yml -f docker-compose.recovery-projector.yml -f docker-compose.operations-journey.yml
           down --volumes --remove-orphans
 
   quality-gate:

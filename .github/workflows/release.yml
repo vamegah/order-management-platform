@@ -85,6 +85,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.2
+          cache-dir: ${{ runner.temp }}/omp-trivy-cache
           image-ref: ${{ env.IMAGE }}@${{ steps.image.outputs.digest }}
           format: json
           output: release/${{ matrix.service }}-scan.json
