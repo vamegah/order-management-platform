@@ -1,6 +1,6 @@
 # Signed release and approved promotion
 
-Status: implementation under verification. Local drills do not constitute a production deployment. A protected staging/production destination, named approvers and its dedicated runner must be provisioned before enabling promotion.
+Status (2026-11-26): six Section 7 items have accepted isolated verification. Release readiness remains blocked pending vendor patches for the [recorded infrastructure findings](../security/runtime-image-findings.json), as explicitly selected by the maintainer. A protected destination, named approvers, immutable release tags and a dedicated runner remain production activation prerequisites. The zero-high/critical scan policy remains enforced.
 
 The supported topology is a dedicated Linux amd64 Docker Compose host. Use the standalone `docker-compose.prod.yml` with a cryptographically verified image overlay. Development Compose files and their credentials are excluded. Inventory/payment each have one replica and are stopped before replacement. PostgreSQL, Kafka and Redis remain on private networks; payment and webhook delivery have outbound connectivity without published host ports. This is a single-host availability model, not a multi-zone deployment.
 

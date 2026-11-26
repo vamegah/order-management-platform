@@ -19,7 +19,7 @@
       "highCriticalOccurrences": 2,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "golang.org/x/net",
@@ -42,7 +42,7 @@
       "highCriticalOccurrences": 6,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "java-21-openjdk-headless",
@@ -87,7 +87,7 @@
       "highCriticalOccurrences": 76,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "brotli-libs",
@@ -433,7 +433,7 @@
       "highCriticalOccurrences": 2,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "golang.org/x/net",
@@ -456,7 +456,7 @@
       "highCriticalOccurrences": 2,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "github.com/go-jose/go-jose/v4",
@@ -489,7 +489,7 @@
       "highCriticalOccurrences": 48,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "github.com/klauspost/compress",
@@ -615,7 +615,7 @@
       "highCriticalOccurrences": 16,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "krb5-libs",
@@ -658,7 +658,7 @@
       "highCriticalOccurrences": 2,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "libcrypto3",
@@ -691,7 +691,7 @@
       "highCriticalOccurrences": 15,
       "status": "RELEASE_BLOCKED",
       "owner": "platform maintainers",
-      "requiredAction": "Select and verify a vendor-patched image or an explicitly maintained source backport; rerun affected operational drills and the unchanged release scan policy.",
+      "requiredAction": "Await vendor patches, review updated image digests against the unchanged high/critical policy, and repeat affected operational acceptance before release.",
       "components": [
         {
           "package": "golang.org/x/net",
@@ -753,5 +753,11 @@
         }
       ]
     }
-  ]
+  ],
+  "maintainerDecision": {
+    "decision": "WAIT_FOR_UPSTREAM_PATCHES",
+    "date": "2026-11-26",
+    "additionalInfrastructureBackportsApproved": false,
+    "scanExceptionsApproved": false
+  }
 }
