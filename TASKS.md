@@ -219,6 +219,8 @@ Section 6 is complete. [All seven deployed phases](https://github.com/vamegah/or
 - [ ] **Harden supply chain and deployment.** Pin image digests, sign images/SBOMs, scan dependencies/images, manage secrets outside environment files, and automate environment promotion.
   - Acceptance: a reproducible release can be promoted with approvals and rollback instructions.
 
+Section 7 implementation checkpoint (2026-11-25): shared quotas, audience/metrics policies, the endpoint security inventory, private production topology, monitoring/exporters, encrypted recovery, and signed-release/promotion controls are implemented and under verification. The real-issuer two-replica API drill passes all three phases, including a 265 ms fail-closed Redis outage response. All five real monitoring phases pass: twelve alert triggers/deliveries/resolutions, inhibition/silence, sensitive trace redaction, and paused-backend trace recovery within twenty seconds. Reports under `coverage/operations` retain the exact dirty-source tree hashes and hardware; these local checkpoints are provisional until final-source CI acceptance. The portable broker/exporter drill, expanded tracing/coverage regressions, cross-protocol journey, load/soak and complete fault execution, release scanning/signing and promotion/rollback rehearsal still require verification. Section 7 checkboxes stay open until their respective acceptance evidence is complete.
+
 ## 8. Documentation and Final Acceptance
 
 - [x] **Reconcile project status documentation.** Update the root README, phase plan, service READMEs, ADR index, and retrospectives so they match implemented code and remaining work.

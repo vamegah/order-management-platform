@@ -1,0 +1,26 @@
+[Unit]
+Description=Short-lived scoped OMP metrics token projection
+After=network-online.target docker.service
+Wants=network-online.target
+[Service]
+Type=simple
+User=nobody
+Group=2000
+WorkingDirectory=/opt/omp
+RuntimeDirectory=omp-metrics-token
+RuntimeDirectoryMode=0700
+EnvironmentFile=/etc/omp/metrics-token.env
+LoadCredential=client-secret:/etc/omp/secrets/metrics_client_secret
+Environment=SERVICE_TOKEN_CLIENT_SECRET_FILE=%d/client-secret
+Environment=SERVICE_TOKEN_OUTPUT=/run/omp-metrics-token/token
+ExecStart=/usr/bin/python3 scripts/project_service_token.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/omp-metrics-token
+MemoryMax=128M
+[Install]
+WantedBy=multi-user.target

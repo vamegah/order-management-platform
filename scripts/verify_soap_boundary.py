@@ -76,7 +76,8 @@ class Acceptance:
         body={'fromAccount':'ACC-1','toAccount':'ACC-2','amount':float(amount),'currency':'USD','reference':'soap-acceptance-'+uuid.uuid4().hex,**values}
         return self.http('/api/v1/banking/transfers',body,key)
     def metrics(self):
-        with self.opener.open('http://127.0.0.1:19085/actuator/prometheus',timeout=5) as response:return response.read().decode()
+        request=Request('http://127.0.0.1:19085/actuator/prometheus',headers={'Authorization':'Bearer '+self.auth.token('admin')})
+        with self.opener.open(request,timeout=5) as response:return response.read().decode()
     def metric(self,name,operation=None):
         return sum(float(line.rsplit(' ',1)[1]) for line in self.metrics().splitlines() if line.startswith(name+'{') and (operation is None or f'operation="{operation}"' in line))
     def state(self,state):

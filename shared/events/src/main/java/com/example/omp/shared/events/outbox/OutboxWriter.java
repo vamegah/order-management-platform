@@ -39,6 +39,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Component
 public class OutboxWriter {
+    private final com.example.omp.shared.events.tracing.EventTracing tracing =
+            new com.example.omp.shared.events.tracing.EventTracing();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureTracing(
+            io.micrometer.tracing.Tracer tracer,
+            io.micrometer.tracing.propagation.Propagator propagator) {
+        tracing.configure(tracer, propagator);
+    }
 
     private static final Logger log = LoggerFactory.getLogger(OutboxWriter.class);
 
@@ -105,7 +114,7 @@ public class OutboxWriter {
             var data = wire.deepCopy();
             wire.put("aggregateId", event.aggregateId());
             wire.set("data", data);
-            return objectMapper.writeValueAsString(wire);
+            return tracing.attach(objectMapper.writeValueAsString(wire), tracing.current());
         } catch (JsonProcessingException e) {
             throw new OutboxException("Failed to serialize event " + event.eventType(), e);
         }

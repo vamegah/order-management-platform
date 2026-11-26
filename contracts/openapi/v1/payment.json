@@ -468,6 +468,26 @@
             },
             "description": "Conflict"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
           "502": {
             "content": {
               "*/*": {
@@ -477,6 +497,26 @@
               }
             },
             "description": "Provider outcome unavailable"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -546,6 +586,46 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -636,6 +716,46 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -736,6 +856,26 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -846,6 +986,46 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -954,6 +1134,26 @@
             },
             "description": "Conflict"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
           "502": {
             "content": {
               "*/*": {
@@ -963,6 +1163,26 @@
               }
             },
             "description": "Provider outcome unresolved"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1070,6 +1290,46 @@
               }
             },
             "description": "Refund failed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1156,6 +1416,46 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1244,6 +1544,46 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1357,6 +1697,46 @@
               }
             },
             "description": "Refund failed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1462,6 +1842,46 @@
               }
             },
             "description": "Refund failed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The shared identity quota is exhausted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The quota store is unavailable; retry safely.",
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum delay in seconds before retrying.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "tags": [

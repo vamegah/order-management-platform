@@ -123,15 +123,14 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
         if (sessionAttributes != null) {
             sessionAttributes.put("jwt", new SessionToken(token));
+            if (jwt.getClaimAsString("iss") != null)
+                sessionAttributes.put("quotaIssuer", jwt.getClaimAsString("iss"));
             if (jwt.getExpiresAt() != null)
                 sessionAttributes.put("jwtExpiresAt", jwt.getExpiresAt());
         }
         accessor.removeNativeHeader(AUTHORIZATION_HEADER);
 
-        log.info(
-                "STOMP session authenticated: user={} sub={}",
-                principal.username(),
-                principal.sub());
+        log.info("STOMP session authenticated");
     }
 
     @SuppressWarnings("unchecked")

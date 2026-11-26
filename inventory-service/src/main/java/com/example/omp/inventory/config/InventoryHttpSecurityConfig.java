@@ -25,7 +25,8 @@ public class InventoryHttpSecurityConfig {
                                                 "/actuator/info")
                                         .permitAll()
                                         .requestMatchers("/actuator/prometheus")
-                                        .authenticated()
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
                                         .anyRequest()
                                         .denyAll())
                 .oauth2ResourceServer(resource -> resource.jwt(Customizer.withDefaults()))

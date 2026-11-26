@@ -144,7 +144,8 @@ class WebhookDeliveryWorkerTest {
     void auditPersistenceFailurePropagatesForKafkaRetryBeforeHttp() throws Exception {
         when(attempts.save(any())).thenThrow(new IllegalStateException("database unavailable"));
         assertThatThrownBy(() -> worker.onDelivery(mapper.writeValueAsString(message(1))))
-                .hasRootCauseMessage("database unavailable");
+                .hasMessage("Webhook delivery processing failed")
+                .hasNoCause();
         verifyNoInteractions(http, retries, dlq);
     }
 }

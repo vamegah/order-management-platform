@@ -258,3 +258,10 @@ springdoc:
 server:
   forward-headers-strategy: none
   port: ${SERVER_PORT:8080}
+
+spring.kafka.template.observation-enabled: true
+spring.kafka.listener.observation-enabled: true
+
+# Export the real bounded HTTP histogram used by latency SLOs and trace exemplars.
+management.metrics.distribution.percentiles-histogram.http.server.requests: true
+management.metrics.distribution.slo.http.server.requests: 1s,2500ms

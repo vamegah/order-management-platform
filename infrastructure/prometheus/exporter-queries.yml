@@ -1,0 +1,15 @@
+omp_queue:
+  query: SELECT service,queue,pending,oldest_seconds FROM operations.queue_backlog
+  metrics:
+  - service:
+      usage: LABEL
+      description: Owning service
+  - queue:
+      usage: LABEL
+      description: Bounded durable queue class
+  - pending:
+      usage: GAUGE
+      description: Unresolved durable items
+  - oldest_seconds:
+      usage: GAUGE
+      description: Age of oldest unresolved durable item

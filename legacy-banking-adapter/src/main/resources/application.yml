@@ -77,3 +77,7 @@ springdoc:
     enabled: ${API_DOCS_ENABLED:true}
   swagger-ui:
     enabled: false
+
+# Export the real bounded HTTP histogram used by latency SLOs and trace exemplars.
+management.metrics.distribution.percentiles-histogram.http.server.requests: true
+management.metrics.distribution.slo.http.server.requests: 1s,2500ms

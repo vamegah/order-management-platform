@@ -144,7 +144,7 @@ public class CustomerService {
         }
 
         Customer saved = customerRepository.save(customer);
-        log.info("Created customer id={} email={}", saved.getId(), saved.getEmail());
+        log.info("Created customer id={}", saved.getId());
         return CustomerMapper.toDto(saved);
     }
 
@@ -209,7 +209,7 @@ public class CustomerService {
                         });
 
         customer.linkKeycloakUser(keycloakSub);
-        log.info("Linked customer id={} to keycloak sub={}", id, keycloakSub);
+        log.info("Linked verified identity to customer id={}", id);
         return CustomerMapper.toDto(customer);
     }
 

@@ -1,0 +1,18 @@
+http:
+  middlewares:
+    ingress-quota:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+    request-bounds:
+      buffering:
+        maxRequestBodyBytes: 1048576
+        memRequestBodyBytes: 65536
+        retryExpression: ""
+    security-policy:
+      chain:
+        middlewares:
+          - ingress-quota
+          - request-bounds
+          - security-headers

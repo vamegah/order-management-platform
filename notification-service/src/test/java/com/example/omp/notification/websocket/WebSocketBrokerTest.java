@@ -57,6 +57,7 @@ class WebSocketBrokerTest {
         WebSocketConfig.class,
         SecurityConfig.class,
         StompAuthChannelInterceptor.class,
+        StompQuotaInterceptor.class,
         SubscriptionInterceptor.class,
         SubscriptionRegistry.class,
         OwnershipVerifier.class,

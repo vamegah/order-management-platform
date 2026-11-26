@@ -16,6 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DomainEventIngestion {
+    private final com.example.omp.shared.events.tracing.EventTracing tracing =
+            new com.example.omp.shared.events.tracing.EventTracing();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureTracing(
+            io.micrometer.tracing.Tracer tracer,
+            io.micrometer.tracing.propagation.Propagator propagator) {
+        tracing.configure(tracer, propagator);
+    }
+
     private final JdbcTemplate jdbc;
     private final DispatchQueue queue;
     private final SubscriptionMatcher matcher;
@@ -29,6 +39,13 @@ public class DomainEventIngestion {
 
     @Transactional
     public void accept(String consumer, String payload, String topic) {
+        tracing.run(
+                tracing.parent(payload),
+                "event.ingest",
+                () -> acceptWithinTrace(consumer, payload, topic));
+    }
+
+    private void acceptWithinTrace(String consumer, String payload, String topic) {
         var event = EventContract.validate(payload, topic);
         String hash = hash(payload);
         int inserted =
@@ -49,11 +66,12 @@ public class DomainEventIngestion {
         }
         if ("webhook".equals(consumer)) {
             jdbc.update(
-                    "INSERT INTO webhook_event_payload(event_id,event_type,payload,occurred_at) VALUES(?,?,?::jsonb,?) ON CONFLICT DO NOTHING",
+                    "INSERT INTO webhook_event_payload(event_id,event_type,payload,occurred_at,traceparent) VALUES(?,?,?::jsonb,?,?) ON CONFLICT DO NOTHING",
                     event.eventId(),
                     event.eventType(),
                     event.data().toString(),
-                    java.sql.Timestamp.from(Instant.parse(event.occurredAt())));
+                    java.sql.Timestamp.from(Instant.parse(event.occurredAt())),
+                    tracing.parent(payload));
             matcher.matchAndPublish(event.eventId(), event.eventType(), event.data());
         } else if ("live".equals(consumer)) {
             String channel =
@@ -72,7 +90,7 @@ public class DomainEventIngestion {
                         "REDIS",
                         channel,
                         event.aggregateId(),
-                        normalized,
+                        tracing.attach(normalized, tracing.parent(payload)),
                         Instant.now());
             } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                 throw new EventContract.InvalidEventException();

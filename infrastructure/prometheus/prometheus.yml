@@ -245,6 +245,8 @@ scrape_configs:
 # a no-op when the directory is empty.
 # ==============================================================================
   - job_name: omp-services
+    authorization:
+      credentials_file: /run/metrics-token/token
     file_sd_configs:
       - files:
           - /etc/prometheus/targets/*.yml
@@ -293,3 +295,19 @@ scrape_configs:
 # ==============================================================================
 # END OF prometheus.yml
 # ==============================================================================
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels: {tier: data}
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels: {tier: data, service: redis}
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels: {tier: data, service: kafka}
+  - job_name: certificate-exporter
+    static_configs:
+      - targets: ['certificate-exporter:9188']
+        labels: {tier: data}

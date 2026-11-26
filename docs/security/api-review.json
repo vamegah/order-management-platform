@@ -1,0 +1,1236 @@
+{
+  "standard": "https://owasp.org/API-Security/editions/2023/en/0x11-t10/",
+  "reviewDate": "2026-11-25",
+  "scope": "All executable HTTP/GraphQL/RPC/SOAP/WebSocket endpoint classes. Private management is covered by topology and JWT policies.",
+  "surfaces": [
+    {
+      "source": "customer-service/src/main/java/com/example/omp/customer/web/AddressController.java",
+      "sha256": "9abae3a64a91f56601241ec41813aae9521e5d8383d069365679686fd3545d66",
+      "controls": "Verified JWT/customer_id owner or administrator; canonical UUID ownership; administrator aggregate writes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "customer-service/src/test/java/com/example/omp/customer/domain/CustomerAddressTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBatchAuthorizationTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerSecurityBoundaryTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/AddressControllerIT.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBoundaryIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "customer-service/src/main/java/com/example/omp/customer/web/CustomerController.java",
+      "sha256": "77f42666b292a9d539474d8df81b1421ff22bf9f5669bacc1a6a95f928b0eedc",
+      "controls": "Verified JWT/customer_id owner or administrator; canonical UUID ownership; administrator aggregate writes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "customer-service/src/test/java/com/example/omp/customer/domain/CustomerAddressTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/service/CustomerPreferencesUpdateTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/service/CustomerServiceTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBatchAuthorizationTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBatchRequestTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerSecurityBoundaryTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/CustomerServiceApplicationIT.java",
+        "customer-service/src/test/java/com/example/omp/customer/repository/CustomerRepositoryIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "customer-service/src/main/java/com/example/omp/customer/web/CustomerPreferencesController.java",
+      "sha256": "f95130663286b0eaa2fc16fb85464a89e0b19490039fc8ae7f9dc91d7843643d",
+      "controls": "Verified JWT/customer_id owner or administrator; canonical UUID ownership; administrator aggregate writes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "customer-service/src/test/java/com/example/omp/customer/service/CustomerPreferencesUpdateTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBatchAuthorizationTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerSecurityBoundaryTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBoundaryIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "customer-service/src/main/java/com/example/omp/customer/web/GlobalExceptionHandler.java",
+      "sha256": "95079e7a0555cd8614cb30895d372b92c24899db6e8018b70ec65a74d7608896",
+      "controls": "Verified JWT/customer_id owner or administrator; canonical UUID ownership; administrator aggregate writes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBatchAuthorizationTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerSecurityBoundaryTest.java",
+        "customer-service/src/test/java/com/example/omp/customer/web/CustomerBoundaryIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/field/CrossServiceFieldResolver.java",
+      "sha256": "9786744394314339b26b258924638017f41dec7e8904a93c00543a88c5ffba28",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/graphql/field/CrossServiceFieldResolverTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/mutation/CustomerMutationResolver.java",
+      "sha256": "231134bee331551fa59efcf6a4b63c1c669b6a3c5b5989efd86621a64f17fef6",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/mutation/OrderMutationResolver.java",
+      "sha256": "feb2dd9d29f3d0ce075c3f62f6c625735a4e98078fd4a7c05627d69c76795253",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/graphql/mutation/OrderMutationResolverTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/mutation/ProductMutationResolver.java",
+      "sha256": "2db0546bd21ebd529ffb888d540692ef6acf8e1b6549a5b169b7eb93cd3c54b7",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/graphql/mutation/ProductMutationResolverTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/query/CustomerQueryResolver.java",
+      "sha256": "9972f22a6710e1f506f723eaafdfbc39591fc0d2faa6caa8fe7e9c6d9fcbb662",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/graphql/query/CustomerQueryResolverTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/query/OrderQueryResolver.java",
+      "sha256": "510756e52ab22e75194d8d7cbcdaea75203cd6a5a5bfeb142a293d04b98e362e",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/graphql/query/OrderQueryResolverTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/graphql/query/ProductQueryResolver.java",
+      "sha256": "42bf153ee832ae2d2adfb2d5f0429f48a0041a966fa8f0e6a634254fb0cded88",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/graphql/query/ProductQueryResolverTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "graphql-gateway/src/main/java/com/example/omp/gateway/GraphqlGatewayApplication.java",
+      "sha256": "bb3b8ce41c3c90ba4dc788687b5addb94ca3b4a9539c3496b1bd7f01336cacf3",
+      "controls": "Verified JWT; resolver/service ownership; administrator mutations; depth, complexity, bytes, timeout and quota limits",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/FeignAuthorizationErrorTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/config/ScalarContractTest.java",
+        "graphql-gateway/src/test/java/com/example/omp/gateway/GraphQlProductionPolicyTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "inventory-service/src/main/java/com/example/omp/inventory/grpc/advice/GrpcExceptionAdvice.java",
+      "sha256": "29e24dc8753f7de91c433fd1d80df9c5694ac882e69fd8fcdf2636c8171cac97",
+      "controls": "mTLS workload methods/scopes; bounded streams, validated ownership and idempotency; private management",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "inventory-service/src/test/java/com/example/omp/inventory/config/InventorySecurityConfigurationTest.java",
+        "inventory-service/src/test/java/com/example/omp/inventory/grpc/CompensationRpcContractTest.java",
+        "inventory-service/src/test/java/com/example/omp/inventory/grpc/InventoryRpcContractTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "inventory-service/src/main/java/com/example/omp/inventory/grpc/InventoryServiceImpl.java",
+      "sha256": "764c568335c692a28a1cec78b9af85c3d540655feaaa4dd457898ac0a352cb64",
+      "controls": "mTLS workload methods/scopes; bounded streams, validated ownership and idempotency; private management",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "inventory-service/src/test/java/com/example/omp/inventory/config/InventorySecurityConfigurationTest.java",
+        "inventory-service/src/test/java/com/example/omp/inventory/grpc/CompensationRpcContractTest.java",
+        "inventory-service/src/test/java/com/example/omp/inventory/grpc/InventoryRpcContractTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "inventory-service/src/main/java/com/example/omp/inventory/InventoryServiceApplication.java",
+      "sha256": "7b56b06065ad493f4c1cb7cfa05af8f1febae83153ac1c785dc55bd986f32915",
+      "controls": "mTLS workload methods/scopes; bounded streams, validated ownership and idempotency; private management",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "inventory-service/src/test/java/com/example/omp/inventory/config/InventorySecurityConfigurationTest.java",
+        "inventory-service/src/test/java/com/example/omp/inventory/grpc/CompensationRpcContractTest.java",
+        "inventory-service/src/test/java/com/example/omp/inventory/grpc/InventoryRpcContractTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "legacy-bank-service/src/main/java/com/example/omp/bank/endpoint/BankingEndpoint.java",
+      "sha256": "7e394747a941dfcfffdb697971007c8b695a6fdbcb6302b807ff57342811a3ea",
+      "controls": "Private TLS and WS-Security credential/freshness/replay enforcement; exact decimal and account constraints",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "legacy-bank-service/src/test/java/com/example/omp/bank/config/SecurityUsersConfigTest.java",
+        "legacy-bank-service/src/test/java/com/example/omp/bank/endpoint/BankingSoapBoundaryTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "legacy-banking-adapter/src/main/java/com/example/omp/adapter/rest/BankingAdapterController.java",
+      "sha256": "0ebf00802388102264c8f744a9ebef999386669bb3db618d4b1bb1b40d60064b",
+      "controls": "Administrator facade; scoped idempotency; verified TLS; bounded structured SOAP parsing",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/rest/BankingAdapterBoundaryTest.java",
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/rest/BankingHttpSecurityTest.java",
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/soap/SoapBankingClientContractTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "legacy-banking-adapter/src/main/java/com/example/omp/adapter/rest/BankingExceptionHandler.java",
+      "sha256": "ea10638e61c4cbe6ecc4c0f7b73c6a2bedb6ece39d63463a849790a8e5863f1d",
+      "controls": "Administrator facade; scoped idempotency; verified TLS; bounded structured SOAP parsing",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/rest/BankingAdapterBoundaryTest.java",
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/rest/BankingExceptionHandlerTest.java",
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/rest/BankingHttpSecurityTest.java",
+        "legacy-banking-adapter/src/test/java/com/example/omp/adapter/soap/SoapBankingClientContractTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/config/WebSocketConfig.java",
+      "sha256": "d2dfe204615f46c30a87b1058b14d80a59687d410e25e8925cd5372857b8c977",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookDeliveryPublisherTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookEventTypesTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/durable/EventRecoveryAdvice.java",
+      "sha256": "75c7310dc22544b0ca893b2fca13953a83cdf2df95c8d936c0030a81930c9f92",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/durable/EventRecoveryAdviceTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookDeliveryPublisherTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/durable/EventRecoveryController.java",
+      "sha256": "1477d8464aa69ddc22422fd4f7e70e7eaa90d358983e2b35090f700156874b40",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/durable/EventRecoveryAdviceTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/durable/EventRecoveryServiceTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/webhook/dlq/DlqController.java",
+      "sha256": "60f1875a27ac401ada7cbe73716e80f78b3193d7877b29693e3bccbe725043b7",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/dlq/DlqServiceTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookDeliveryPublisherTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/webhook/error/WebhookExceptionHandler.java",
+      "sha256": "1e8961c7a7aff4e66f4e659070055308e53bef4e5c9ab6b602a0d7097502eb53",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookDeliveryPublisherTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookEventTypesTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/webhook/WebhookDeliveryController.java",
+      "sha256": "cf7f41692a792567dd7ec2f6c8a6f4f5010104f4c5ab62a30fa479f549938b6a",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookDeliveryPublisherTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookEventTypesTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "notification-service/src/main/java/com/example/omp/notification/webhook/WebhookSubscriptionController.java",
+      "sha256": "bfb250123d0f5c2cdb3625eaea436c378f9750eed3a433365b03662f9c357d90",
+      "controls": "Verified owner or scoped administrator; STOMP destination validation and lifetime; SSRF/DNS pinning; signed bounded delivery",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipProofCacheTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/subscription/OwnershipVerifierTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDestinationPolicyTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookHttpClientTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookPinnedTlsTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookDeliveryPublisherTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookEventTypesTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/CheckoutRecoveryAdoptionController.java",
+      "sha256": "ce8c8cc8ceb048b6cbf53fdadcfb10f9d405ffd4d0207347d33d2361b6b7c344",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/CheckoutRecoveryAdoptionTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupAuthorizationTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/GlobalExceptionHandler.java",
+      "sha256": "c79fca4b4fe7f529266b2d774b693fe45a3854c9e3db321bc003a5145980e450",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/web/CheckoutRecoveryAdoptionContractTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/OrderCleanupController.java",
+      "sha256": "5a8b481b5ea0703a40e1780c567d8436735160b8a3f71e46d894ca60819c5901",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupQueueTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/OrderController.java",
+      "sha256": "4a7010b11e9c5866b3c8b3489fd00eedd69b2f4ab7cdd704dc33a887fa278901",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/OrderFulfillmentJobTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/OrderLifecycleJobTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/domain/OrderReservationIntegrityTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/OrderLifecycleController.java",
+      "sha256": "f260075f949fa1d7b8d2c588d93eae78a4825297c0fb41d7b316cfc090657d3d",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/OrderLifecycleJobTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupAuthorizationTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/OrderReservationRepairController.java",
+      "sha256": "849c9274d4d6848d166bba9b03a5019d2667d6755203aca3b5dcd23f8132f933",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderReservationRepairServiceTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "order-service/src/main/java/com/example/omp/order/web/TerminalReservationDispositionController.java",
+      "sha256": "3680b63faa1d061a68897b4a7e66e073fd25ea5cabcac62e00d0cbf94852ed0d",
+      "controls": "Verified JWT and durable owner; administrator repair/fulfillment/recovery; optimistic versions; verified upstream correlation",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/DownstreamFixtureContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/interceptor/RecoveryDiscoveryContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/InventoryReservationContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/LifecycleRpcContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/clients/grpc/PaymentIntentCheckoutContractTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/OrderCleanupAuthorizationTest.java",
+        "order-service/src/test/java/com/example/omp/order/service/TerminalReservationDispositionServiceTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-provider-simulator/src/main/java/com/example/omp/provider/PaymentSimulationController.java",
+      "sha256": "34f0e4564c355c910d2dc17347188bc4e742f327dae406b8153a2ff5ac515431",
+      "controls": "Test-only Compose profile; release manifest forbids simulator/debug routes and fixture secrets",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-provider-simulator/src/test/java/com/example/omp/provider/WebhookSenderTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-provider-simulator/src/main/java/com/example/omp/provider/ProviderFixtureController.java",
+      "sha256": "47617195b730248b96c21b1b38e3ed30b6d398c12a1dc291eed0f216fb9a73f8",
+      "controls": "Test-only Compose profile; release manifest forbids simulator/debug routes and fixture secrets",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-provider-simulator/src/test/java/com/example/omp/provider/ProviderFixtureAuthenticationTest.java",
+        "payment-provider-simulator/src/test/java/com/example/omp/provider/ProviderFixtureLedgerTest.java",
+        "payment-provider-simulator/src/test/java/com/example/omp/provider/ProviderFixtureWorkerTest.java",
+        "payment-provider-simulator/src/test/java/com/example/omp/provider/WebhookSenderTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/grpc/PaymentServiceImpl.java",
+      "sha256": "2c32aa5ba07d1253aabdeb7e900e4e4233a5f1048b092073f952c2f37db9b48b",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/StripeWebhookVerifierTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/web/PaymentHttpContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/WebhookBodyLimitFilterTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/PaymentController.java",
+      "sha256": "8378cd0dd163f3bbac85d1b295bed72dfaaafc27859470edccf90f78252bf26e",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/handler/PaymentEventStreamHandlerTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentAccessTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentCancellationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentChargeOrchestrationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentCreationLockTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentFulfillmentFenceTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/PaymentExceptionHandler.java",
+      "sha256": "dd40116934f90205a766547c6778b4f53e1f17cc12e8e01fcd73ed0e45bc9c3c",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/StripeWebhookVerifierTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/web/PaymentHttpContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/WebhookBodyLimitFilterTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/ProviderEventRecoveryController.java",
+      "sha256": "fb5b004ee2be7ca9f645553a7ce273596609b22d1e704d6a625cff609fa531d8",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/StripeWebhookVerifierTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/web/PaymentHttpContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/WebhookBodyLimitFilterTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/RefundController.java",
+      "sha256": "6bc927c4c528adf0fbacb888e431748abad24f730ea74ceefdac400e02c6a97b",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundReconciliationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundReconciliationWebTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundRecoveryJobTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/RefundReconciliationController.java",
+      "sha256": "19fbf2a082d86b379bc850ba5b61d4e0cc5b89b896626bc506bd9c06704367f7",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundReconciliationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundReconciliationWebTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/StripeWebhookVerifierTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/RefundRecoveryController.java",
+      "sha256": "1d0eaea5a13861915fdf540deb96fdd5bb9e10aaab32829ab1f583341f436a16",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundRecoveryJobTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundRecoveryTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundRecoveryWebTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "payment-service/src/main/java/com/example/omp/payment/web/StripeWebhookController.java",
+      "sha256": "53f85589c9b9cdd780f88ec49ad6b1e1730734bef27f81a79b73eef49e6567d4",
+      "controls": "Administrator REST mutations and reconciliation; workload-only mTLS RPC; bounded provider signatures and durable inbox",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "payment-service/src/test/java/com/example/omp/payment/config/PublishedProviderSecurityTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/grpc/PaymentIntentContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/PaymentWebhookInboxTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/ProviderWebhookNetworkFilterTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/RefundAuthorizationTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/StripeWebhookVerifierTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/web/PaymentHttpContractTest.java",
+        "payment-service/src/test/java/com/example/omp/payment/WebhookBodyLimitFilterTest.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "product-service/src/main/java/com/example/omp/product/web/CategoryController.java",
+      "sha256": "cba12f68a786445f164793d552e0298a2c0cf1c1e42a981f6421977aca458fd1",
+      "controls": "Verified JWT; administrator writes; DTO allowlist; bounded pagination and batch sizes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "product-service/src/test/java/com/example/omp/product/web/ProductSecurityBoundaryTest.java",
+        "product-service/src/test/java/com/example/omp/product/contract/OpenApiContractIT.java",
+        "product-service/src/test/java/com/example/omp/product/web/CategoryControllerIT.java",
+        "product-service/src/test/java/com/example/omp/product/web/ProductBoundaryIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "product-service/src/main/java/com/example/omp/product/web/GlobalExceptionHandler.java",
+      "sha256": "76e113c0f2328b1e7fb2955f2aeb071c2a03f3d5d41b6550f8569be518c63e96",
+      "controls": "Verified JWT; administrator writes; DTO allowlist; bounded pagination and batch sizes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "product-service/src/test/java/com/example/omp/product/web/ProductSecurityBoundaryTest.java",
+        "product-service/src/test/java/com/example/omp/product/contract/OpenApiContractIT.java",
+        "product-service/src/test/java/com/example/omp/product/web/ProductBoundaryIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    },
+    {
+      "source": "product-service/src/main/java/com/example/omp/product/web/ProductController.java",
+      "sha256": "de9a006b1f714290ab16bc886acc3de2cf96004855060b8f6141296cf18eff8c",
+      "controls": "Verified JWT; administrator writes; DTO allowlist; bounded pagination and batch sizes",
+      "categories": [
+        "API1:2023",
+        "API2:2023",
+        "API3:2023",
+        "API4:2023",
+        "API5:2023",
+        "API6:2023",
+        "API7:2023",
+        "API8:2023",
+        "API9:2023",
+        "API10:2023"
+      ],
+      "negativeTests": [
+        "product-service/src/test/java/com/example/omp/product/service/ProductServiceTest.java",
+        "product-service/src/test/java/com/example/omp/product/service/ProductSpecificationsTest.java",
+        "product-service/src/test/java/com/example/omp/product/web/ProductBatchRequestTest.java",
+        "product-service/src/test/java/com/example/omp/product/web/ProductSecurityBoundaryTest.java",
+        "product-service/src/test/java/com/example/omp/product/contract/OpenApiContractIT.java",
+        "product-service/src/test/java/com/example/omp/product/ProductServiceApplicationIT.java",
+        "product-service/src/test/java/com/example/omp/product/repository/ProductRepositoryIT.java",
+        "product-service/src/test/java/com/example/omp/product/service/ProductLifecycleIT.java"
+      ],
+      "review": "source-reviewed; executed acceptance evidence required separately"
+    }
+  ],
+  "releaseBlockingFindings": [
+    {
+      "id": "OPS-01",
+      "finding": "Replica-local and missing quotas",
+      "remediation": "Atomic bounded Redis buckets and coarse trusted ingress policy",
+      "tests": [
+        "shared/common-web/src/test/java/com/example/omp/shared/web/quota/QuotaTest.java",
+        "shared/common-web/src/test/java/com/example/omp/shared/web/quota/RedisQuotaIT.java"
+      ]
+    },
+    {
+      "id": "OPS-02",
+      "finding": "Spring does not consume arbitrary DATASOURCE_PASSWORD_FILE variables",
+      "remediation": "Mandatory file-mounted configtree and reject raw password environment values in release guard",
+      "tests": [
+        "scripts/tests/test_release_policy.py"
+      ]
+    },
+    {
+      "id": "OPS-03",
+      "finding": "Alert rules reference nonexistent metrics and unevaluated dotenv receiver URL",
+      "remediation": "Real metrics, promtool trigger fixtures and explicit secret-file receiver renderer",
+      "tests": [
+        "infrastructure/prometheus/tests/application.test.yml"
+      ]
+    },
+    {
+      "id": "OPS-04",
+      "finding": "Production resource servers did not consistently require the public API audience; metrics permissions differed between services",
+      "remediation": "Mandatory production audiences and verified metrics.read/admin authorization; separate scoped metrics token projection",
+      "tests": [
+        "scripts/operations/api_probe.py",
+        "scripts/verify_production_api.py"
+      ]
+    },
+    {
+      "id": "OPS-05",
+      "finding": "Shared Redis credentials allowed unrelated workloads to inherit administration access; restricted Redis 7 quota transactions did not retain spent buckets after AOF restart",
+      "remediation": "Separate quota, replication, notification and monitoring credentials/ACLs; pin the dedicated quota store to the verified Redis 8.6 image",
+      "tests": [
+        "shared/common-web/src/test/java/com/example/omp/shared/web/quota/RedisQuotaIT.java",
+        "scripts/verify_secure_runtime.py"
+      ]
+    },
+    {
+      "id": "OPS-06",
+      "finding": "Management services shared database network access and alert delivery lacked external receiver egress",
+      "remediation": "Separate private ops network, no ingress attachment to data, explicit bounded Alertmanager receiver egress and managed configuration group permissions",
+      "tests": [
+        "scripts/check_production_configuration.py",
+        "scripts/verify_operations_monitoring.py"
+      ]
+    },
+    {
+      "id": "OPS-07",
+      "finding": "Telemetry exceptions could retain upstream messages or omit classified asynchronous failures from error sampling",
+      "remediation": "Redact status/event exception content, retain bounded protocol status codes and mark classified outbox/webhook failures without copying exception messages",
+      "tests": [
+        "scripts/verify_operations_monitoring.py",
+        "shared/events/src/test/java/com/example/omp/shared/events/EventTracingTest.java",
+        "shared/grpc/src/test/java/com/example/omp/shared/grpc/GrpcTraceLifecycleTest.java"
+      ]
+    }
+  ],
+  "residualRisks": []
+}

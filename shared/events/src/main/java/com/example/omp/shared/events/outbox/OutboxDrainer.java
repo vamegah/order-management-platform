@@ -32,6 +32,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @ConditionalOnProperty(name = "omp.outbox.enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxDrainer {
+    private final com.example.omp.shared.events.tracing.EventTracing tracing =
+            new com.example.omp.shared.events.tracing.EventTracing();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureTracing(
+            io.micrometer.tracing.Tracer tracer,
+            io.micrometer.tracing.propagation.Propagator propagator) {
+        tracing.configure(tracer, propagator);
+    }
 
     private static final Logger log = LoggerFactory.getLogger(OutboxDrainer.class);
 
@@ -80,6 +89,13 @@ public class OutboxDrainer {
      * attempt counter and either leaves the row PENDING (for retry) or transitions to FAILED.
      */
     private void publish(OutboxEvent event) {
+        tracing.run(
+                tracing.parent(event.getPayload()),
+                "outbox.publish",
+                () -> publishWithinTrace(event));
+    }
+
+    private void publishWithinTrace(OutboxEvent event) {
         try {
             // Synchronous send (get()) so we know whether it succeeded before
             // committing the transaction that marks the row as PUBLISHED.
@@ -102,6 +118,7 @@ public class OutboxDrainer {
                     event.getTopic(),
                     event.getAggregateId());
         } catch (Exception e) {
+            tracing.failed();
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             metrics.incrementError();
 

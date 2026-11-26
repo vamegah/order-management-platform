@@ -223,7 +223,7 @@ omp.kafka:
   default-replication-factor: ${KAFKA_DEFAULT_REPLICATION_FACTOR:1}
   retention-hours: ${KAFKA_RETENTION_HOURS:168}
   min-insync-replicas: ${KAFKA_MIN_INSYNC_REPLICAS:1}
-  
+
 # (existing sections unchanged; add these)
 
 # ==============================================================================
@@ -272,3 +272,10 @@ springdoc:
 spring.cloud.openfeign.client.config.default:
   connectTimeout: 2000
   readTimeout: 3000
+
+spring.kafka.template.observation-enabled: true
+spring.kafka.listener.observation-enabled: true
+
+# Export the real bounded HTTP histogram used by latency SLOs and trace exemplars.
+management.metrics.distribution.percentiles-histogram.http.server.requests: true
+management.metrics.distribution.slo.http.server.requests: 1s,2500ms

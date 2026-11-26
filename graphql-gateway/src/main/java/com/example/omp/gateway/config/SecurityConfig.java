@@ -39,7 +39,8 @@ public class SecurityConfig {
                                         .permitAll()
                                         // Actuator prometheus (internal)
                                         .requestMatchers("/actuator/prometheus")
-                                        .authenticated()
+                                        .hasAnyAuthority(
+                                                "SCOPE_metrics.read", "ROLE_admin", "ROLE_ADMIN")
                                         // GraphQL endpoint — authenticated; field-level
                                         // authorization is enforced by @PreAuthorize
                                         .requestMatchers("/graphql")

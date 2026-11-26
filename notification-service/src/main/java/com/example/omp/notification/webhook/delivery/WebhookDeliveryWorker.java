@@ -25,6 +25,15 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class WebhookDeliveryWorker {
+    private final com.example.omp.shared.events.tracing.EventTracing tracing =
+            new com.example.omp.shared.events.tracing.EventTracing();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void configureTracing(
+            io.micrometer.tracing.Tracer tracer,
+            io.micrometer.tracing.propagation.Propagator propagator) {
+        tracing.configure(tracer, propagator);
+    }
 
     private static final Logger log = LoggerFactory.getLogger(WebhookDeliveryWorker.class);
 
@@ -102,12 +111,21 @@ public class WebhookDeliveryWorker {
                         message.deliveryId().toString())))
             throw new IllegalStateException("Delivery is already in progress");
         try {
-            processDelivery(message);
+            var parents =
+                    jdbc.queryForList(
+                            "SELECT traceparent FROM webhook_event_payload WHERE event_id=?",
+                            message.eventId());
+            String parent =
+                    parents.isEmpty() ? null : (String) parents.getFirst().get("traceparent");
+            tracing.run(parent, "webhook.deliver", () -> processDelivery(message));
         } catch (Exception e) {
-            log.error("Unexpected failure processing delivery {}", message.deliveryId(), e);
+            log.error(
+                    "Unexpected failure processing delivery {}: {}",
+                    message.deliveryId(),
+                    e.getClass().getSimpleName());
             // Rethrow for Kafka retry. The delivery is at-least-once; duplicates
             // are prevented by the SUCCESS check below.
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Webhook delivery processing failed");
         }
     }
 
@@ -173,6 +191,7 @@ public class WebhookDeliveryWorker {
         attempt.setResponseBody(result.responseBody());
         attempt.setErrorMessage(result.errorMessage());
 
+        if (result.outcome() != DeliveryOutcome.SUCCESS) tracing.failed();
         switch (result.outcome()) {
             case SUCCESS -> {
                 attempt.setStatus(DeliveryStatus.SUCCESS);
@@ -238,6 +257,7 @@ public class WebhookDeliveryWorker {
         headers.put("X-Webhook-Id", message.eventId());
         headers.put("X-Webhook-Delivery-Id", message.deliveryId().toString());
         headers.put("X-Webhook-Event", message.eventType());
+        if (tracing.current() != null) headers.put("traceparent", tracing.current());
         return headers;
     }
 

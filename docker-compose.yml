@@ -7,10 +7,8 @@
 #   caps, no external secrets.
 #
 # PRODUCTION
-#   Apply the overlay:  docker compose -f docker-compose.yml \
-#                                       -f docker-compose.prod.yml up -d
-#   The overlay adds TLS (Traefik), resource limits, replicas, Docker secrets,
-#   backup sidecars, and HA for Kafka/Redis. See docker-compose.prod.yml.
+#   Use the standalone docker-compose.prod.yml with a verified immutable image overlay.
+#   Follow docs/runbooks/release.md for private files, approval and rollback.
 #
 # QUICK START
 #   cp .env.example .env
@@ -1169,6 +1167,17 @@ services:
   # Receives firing alerts from Prometheus and routes them to receivers.
   # Dev: logs to a local webhook. Prod overlay: Slack/PagerDuty/email.
   # ============================================================================
+  alert-receiver:
+    image: python:3.12-alpine
+    profiles: [operations-dev]
+    command: [python, /app/alert_receiver.py]
+    volumes:
+      - ./scripts/operations/alert_receiver.py:/app/alert_receiver.py:ro
+    networks: [data]
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 128m
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     restart: unless-stopped
@@ -1180,7 +1189,7 @@ services:
     volumes:
       - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     environment:
-      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-http://localhost:5001/alerts}
+      OMP_RECEIVER_CONFIGURATION: file-mounted
     networks:
       - edge
       - data
@@ -1216,7 +1225,7 @@ services:
       # `env` external label (see infrastructure/prometheus/prometheus.yml,
       # global.external_labels). Without this flag, ${PROMETHEUS_ENV} would
       # be treated as a literal string, not expanded.
-      - --enable-feature=expand-external-labels
+      - --enable-feature=expand-external-labels,exemplar-storage
     environment:
       # Environment label applied to every metric as an external label.
       # Used in Grafana queries like `up{env="dev"}` to distinguish

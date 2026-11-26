@@ -3,7 +3,6 @@
   "enabled": true,
   "displayName": "Order Management Platform",
   "displayNameHtml": "<strong>Order Management Platform</strong>",
-
   "sslRequired": "external",
   "registrationAllowed": false,
   "resetPasswordAllowed": true,
@@ -12,7 +11,6 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "editUsernameAllowed": false,
-
   "accessTokenLifespan": 300,
   "accessTokenLifespanForImplicitFlow": 900,
   "ssoSessionIdleTimeout": 1800,
@@ -21,7 +19,6 @@
   "offlineSessionMaxLifespanEnabled": false,
   "refreshTokenMaxReuse": 0,
   "revokeRefreshToken": true,
-
   "passwordPolicy": "length(12)",
   "bruteForceProtected": true,
   "permanentLockout": false,
@@ -31,7 +28,6 @@
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 10,
-
   "roles": {
     "realm": [
       {
@@ -54,9 +50,7 @@
       }
     ]
   },
-
   "groups": [],
-
   "users": [
     {
       "id": "test-alice",
@@ -73,11 +67,17 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["customer"],
+      "realmRoles": [
+        "customer"
+      ],
       "requiredActions": [],
       "attributes": {
-        "customer_id": ["00000000-0000-0000-0000-000000000101"],
-        "orders_limit": ["1000"]
+        "customer_id": [
+          "00000000-0000-0000-0000-000000000101"
+        ],
+        "orders_limit": [
+          "1000"
+        ]
       }
     },
     {
@@ -94,10 +94,15 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["customer", "admin"],
+      "realmRoles": [
+        "customer",
+        "admin"
+      ],
       "requiredActions": [],
       "attributes": {
-        "orders_limit": ["100000"]
+        "orders_limit": [
+          "100000"
+        ]
       }
     },
     {
@@ -128,7 +133,6 @@
       }
     }
   ],
-
   "clients": [
     {
       "clientId": "order-recovery",
@@ -145,7 +149,10 @@
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
       "secret": "dev-only-order-recovery-secret",
-      "defaultClientScopes": ["basic", "order.reconcile"],
+      "defaultClientScopes": [
+        "basic",
+        "order.reconcile"
+      ],
       "optionalClientScopes": []
     },
     {
@@ -163,8 +170,30 @@
       "authorizationServicesEnabled": false,
       "fullScopeAllowed": true,
       "secret": "dev-only-order-service-secret",
-      "defaultClientScopes": ["basic", "web-origins", "profile", "roles", "email", "orders"],
-      "optionalClientScopes": ["offline_access"]
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "profile",
+        "roles",
+        "email",
+        "orders"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "platform API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "omp-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "customer-service",
@@ -181,8 +210,30 @@
       "authorizationServicesEnabled": false,
       "fullScopeAllowed": true,
       "secret": "dev-only-customer-service-secret",
-      "defaultClientScopes": ["basic", "web-origins", "profile", "roles", "email", "orders"],
-      "optionalClientScopes": ["offline_access"]
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "profile",
+        "roles",
+        "email",
+        "orders"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "platform API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "omp-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "product-service",
@@ -199,8 +250,30 @@
       "authorizationServicesEnabled": false,
       "fullScopeAllowed": true,
       "secret": "dev-only-product-service-secret",
-      "defaultClientScopes": ["basic", "web-origins", "profile", "roles", "email", "orders"],
-      "optionalClientScopes": ["offline_access"]
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "profile",
+        "roles",
+        "email",
+        "orders"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "platform API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "omp-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "web-app",
@@ -227,8 +300,30 @@
         "http://localhost:3000",
         "http://web.localhost"
       ],
-      "defaultClientScopes": ["basic", "web-origins", "profile", "roles", "email", "orders"],
-      "optionalClientScopes": ["offline_access"]
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "profile",
+        "roles",
+        "email",
+        "orders"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "platform API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "omp-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "postman",
@@ -251,9 +346,33 @@
         "https://oauth.pstmn.io/v1/callback",
         "http://localhost:*"
       ],
-      "webOrigins": ["*"],
-      "defaultClientScopes": ["basic", "web-origins", "profile", "roles", "email", "orders"],
-      "optionalClientScopes": ["offline_access"]
+      "webOrigins": [
+        "*"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "profile",
+        "roles",
+        "email",
+        "orders"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "platform API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "omp-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "notification-short-lived-acceptance",
@@ -290,28 +409,51 @@
       ],
       "optionalClientScopes": [
         "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "platform API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "omp-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
       ]
     }
   ],
-
   "clientScopes": [
     {
       "name": "order.reconcile",
       "description": "Privileged order recovery discovery and compensation",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
       "protocolMappers": [
         {
           "name": "inventory recovery audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
-          "config": { "included.custom.audience": "inventory-service", "access.token.claim": "true", "id.token.claim": "false" }
+          "config": {
+            "included.custom.audience": "inventory-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
         },
         {
           "name": "payment recovery audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
-          "config": { "included.custom.audience": "payment-service", "access.token.claim": "true", "id.token.claim": "false" }
+          "config": {
+            "included.custom.audience": "payment-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
         }
       ]
     },
@@ -419,7 +561,9 @@
           "name": "allowed web origins",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-allowed-origins-mapper",
-          "config": { "access.token.claim": "true" }
+          "config": {
+            "access.token.claim": "true"
+          }
         }
       ]
     },
@@ -463,7 +607,6 @@
       ]
     }
   ],
-
   "defaultDefaultClientScopes": [
     "basic",
     "profile",
@@ -472,30 +615,26 @@
     "web-origins",
     "orders"
   ],
-
   "defaultOptionalClientScopes": [
     "offline_access"
   ],
-
   "browserSecurityHeaders": {
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
     "xContentTypeOptions": "nosniff",
     "xFrameOptions": "SAMEORIGIN",
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
-
   "smtpServer": {},
-
   "eventsEnabled": false,
-  "eventsListeners": ["jboss-logging"],
+  "eventsListeners": [
+    "jboss-logging"
+  ],
   "enabledEventTypes": [],
   "adminEventsEnabled": false,
   "adminEventsDetailsEnabled": false,
-
   "internationalizationEnabled": false,
   "supportedLocales": [],
   "defaultLocale": "en",
-
   "registrationEmailAsUsername": false,
   "loginTheme": "",
   "accountTheme": "",

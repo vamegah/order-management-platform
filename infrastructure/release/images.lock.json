@@ -1,0 +1,13 @@
+{
+  "platform": "linux/amd64",
+  "resolvedAt": "2026-11-25",
+  "toolsAndBases": {
+    "eclipse-temurin:21-jdk": "eclipse-temurin:21-jdk@sha256:8ad118b146aa92da815b576441acd6b42b38236797ad0b6edc8c200b85bb0734",
+    "eclipse-temurin:21-jre-jammy": "eclipse-temurin:21-jre-jammy@sha256:a8bff88f760e87e0c8844f8461f807c203fd5e8f78c951c843024647e965eaf5",
+    "ghcr.io/sigstore/cosign/cosign:v3.1.5": "ghcr.io/sigstore/cosign/cosign:v3.1.5@sha256:191099139868a6cd02abae63f2919e0915dcaa7bcc22bda6fbd11fd0dd5599e7",
+    "aquasec/trivy:0.76.2": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "grafana/k6:1.6.1": "grafana/k6:1.6.1@sha256:a5ad6bc089a08d77c3ec49f3db8c6fa7a148e4073efcac44c675dbaf3568d8e1",
+    "eclipse-temurin:21-jre-alpine": "eclipse-temurin:21-jre-alpine@sha256:5d7689f47d670aca766b9503a70bccc2d73b4eb9221ae8f714ae958313c4ce70"
+  },
+  "postgresBase": "postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663"
+}
