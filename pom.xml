@@ -98,6 +98,7 @@
 
         
         <grpc.version>1.84.1</grpc.version>
+        <guava.version>33.6.0-jre</guava.version>
         <protobuf.version>4.36.2</protobuf.version>
         <protobuf-maven-plugin.version>0.6.1</protobuf-maven-plugin.version>
         <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
@@ -180,6 +181,11 @@
          ===================================================================== -->
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
 
             <!-- Import before Spring Boot: Maven uses the first imported BOM
                  for overlapping dependency versions. Keep every Testcontainers

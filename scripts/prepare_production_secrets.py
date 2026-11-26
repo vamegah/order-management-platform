@@ -102,7 +102,7 @@ def prepare(directory, htpasswd, owner=None, group=None):
         )
     values["kafka_scram_bootstrap"] = "\n".join(records) + "\n"
     values["redis_exporter_passwords"] = json.dumps(
-        {"redis://redis:6379": values["redis_monitor_password"]}
+        {"redis://omp_monitor@redis:6379": values["redis_monitor_password"]}
     )
     values["ingress_admin_users"] = users + "\n"
     # Directory config trees use the same database credentials as PostgreSQL bootstrap.

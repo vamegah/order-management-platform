@@ -53,12 +53,21 @@ public final class TestJwtIssuer implements AutoCloseable {
     }
 
     public String token(UUID customerId) throws JOSEException {
+        return token(customerId, "");
+    }
+
+    public String metricsToken(UUID customerId) throws JOSEException {
+        return token(customerId, "metrics.read");
+    }
+
+    private String token(UUID customerId, String scope) throws JOSEException {
         Instant now = Instant.now();
         var claims =
                 new JWTClaimsSet.Builder()
                         .issuer(issuer())
                         .subject(customerId.toString())
                         .claim("customer_id", customerId.toString())
+                        .claim("scope", scope)
                         .claim("realm_access", Map.of("roles", List.of("CUSTOMER")))
                         .issueTime(Date.from(now))
                         .expirationTime(Date.from(now.plusSeconds(3600)))

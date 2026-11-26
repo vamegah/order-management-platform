@@ -20,7 +20,7 @@ if [ "$mode" = sentinel ]; then
     exec redis-server "$config" --sentinel
 fi
 printf 'appendonly yes\nappendfsync everysec\nmaxmemory 128mb\nmaxmemory-policy noeviction\n' >> "$config"
-printf 'user omp_monitor on >%s -@all +ping +info +client|list\n' "$monitor" >> "$config"
+printf 'user omp_monitor on >%s -@all +ping +info +client|setname\n' "$monitor" >> "$config"
 if [ "$mode" = quota ]; then
     printf 'user default off\nuser quota on >%s ~omp:quota:v1:* -@all +hello +auth +ping +eval +evalsha +script|load +hset +hmget +pexpire +time +zremrangebyscore +zscore +zcard +zadd +zrange +client|setinfo +client|setname\n' "$password" >> "$config"
 else

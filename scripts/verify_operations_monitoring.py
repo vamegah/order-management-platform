@@ -71,7 +71,7 @@ class Monitoring:
                 value = predicate()
                 if value:
                     return value
-            except (URLError, ValueError, KeyError):
+            except (OSError, ValueError, KeyError):
                 pass
             time.sleep(1)
         raise AssertionError(

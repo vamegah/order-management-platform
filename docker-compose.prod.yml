@@ -1174,6 +1174,10 @@ services:
       REDIS_USER: omp_monitor
       REDIS_PASSWORD_FILE: /run/secrets/redis_exporter_passwords.json
       REDIS_EXPORTER_REDIS_ONLY_METRICS: 'true'
+      REDIS_EXPORTER_CONFIG_COMMAND: '-'
+      REDIS_EXPORTER_EXCLUDE_SLOWLOG_METRICS: 'true'
+      REDIS_EXPORTER_EXCLUDE_COMMANDLOG_METRICS: 'true'
+      REDIS_EXPORTER_EXCLUDE_LATENCY_HISTOGRAM_METRICS: 'true'
     secrets: !override
     - source: redis_exporter_passwords
       target: redis_exporter_passwords.json

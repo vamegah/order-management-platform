@@ -39,6 +39,14 @@ class OperationsControlTest(unittest.TestCase):
             self.assertFalse(result["credentialValuesPrinted"])
             self.assertFalse((directory / "stripe_api_key").exists())
             self.assertTrue((directory / "redis_exporter_passwords").is_file())
+            import json
+
+            passwords = json.loads((directory / "redis_exporter_passwords").read_text())
+            self.assertEqual(set(passwords), {"redis://omp_monitor@redis:6379"})
+            self.assertEqual(
+                passwords["redis://omp_monitor@redis:6379"],
+                (directory / "redis_monitor_password").read_text(),
+            )
             with self.assertRaisesRegex(ValueError, "overwrite"):
                 secrets_tool.prepare(directory, users)
             # chmod allows Windows TemporaryDirectory to remove its read-only test leaves.

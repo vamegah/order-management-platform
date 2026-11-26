@@ -1,3 +1,3 @@
 # Append this least-privilege monitoring principal to the externally managed ACL file.
 # Replace the SHA256 password hash with a managed secret; never commit a usable password.
-user omp_monitor on #REPLACE_WITH_64_HEX_PASSWORD_HASH -@all +ping +info +client|list +latency|latest
+user omp_monitor on #REPLACE_WITH_64_HEX_PASSWORD_HASH -@all +ping +info +client|setname
