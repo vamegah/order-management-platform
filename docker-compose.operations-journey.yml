@@ -1,0 +1,132 @@
+# Isolated cross-protocol acceptance; never merge this overlay into production.
+services:
+  product-service:
+    environment:
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+  customer-service:
+    environment:
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+  order-service:
+    environment:
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+  inventory-service:
+    environment:
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+  payment-service:
+    environment:
+      PAYMENT_PROVIDER: noop
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+  graphql-gateway:
+    environment:
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+  notification-service:
+    environment:
+      WEBHOOK_DESTINATION_TEST_ALLOWED_HOSTS: host.docker.internal
+      TRACING_SAMPLE_RATE: "1.0"
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m
+      TRACING_EXPORT_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    labels:
+      com.omp.acceptance: operations
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    ports: !override
+    - 127.0.0.1::8084
+    - 127.0.0.1::8085
+  traefik:
+    ports: !override
+    - 127.0.0.1::80
+    labels:
+      com.omp.acceptance: operations
+  keycloak:
+    ports: !override
+    - 127.0.0.1::8080
+    labels:
+      com.omp.acceptance: operations
+  postgres:
+    labels:
+      com.omp.acceptance: operations
+  kafka:
+    labels:
+      com.omp.acceptance: operations
+  redis:
+    labels:
+      com.omp.acceptance: operations
+  otel-collector:
+    ports: !override
+    - 127.0.0.1::4318
+    - 127.0.0.1::8888
+    extends:
+      file: docker-compose.operations-acceptance.yml
+      service: otel-collector
+    networks: !override
+    - app
+    - ops
+    labels:
+      com.omp.acceptance: operations
+  tempo:
+    ports: !override
+    - 127.0.0.1::3200
+    # This minimal image has no wget; the client verifies its real HTTP readiness.
+    healthcheck:
+      disable: true
+    extends:
+      file: docker-compose.operations-acceptance.yml
+      service: tempo
+    labels:
+      com.omp.acceptance: operations
+networks:
+  ops:
+    # Host acceptance probes use loopback-published telemetry ports.
+    internal: false

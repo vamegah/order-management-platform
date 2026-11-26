@@ -66,5 +66,52 @@ class PerformanceFixtureTest(unittest.TestCase):
                     fixture(path, identities=True)
 
 
+class ProvisioningGuardTest(unittest.TestCase):
+    def test_cannot_provision_external_provider_or_unowned_stack(self):
+        import argparse
+        from unittest.mock import patch
+        import prepare_performance_fixtures as provisioning
+
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = argparse.Namespace(
+                project="production",
+                docker="docker",
+                directory=Path(temporary) / "private",
+            )
+            with patch.dict(
+                provisioning.os.environ, {"OMP_ACCEPTANCE_FIXTURES": "true"}
+            ), patch.object(
+                provisioning.subprocess, "check_output"
+            ) as execute, patch.object(
+                provisioning, "build_opener"
+            ) as opener:
+                with self.assertRaises(ValueError):
+                    provisioning.prepare(arguments)
+                execute.assert_not_called()
+                opener.assert_not_called()
+                arguments.project = "omp-operations-123456"
+                items = [
+                    {
+                        "Config": {
+                            "Labels": {
+                                "com.omp.acceptance": "operations",
+                                "com.docker.compose.service": name,
+                            },
+                            "Env": ["PAYMENT_PROVIDER=stripe"],
+                        }
+                    }
+                    for name in ("keycloak", "payment-service", "traefik")
+                ]
+                execute.side_effect = ["owned\n", json.dumps(items)]
+                with self.assertRaisesRegex(ValueError, "external charges"):
+                    provisioning.prepare(arguments)
+                opener.assert_not_called()
+                items[0]["Config"]["Labels"]["com.omp.acceptance"] = "foreign"
+                execute.side_effect = ["owned\n", json.dumps(items)]
+                with self.assertRaisesRegex(ValueError, "unowned"):
+                    provisioning.prepare(arguments)
+                opener.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

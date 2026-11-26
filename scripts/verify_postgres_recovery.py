@@ -227,6 +227,18 @@ class Recovery:
         )
         self.report["backupLabel"] = info[0]["backup"][-1]["label"]
         assert info[0]["cipher"] == "aes-256-cbc"
+        # Backup selection compares whole-second stop times strictly before the target.
+        # Fast CI hosts can otherwise create a valid WAL marker in the same recorded second.
+        stopped = int(info[0]["backup"][-1]["timestamp"]["stop"])
+        self.wait(
+            lambda: self.sql(
+                "postgres",
+                "SELECT clock_timestamp() > to_timestamp(" + str(stopped + 1) + ")",
+            )
+            == "t",
+            5,
+        )
+        self.report["backupStoppedAtEpoch"] = stopped
         # This committed update exists only in WAL after the full backup.
         self.sql(
             "postgres",

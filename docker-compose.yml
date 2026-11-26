@@ -351,7 +351,7 @@ services:
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
       # OpenTelemetry Collector for trace export.
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       # Inherits env=dev from the parent. Overridden to `prod` in the
       # prod overlay.
@@ -416,7 +416,7 @@ services:
       OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
     networks:
@@ -477,6 +477,8 @@ services:
       otel-collector:
         condition: service_started
     environment:
+      # Keep native buffers, stacks and JIT code within the 512 MiB service limit.
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m
       GRPC_CERTIFICATE_RELOAD_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: local
 
@@ -491,7 +493,7 @@ services:
       PRODUCT_SERVICE_URL: http://product-service:8081
       CUSTOMER_SERVICE_URL: http://customer-service:8082
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
     networks:
@@ -570,7 +572,7 @@ services:
       ORDER_SERVICE_URL: http://order-service:8083
 
       # Observability
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
     networks:
       - edge
@@ -650,7 +652,7 @@ services:
       OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
 
       NOTIFICATION_SERVICE_DB_PASSWORD: ${NOTIFICATION_SERVICE_DB_PASSWORD:-local-dev-notifications-password}
@@ -730,7 +732,7 @@ services:
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
       # OpenTelemetry Collector for trace export.
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
       # Metrics environment label.
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
@@ -816,7 +818,7 @@ services:
       OIDC_ISSUER_URI: http://keycloak.localhost/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
 
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PROMETHEUS_ENV: ${PROMETHEUS_ENV:-dev}
 
       GRPC_PORT: "9093"

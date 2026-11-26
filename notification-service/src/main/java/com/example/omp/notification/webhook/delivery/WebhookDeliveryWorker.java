@@ -154,6 +154,15 @@ public class WebhookDeliveryWorker {
             return;
         }
 
+        String rawBody;
+        try {
+            rawBody = buildPayload(message, sub);
+        } catch (com.example.omp.notification.webhook.WebhookEventOwnership.Denied denied) {
+            dlqService.persist(message, "EVENT_OWNERSHIP_DENIED", "FAILED_PERMANENT");
+            metrics.recordDelivery(message.eventType(), "failed_permanent");
+            return;
+        }
+
         if (!sub.isEnabled()) {
             log.info("Subscription {} is disabled; DLQ-ing delivery {}", sub.getId(), deliveryId);
             WebhookDeliveryAttempt attempt =
@@ -164,7 +173,7 @@ public class WebhookDeliveryWorker {
                             null,
                             null,
                             "Subscription disabled",
-                            buildPayload(message, sub),
+                            rawBody,
                             null);
             dlqService.persist(message, "SUBSCRIPTION_DISABLED", "FAILED_PERMANENT");
             metrics.recordDelivery(message.eventType(), "failed_permanent");
@@ -172,7 +181,6 @@ public class WebhookDeliveryWorker {
         }
 
         long timestampSeconds = Instant.now().getEpochSecond();
-        String rawBody = buildPayload(message, sub);
         String signature = signer.sign(sub.getSecret(), timestampSeconds, rawBody);
 
         Map<String, String> headers =
@@ -284,11 +292,15 @@ public class WebhookDeliveryWorker {
                         jdbc.queryForList(
                                 "SELECT payload::text AS payload,occurred_at FROM webhook_event_payload WHERE event_id=?",
                                 message.eventId());
+                var data =
+                        source.isEmpty()
+                                ? null
+                                : objectMapper.readTree((String) source.getFirst().get("payload"));
+                if (!com.example.omp.notification.webhook.WebhookEventOwnership.allows(sub, data))
+                    throw new com.example.omp.notification.webhook.WebhookEventOwnership.Denied();
                 if (source.isEmpty()) envelope.put("data", Map.of("eventId", message.eventId()));
                 else {
-                    envelope.put(
-                            "data",
-                            objectMapper.readTree((String) source.getFirst().get("payload")));
+                    envelope.put("data", data);
                     envelope.put(
                             "occurredAt",
                             ((java.sql.Timestamp) source.getFirst().get("occurred_at"))
@@ -298,6 +310,8 @@ public class WebhookDeliveryWorker {
             }
 
             return objectMapper.writeValueAsString(envelope);
+        } catch (com.example.omp.notification.webhook.WebhookEventOwnership.Denied denied) {
+            throw denied;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize webhook payload", e);
         }

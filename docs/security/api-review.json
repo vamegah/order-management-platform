@@ -1230,6 +1230,15 @@
         "shared/events/src/test/java/com/example/omp/shared/events/EventTracingTest.java",
         "shared/grpc/src/test/java/com/example/omp/shared/grpc/GrpcTraceLifecycleTest.java"
       ]
+    },
+    {
+      "id": "API-008",
+      "remediation": "Filter customer webhook interests by the canonical event customer, and recheck persisted payload ownership before queued delivery; missing owner information fails closed. Administrator event streams retain their reviewed global scope.",
+      "tests": [
+        "notification-service/src/test/java/com/example/omp/notification/webhook/matcher/WebhookEventTypesTest.java",
+        "notification-service/src/test/java/com/example/omp/notification/webhook/delivery/WebhookDeliveryWorkerTest.java",
+        "platform-tests/src/test/java/com/example/omp/tests/system/PaymentToWebhookIT.java"
+      ]
     }
   ],
   "residualRisks": []

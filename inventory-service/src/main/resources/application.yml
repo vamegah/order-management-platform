@@ -148,8 +148,8 @@ management.opentelemetry:
   tracing:
     export:
       otlp:
-        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
-        transport: grpc
+        endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4318/v1/traces}
+        transport: http
   resource-attributes:
     service.name: ${spring.application.name}
     service.namespace: omp

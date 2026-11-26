@@ -298,7 +298,7 @@ class Monitoring:
             span(ids["error"], "controlled.error", 2),
             span(ids["slow"], "controlled.slow", 1, 1500),
         ]
-        normals = [secrets.token_hex(16) for _ in range(40)]
+        normals = [secrets.token_hex(16) for _ in range(200)]
         spans += [span(trace, "controlled.normal") for trace in normals]
         self.request(
             self.collector + "/v1/traces",
@@ -328,11 +328,25 @@ class Monitoring:
             assert "acceptance-do-not-retain" not in json.dumps(
                 found[name]
             ), "Sensitive tracing attribute was retained"
-        # Errors and slow traces are deterministic; normal sampling is intentionally statistical.
+        # A large cohort proves baseline sampling retains some and drops some without a flaky exact-count assertion.
+        retained = 0
+        for trace in normals:
+            try:
+                data = self.request(self.tempo + "/api/traces/" + trace)
+            except HTTPError as error:
+                if error.code == 404:
+                    continue
+                raise
+            assert "acceptance-do-not-retain" not in json.dumps(data)
+            retained += 1
+        assert (
+            0 < retained < len(normals)
+        ), "Normal trace retention is disabled or unbounded"
         return {
             "errorRetained": True,
             "slowRetained": True,
             "normalInputs": len(normals),
+            "normalRetained": retained,
             "sensitiveAttributeRemoved": True,
         }
 

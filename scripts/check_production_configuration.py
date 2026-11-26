@@ -36,6 +36,33 @@ def check_model(model, lock):
             if "omp-api" not in audience.split(","):
                 raise PolicyError("Public JWT audience is not enforced: " + name)
     for name in SERVICES - {"postgres"}:
+        runtime = model["services"][name]
+        if (
+            runtime.get("user") != "1000:2000"
+            or runtime.get("read_only") is not True
+            or "ALL" not in runtime.get("cap_drop", [])
+            or runtime.get("cap_add")
+        ):
+            raise PolicyError(
+                "Application runtime privilege bounds are missing: " + name
+            )
+        options = runtime.get("environment", {}).get("JAVA_TOOL_OPTIONS", "")
+        if not all(
+            flag in options.split()
+            for flag in (
+                "-Xmx256m",
+                "-Xss512k",
+                "-XX:ReservedCodeCacheSize=64m",
+                "-XX:MaxDirectMemorySize=64m",
+            )
+        ):
+            raise PolicyError(
+                "Application heap and native memory budgets are missing: " + name
+            )
+        tracing = runtime.get("environment", {})
+        if (tracing.get("OTEL_EXPORTER_OTLP_ENDPOINT") != "http://otel-collector:4318"
+                or tracing.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "http://otel-collector:4318/v1/traces"):
+            raise PolicyError("OTLP base and signal endpoints must not duplicate the signal path: " + name)
         if str(
             model["services"][name].get("environment", {}).get("TRACING_SAMPLE_RATE")
         ) not in ("1", "1.0"):
@@ -68,6 +95,7 @@ def check_model(model, lock):
         "lockedRuntimeImages": len(lock),
         "privateManagement": True,
         "rotatingMtls": True,
+        "boundedJavaMemory": True,
     }
 
 

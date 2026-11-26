@@ -100,7 +100,7 @@ export function checkout() {
   // Every prepared captured payment is used at most once; fixture preparation owns the exact budget.
   const payment = data.refundPayments[execution.scenario.iterationInTest];
   if (payment && record(http.post(`${base}/api/v1/payments/${payment.id}/refunds`, JSON.stringify({ amountMinor: payment.amountMinor,
-      idempotencyKey: `operations-refund-${payment.id}`, reason: 'isolated load' }), { ...params('POST refund'), headers: { ...params('').headers,
+      idempotencyKey: `operations-refund-${payment.id}`, reason: 'isolated load' }), { ...params('POST refund'), headers: { ...params('POST refund').headers,
       'Idempotency-Key': `operations-refund-${payment.id}` } }), [200,201,202], 'refund accepted')) refundSamples.add(1);
 }
 export function handleSummary(value) {

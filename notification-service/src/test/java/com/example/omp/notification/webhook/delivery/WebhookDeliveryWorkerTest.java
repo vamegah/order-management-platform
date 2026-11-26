@@ -53,6 +53,8 @@ class WebhookDeliveryWorkerTest {
                         any(Object.class)))
                 .thenReturn(true);
         sub.setId(UUID.randomUUID());
+        sub.setOwnerType(SubscriptionOwnerType.ADMIN);
+        sub.setOwnerId(UUID.randomUUID());
         sub.setTargetUrl("https://subscriber.example/hook");
         sub.setSecret("abcdefghijklmnopqrstuvwxyz0123456789");
         when(lookup.findById(sub.getId())).thenReturn(Optional.of(sub));
@@ -67,6 +69,45 @@ class WebhookDeliveryWorkerTest {
     void deliver(int attempt, DeliveryResult result) throws Exception {
         when(http.post(eq(sub.getTargetUrl()), anyString(), anyMap())).thenReturn(result);
         worker.onDelivery(mapper.writeValueAsString(message(attempt)));
+    }
+
+    @Test
+    void queuedForeignOrOwnerlessEventsAreQuarantinedBeforeAnyHttpPost() throws Exception {
+        sub.setOwnerType(SubscriptionOwnerType.CUSTOMER);
+        for (String payload :
+                List.of(
+                        "{}",
+                        "{\"customerId\":\"" + UUID.randomUUID() + "\"}",
+                        "{\"customerId\":42}")) {
+            when(jdbc.queryForList(startsWith("SELECT payload::text"), any(Object.class)))
+                    .thenReturn(
+                            List.of(
+                                    Map.of(
+                                            "payload",
+                                            payload,
+                                            "occurred_at",
+                                            java.sql.Timestamp.from(java.time.Instant.now()))));
+            worker.onDelivery(mapper.writeValueAsString(message(1)));
+        }
+        verify(dlq, times(3)).persist(message(1), "EVENT_OWNERSHIP_DENIED", "FAILED_PERMANENT");
+        verifyNoInteractions(http, retries);
+        verify(attempts, never()).save(any());
+    }
+
+    @Test
+    void queuedOwnedEventPreservesCustomerDataAndDelivers() throws Exception {
+        sub.setOwnerType(SubscriptionOwnerType.CUSTOMER);
+        when(jdbc.queryForList(startsWith("SELECT payload::text"), any(Object.class)))
+                .thenReturn(
+                        List.of(
+                                Map.of(
+                                        "payload",
+                                        "{\"customerId\":\"" + sub.getOwnerId() + "\"}",
+                                        "occurred_at",
+                                        java.sql.Timestamp.from(java.time.Instant.now()))));
+        deliver(1, DeliveryResult.success(204, ""));
+        assertThat(recorded.getStatus()).isEqualTo(DeliveryStatus.SUCCESS);
+        verifyNoInteractions(dlq, retries);
     }
 
     @Test

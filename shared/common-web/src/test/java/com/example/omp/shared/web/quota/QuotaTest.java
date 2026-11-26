@@ -211,7 +211,18 @@ class QuotaTest {
                 .isEqualTo(QuotaPolicy.EXPENSIVE);
         assertThat(QuotaFilter.policy(request("POST", "/api/v1/orders/checkout")))
                 .isEqualTo(QuotaPolicy.EXPENSIVE);
-        assertThat(QuotaFilter.policy(request("POST", "/api/v1/orders")))
+        for (String path :
+                List.of(
+                        "/api/v1/orders",
+                        "/api/v1/payments",
+                        "/api/v1/orders/id/cancel",
+                        "/api/v1/orders/id/ship",
+                        "/api/v1/orders/id/place",
+                        "/api/v1/orders/id/confirm",
+                        "/api/v1/orders/id/deliver",
+                        "/api/v1/payments/id/confirm"))
+            assertThat(QuotaFilter.policy(request("POST", path))).isEqualTo(QuotaPolicy.EXPENSIVE);
+        assertThat(QuotaFilter.policy(request("POST", "/api/v1/products")))
                 .isEqualTo(QuotaPolicy.WRITE);
         assertThat(QuotaFilter.policy(request("HEAD", "/api/v1/products")))
                 .isEqualTo(QuotaPolicy.READ);
@@ -429,6 +440,49 @@ class QuotaTest {
                     request(method, "/api/v1/products"),
                     new MockHttpServletResponse(),
                     (a, b) -> {});
+    }
+
+    @Test
+    void namedManagedCredentialInitializesAndClosesWithoutOpeningANetworkConnection(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path temporary) throws Exception {
+        var password = temporary.resolve("redis-password");
+        java.nio.file.Files.writeString(password, "isolated-unit-credential");
+        var client = org.mockito.Mockito.mock(io.lettuce.core.RedisClient.class);
+        try (var factory = org.mockito.Mockito.mockStatic(io.lettuce.core.RedisClient.class)) {
+            factory.when(
+                            () ->
+                                    io.lettuce.core.RedisClient.create(
+                                            org.mockito.ArgumentMatchers.any(
+                                                    io.lettuce.core.RedisURI.class)))
+                    .thenReturn(client);
+            try (var store =
+                    new RedisQuotaStore(
+                            new QuotaProperties(
+                                    true,
+                                    "test",
+                                    "localhost",
+                                    6379,
+                                    "quota",
+                                    password,
+                                    false,
+                                    Duration.ofMillis(250),
+                                    16,
+                                    1))) {
+                var uri = org.mockito.ArgumentCaptor.forClass(io.lettuce.core.RedisURI.class);
+                factory.verify(() -> io.lettuce.core.RedisClient.create(uri.capture()));
+                var credentials =
+                        uri.getValue()
+                                .getCredentialsProvider()
+                                .resolveCredentials()
+                                .block(Duration.ofSeconds(1));
+                assertThat(credentials).isNotNull();
+                assertThat(credentials.getUsername()).isEqualTo("quota");
+                assertThat(credentials.getPassword())
+                        .containsExactly("isolated-unit-credential".toCharArray());
+                org.mockito.Mockito.verify(client, org.mockito.Mockito.never()).connect();
+            }
+            org.mockito.Mockito.verify(client).shutdown();
+        }
     }
 
     private static MockHttpServletRequest request(String method, String path) {

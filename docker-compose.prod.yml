@@ -100,10 +100,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -179,10 +180,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -258,10 +260,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -355,10 +358,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -453,10 +457,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -559,10 +564,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -655,10 +661,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -726,10 +733,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'
@@ -807,10 +815,11 @@ services:
     environment: !override
       SPRING_PROFILES_ACTIVE: prod
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx256m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError
       OIDC_ISSUER_URI: https://auth.${OMP_DOMAIN:?Set domain}/realms/omp
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/omp/protocol/openid-connect/certs
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_TRANSPORT: http
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       TRACING_SAMPLE_RATE: '1.0'

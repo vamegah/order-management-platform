@@ -109,6 +109,17 @@ public final class QuotaFilter extends OncePerRequestFilter {
         if (path.equals("/graphql")) return QuotaPolicy.GRAPHQL;
         if (path.equals("/ws") || path.startsWith("/ws/")) return QuotaPolicy.HANDSHAKE;
         if (path.startsWith("/api/v1/payments/webhooks/")) return QuotaPolicy.WEBHOOK;
+        if ("POST".equals(request.getMethod())
+                && (path.equals("/api/v1/orders")
+                        || path.equals("/api/v1/payments")
+                        || (path.startsWith("/api/v1/payments/") && path.endsWith("/confirm"))
+                        || (path.startsWith("/api/v1/orders/")
+                                && (path.endsWith("/place")
+                                        || path.endsWith("/confirm")
+                                        || path.endsWith("/ship")
+                                        || path.endsWith("/deliver")
+                                        || path.endsWith("/cancel")))))
+            return QuotaPolicy.EXPENSIVE;
         if (path.contains("/admin/")
                 || path.contains("/replay")
                 || path.contains("/census")

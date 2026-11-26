@@ -133,7 +133,7 @@ def execute(args):
             "--label",
             "com.omp.task=section7",
             "--network",
-            args.project + "_app",
+            args.project + "_edge",
         ]
         for source, target, readonly in (
             (ROOT / "scripts/performance", "/scripts", True),
@@ -176,9 +176,46 @@ def execute(args):
         summary = json.loads(summary_path.read_text()) if summary_path.is_file() else {}
         metrics = summary.get("metrics", {})
         requests = metrics.get("http_reqs", {}).get("values", {}).get("count", 0)
+        # Inspect only counts; a load run cannot pass after corrupting stock or accepted references.
+        database = next(
+            item["Id"]
+            for item in containers
+            if item["Config"]["Labels"].get("com.docker.compose.service") == "postgres"
+        )
+        invariant_result = subprocess.run(
+            [
+                args.docker,
+                "exec",
+                "-i",
+                database,
+                "psql",
+                "-XAtq",
+                "--set=ON_ERROR_STOP=1",
+                "-U",
+                "omp_admin",
+                "-d",
+                "omp",
+            ],
+            input=(ROOT / "scripts/operations/verify-conservation.sql").read_text(
+                encoding="utf-8"
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+        )
+        invariants = {}
+        if invariant_result.returncode == 0:
+            for line in invariant_result.stdout.splitlines():
+                key, value = line.rsplit("|", 1)
+                invariants[key] = int(value)
+        conservation = len(invariants) == 4 and all(
+            value == 0 for value in invariants.values()
+        )
         minimum = 1200 if name == "load" else 6000
         passed = (
             result.returncode == 0
+            and conservation
             and requests >= minimum
             and bool(metrics)
             and all(
@@ -192,6 +229,8 @@ def execute(args):
             "passed": passed,
             "seconds": round(time.monotonic() - started, 2),
             "httpRequests": requests,
+            "invariants": invariants,
+            "conservationPassed": conservation,
             "summarySha256": hashlib.sha256(summary_path.read_bytes()).hexdigest()
             if summary_path.is_file()
             else None,
