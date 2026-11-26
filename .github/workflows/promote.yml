@@ -63,9 +63,8 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
-        with:
-          cosign-release: v3.1.5
+      - name: Install the signing tool from its reviewed image digest
+        run: python scripts/install_cosign.py --directory "$RUNNER_TEMP/omp-cosign"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io

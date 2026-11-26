@@ -57,6 +57,12 @@ services:
     labels:
       com.omp.acceptance: operations
   graphql-gateway:
+    # Match the other e2e services' cold-start probe budget; the 600 s stack deadline remains.
+    healthcheck:
+      start_period: 180s
+      retries: 20
+      interval: 10s
+      timeout: 5s
     environment:
       TRACING_SAMPLE_RATE: "1.0"
       JAVA_TOOL_OPTIONS: -XX:+UseG1GC -Xms64m -Xmx192m -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m

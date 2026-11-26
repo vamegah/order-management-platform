@@ -77,6 +77,18 @@ try{
   const rest=await api('order-service.localhost','/api/v1/orders/'+order,'GET',undefined,alice,true);assert.equal(rest.response.status,200);assert.ok(rest.data.paymentId&&rest.data.lines.every(l=>l.reservationId));
   console.log(JSON.stringify({stage:'checkout-accepted'}));
   const receipt=await until(()=>receipts.find(r=>r.body.data?.orderId===order));await until(()=>hints.some(h=>JSON.stringify(h).includes(order)));
+  report.traceCorrelation={expectedTraceId:trace,deliveredTraceId:receipt.traceparent?.split('-')[1]};
+  assert.match(order,/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  report.traceCorrelation.persistedOrderTraceparent=run(['exec',catalogue.get('postgres').Id,'psql','-XAtq','--set=ON_ERROR_STOP=1','-U','omp_admin','-d','omp','-c',`SELECT payload->>'traceparent' FROM orders.outbox_event WHERE aggregate_id='${order}' AND event_type IN ('ORDER_CREATED','order.created') LIMIT 1`]).trim();
+
+  if(report.traceCorrelation.deliveredTraceId!==trace){
+    await wait(20000);report.propagationDiagnostics=[];
+    for(const id of new Set([trace,report.traceCorrelation.deliveredTraceId])){
+      const response=await request(tempo+'/api/traces/'+id);
+      const data=response.status===200?await response.json():null;
+      report.propagationDiagnostics.push({traceId:id,status:response.status,services:data?[...serviceNames(data)]:[],spans:data?spansOf(data).map(span=>({name:span.name,spanId:span.spanId??span.spanID,parentSpanId:span.parentSpanId??span.parentSpanID})):[]});
+    }
+  }
   assert.match(receipt.traceparent,new RegExp('^00-'+trace+'-[0-9a-f]{16}-01$'));
   report.phases.push({name:'graphql-rest-grpc-kafka-websocket-webhook',passed:true,durableReferences:true,ownedHint:true,signedWebhook:true,traceparentForwarded:true});
   // The client observation includes an actual bounded settlement window, ensuring deterministic slow-trace retention.

@@ -77,13 +77,13 @@ export function browse() {
     ? http.post(`${base}/graphql`, JSON.stringify({ query: '{ products(size: 10) { content { id name } } }' }), request)
     : http.get(`${base}/api/v1/products?size=10`, request);
   const accepted = record(response, [200], 'catalog available');
-  if (accepted && !graphql) readSamples.add(1);
+  if (accepted && !graphql && execution.scenario.name === 'reads') readSamples.add(1);
   if (accepted && graphql) {
     const body = response.json();
     const valid = !body.errors && Array.isArray(body.data?.products?.content);
     unexpected.add(!valid);
     check(body, { 'GraphQL aggregate has no errors': () => valid });
-    if (valid) readSamples.add(1);
+    if (valid && execution.scenario.name === 'reads') readSamples.add(1);
   }
   if (execution.scenario.name === 'warmup') sleep(1);
 }

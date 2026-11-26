@@ -24,7 +24,9 @@
     "maximumBacklogDrainSeconds": 120,
     "maximumAlertDeliverySeconds": 45,
     "maximumQuotaOutageDecisionMs": 2000,
-    "maximumCollectorRecoverySeconds": 60
+    "maximumCollectorRecoverySeconds": 60,
+    "maximumDownstreamHttpFailureMs": 5000,
+    "maximumDownstreamHttpRecoverySeconds": 20
   },
   "invariants": [
     "No duplicate charge, refund, reservation, transfer or durable history identity",

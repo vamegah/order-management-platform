@@ -13,7 +13,7 @@ public final class EventTracing {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
             EventSerde.buildObjectMapper();
     private static final java.util.regex.Pattern PARENT =
-            java.util.regex.Pattern.compile("00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]");
+            java.util.regex.Pattern.compile("00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}");
     private Tracer tracer;
     private Propagator propagator;
 

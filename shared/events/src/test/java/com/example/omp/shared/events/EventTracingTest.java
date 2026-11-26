@@ -23,6 +23,12 @@ class EventTracingTest {
                         "00-" + "0".repeat(32) + "-0123456789abcdef-01",
                         "00-0123456789abcdef0123456789abcdef-" + "0".repeat(16) + "-01",
                         PARENT + "secret")) assertThat(EventTracing.validated(invalid)).isNull();
+        // W3C flags include sampled and random bits; unknown bits must not invalidate an ID.
+        for (String flags : java.util.List.of("00", "01", "02", "03", "ff")) {
+            String parent = PARENT.substring(0, 53) + flags;
+            assertThat(EventTracing.validated(parent)).isEqualTo(parent);
+            assertThat(tracing.parent("{\"traceparent\":\"" + parent + "\"}")).isEqualTo(parent);
+        }
         assertThat(tracing.parent("malformed")).isNull();
         assertThat(tracing.parent("x".repeat(262145))).isNull();
         assertThat(tracing.parent(null)).isNull();

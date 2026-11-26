@@ -16,6 +16,7 @@ import com.example.omp.testsupport.TestRetryScheduler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
@@ -125,8 +126,8 @@ class PaymentToWebhookIT {
             assertThat(registration.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             String foreignId = (String) registration.getBody().get("id");
             var payment = charge(101L, UUID.randomUUID().toString());
-            assertThat(payment.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-            awaitDelivery("payment.confirmed", (String) payment.getBody().get("id"), 1);
+            assertThat(payment.getStatusCode()).isEqualTo(HttpStatus.OK);
+            awaitDelivery("payment.confirmed", (String) payment.getBody().get("paymentId"), 1);
             assertThat(
                             notificationJdbc.queryForObject(
                                     "SELECT count(*) FROM notifications.notification_dispatch WHERE transport='KAFKA' AND payload::jsonb->>'subscriptionId'=?",

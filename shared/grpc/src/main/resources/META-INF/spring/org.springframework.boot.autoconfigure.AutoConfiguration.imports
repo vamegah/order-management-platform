@@ -4,3 +4,4 @@ com.example.omp.shared.grpc.GrpcMetricsOrderingAutoConfiguration
 com.example.omp.shared.grpc.GrpcChannelHealthAutoConfiguration
 
 com.example.omp.shared.grpc.GrpcTracingAutoConfiguration
+com.example.omp.shared.grpc.GrpcObservationCompatibilityAutoConfiguration

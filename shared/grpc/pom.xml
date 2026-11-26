@@ -12,6 +12,11 @@
     <name>OMP gRPC Boot integration</name>
     <description>Authentication, health and metrics integration for the existing gRPC transport.</description>
     <dependencies>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <!-- The exposed gRPC API requires these helper types during complete bytecode analysis. -->
         <dependency><groupId>com.google.guava</groupId><artifactId>guava</artifactId><scope>provided</scope></dependency>
         <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-tracing</artifactId></dependency>

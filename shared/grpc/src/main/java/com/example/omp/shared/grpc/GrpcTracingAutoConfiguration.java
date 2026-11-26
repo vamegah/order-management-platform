@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 
 @AutoConfiguration(
         afterName =
@@ -18,7 +19,7 @@ public class GrpcTracingAutoConfiguration {
     static class Client {
         @Bean
         @net.devh.boot.grpc.client.interceptor.GrpcGlobalClientInterceptor
-        GrpcTraceInterceptors ompClientTracing(Tracer tracer, Propagator propagator) {
+        GrpcTraceInterceptors ompClientTracing(@Lazy Tracer tracer, @Lazy Propagator propagator) {
             return new GrpcTraceInterceptors(tracer, propagator);
         }
     }
@@ -28,7 +29,7 @@ public class GrpcTracingAutoConfiguration {
     static class Server {
         @Bean
         @net.devh.boot.grpc.server.interceptor.GrpcGlobalServerInterceptor
-        GrpcTraceInterceptors ompServerTracing(Tracer tracer, Propagator propagator) {
+        GrpcTraceInterceptors ompServerTracing(@Lazy Tracer tracer, @Lazy Propagator propagator) {
             return new GrpcTraceInterceptors(tracer, propagator);
         }
     }
