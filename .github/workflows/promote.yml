@@ -70,18 +70,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Install the digest-pinned scanner
-        shell: bash
-        run: |
-          set -euo pipefail
-          image=$(python3 -c 'import json; print(json.load(open("infrastructure/release/images.lock.json"))["toolsAndBases"]["aquasec/trivy:0.76.2"])')
-          tools="$RUNNER_TEMP/omp-release-tools"
-          mkdir -p "$tools"
-          container=$(docker create "$image")
-          trap 'docker rm "$container" >/dev/null' EXIT
-          docker cp "$container:/usr/local/bin/trivy" "$tools/trivy"
-          chmod 755 "$tools/trivy"
-          echo "$tools" >> "$GITHUB_PATH"
+      - name: Install the scanner from its reviewed image digest
+        run: python scripts/install_trivy.py --directory "$RUNNER_TEMP/omp-trivy"
       - name: Verify signed inputs before checking out deployment configuration
         env:
           GH_TOKEN: ${{ github.token }}

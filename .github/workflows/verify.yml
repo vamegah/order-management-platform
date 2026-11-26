@@ -738,22 +738,18 @@ jobs:
           --output type=docker,rewrite-timestamp=true
           --build-arg SOURCE_DATE_EPOCH="$SOURCE_EPOCH"
           --file product-service/Dockerfile --tag omp/product-service:reproduced .
-      - name: Scan the actual runtime image without unfixed-vulnerability exceptions
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.76.2
-          cache-dir: ${{ runner.temp }}/omp-trivy-cache
-          image-ref: omp/${{ matrix.service }}:verification
-          format: json
-          output: coverage/operations/release/${{ matrix.service }}/scan.json
-          exit-code: '1'
-          severity: HIGH,CRITICAL
-          scanners: vuln
-          ignore-unfixed: false
+      - name: Install the scanner from its reviewed image digest
+        run: python scripts/install_trivy.py --directory "$RUNNER_TEMP/omp-trivy"
+      - name: Scan the actual runtime image without inherited exceptions
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          image=$(docker image inspect --format '{{.Id}}' "omp/$SERVICE:verification")
+          python scripts/release_scanning.py "$image" --output "coverage/operations/release/$SERVICE/scan.json"
       - name: Inventory actual runtime components
         env:
           SERVICE: ${{ matrix.service }}
-        run: trivy image --scanners vuln --format cyclonedx --output "coverage/operations/release/$SERVICE/sbom.json" "omp/$SERVICE:verification"
+        run: trivy image --config "" --ignorefile "" --scanners vuln --format cyclonedx --output "coverage/operations/release/$SERVICE/sbom.json" "omp/$SERVICE:verification"
       - name: Install the signing tool from its reviewed image digest
         run: python scripts/install_cosign.py --directory "$RUNNER_TEMP/omp-cosign"
       - name: Verify keyless signing and deny tampering or foreign identities

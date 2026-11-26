@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "scope": "isolated scanner and rejected deployment preflight",
+  "pinnedScannerInstalled": {
+    "installed": true,
+    "sourceImage": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
+  },
+  "inheritedFiltersRejected": true,
+  "knownBadInfrastructureDenied": true,
+  "highCriticalOccurrences": 2,
+  "cleanApplicationScan": true,
+  "cleanApplicationImageId": "sha256:24f3169ea451641738b1a06ab97e2cc094ef2e58c295d270f1b85795b16d19bd",
+  "acceptedPointerPreserved": true,
+  "noPendingDeploymentCreated": true,
+  "deploymentExecuted": false,
+  "vendorPatchHoldPreserved": true,
+  "recordedAt": "2026-11-26",
+  "releaseReady": false,
+  "approvedScope": "isolated local acceptance; await upstream infrastructure fixes",
+  "evidenceSha256": {
+    "blocked-infrastructure-scan.json": "a4235dd96f030e520201a1a32d8dad9c99762500bb8d7042c83703706cc7dc7a",
+    "clean-application-scan.json": "4a85b6cdf12b587f401fe76522f8e8ee6afc28560ec67de5bf2e2a040ea7dedd"
+  },
+  "testedSourceSha256": {
+    "scripts/install_trivy.py": "de539c6881eade4e609180ea3841243397d8ced405cd3e1849a763aad0684536",
+    "scripts/release_scanning.py": "69240d7333694446970be07c0e1cddf6d3778268295fcf1fb110840873b1e3b5",
+    "scripts/promote_release.py": "798b85ceb101f461a401d7487f169869883d97b6a1c2af7438ae49aacee29b48"
+  }
+}
