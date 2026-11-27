@@ -81,23 +81,17 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-      - name: Reject high and critical image vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.76.2
-          cache-dir: ${{ runner.temp }}/omp-trivy-cache
-          image-ref: ${{ env.IMAGE }}@${{ steps.image.outputs.digest }}
-          format: json
-          output: release/${{ matrix.service }}-scan.json
-          exit-code: '1'
-          severity: HIGH,CRITICAL
-          scanners: vuln
-          ignore-unfixed: false
+      - name: Install the scanner from its reviewed image digest
+        run: python scripts/install_trivy.py --directory "$RUNNER_TEMP/omp-trivy"
+      - name: Reject high and critical image vulnerabilities without inherited exceptions
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: python scripts/release_scanning.py "$IMAGE@$IMAGE_DIGEST" --output "release/$SERVICE-scan.json"
       - name: Produce the exact image SBOM and build provenance
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          trivy image --format cyclonedx --scanners vuln --output "release/$SERVICE-sbom.json" "$IMAGE@$IMAGE_DIGEST"
+          trivy image --config "" --ignorefile "" --format cyclonedx --scanners vuln --output "release/$SERVICE-sbom.json" "$IMAGE@$IMAGE_DIGEST"
           python scripts/build_release_bundle.py image --service "$SERVICE" --image "$IMAGE@$IMAGE_DIGEST" --output release
       - name: Install the signing tool from its reviewed image digest
         run: python scripts/install_cosign.py --directory "$RUNNER_TEMP/omp-cosign"
@@ -144,18 +138,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Install the digest-pinned scanner
-        shell: bash
-        run: |
-          set -euo pipefail
-          image=$(python -c 'import json; print(json.load(open("infrastructure/release/images.lock.json"))["toolsAndBases"]["aquasec/trivy:0.76.2"])')
-          tools="$RUNNER_TEMP/omp-release-tools"
-          mkdir -p "$tools"
-          container=$(docker create "$image")
-          trap 'docker rm "$container" >/dev/null' EXIT
-          docker cp "$container:/usr/local/bin/trivy" "$tools/trivy"
-          chmod 755 "$tools/trivy"
-          echo "$tools" >> "$GITHUB_PATH"
+      - name: Install the scanner from its reviewed image digest
+        run: python scripts/install_trivy.py --directory "$RUNNER_TEMP/omp-trivy"
       - name: Scan locked infrastructure and assemble the immutable release
         run: python scripts/build_release_bundle.py assemble --output release
       - name: Sign and verify the manifest before publishing

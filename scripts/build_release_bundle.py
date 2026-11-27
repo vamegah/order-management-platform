@@ -3,6 +3,7 @@ import argparse, hashlib, json, os, re, subprocess
 from pathlib import Path
 from datetime import datetime, timezone
 from release_policy import SERVICES, DIGEST, TAG, validate_bundle
+from release_scanning import scan_image
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -151,24 +152,7 @@ def assemble(output):
         raise ValueError("Complete infrastructure digest lock required")
     for service, reference in infra.items():
         scan = output / (service + "-infrastructure-scan.json")
-        subprocess.run(
-            [
-                "trivy",
-                "image",
-                "--scanners",
-                "vuln",
-                "--severity",
-                "HIGH,CRITICAL",
-                "--exit-code",
-                "1",
-                "--format",
-                "json",
-                "--output",
-                str(scan),
-                reference,
-            ],
-            check=True,
-        )
+        scan_image(reference, scan)
     migrations, review = migration_compatibility()
     write(output / "migration-review.json", review)
     bundle = {

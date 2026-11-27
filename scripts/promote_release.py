@@ -12,6 +12,7 @@ import tempfile
 import time
 from release_policy import PolicyError, SERVICES, verify_signatures, render
 from check_production_configuration import check_model
+from release_scanning import scan_image
 
 
 def plan(current, target, action):
@@ -64,6 +65,92 @@ def plan(current, target, action):
         "databaseDowngrade": False,
         "statefulImageDowngrade": False,
     }
+
+
+def write_state(path, reference):
+    """Publish a complete, private state pointer atomically, including after a crash."""
+    descriptor, temporary = tempfile.mkstemp(prefix="." + path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(reference, stream)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        if os.name == "posix":
+            directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def apply_release(base, root, target, current, state, reference):
+    """Keep preflight rejection distinct from a deployment that might have changed data."""
+    pending = state / "pending.json"
+    started = time.monotonic()
+
+    def apply(*arguments, input=None):
+        result = subprocess.run(
+            [*base, *arguments],
+            cwd=root,
+            input=input,
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+        if result.returncode:
+            raise PolicyError(
+                "Deployment stage failed: "
+                + arguments[0]
+                + "; signed pending and previous release evidence are preserved"
+            )
+
+    with tempfile.TemporaryDirectory(prefix="omp-release-scans-", dir=state) as scans:
+        for index, image in enumerate(sorted(
+            {item["image"] for item in target["images"]}
+            | set(target["infrastructure"].values())
+        )):
+            scan_image(image, Path(scans) / (str(index) + ".json"))
+    # Checking the archive is mandatory before modifying an existing deployment.
+    if current:
+        apply(
+            "exec",
+            "-T",
+            "--user",
+            "70:2000",
+            "postgres",
+            "/usr/local/bin/omp-pgbackrest",
+            "check",
+        )
+    apply("pull", "--quiet")
+    write_state(pending, reference)
+    apply("stop", "--timeout", "30", "inventory-service", "payment-service")
+    apply("up", "-d", "--no-build", "--wait", "--wait-timeout", "600")
+    monitoring = (root / "infrastructure/postgres/monitoring.sql").read_text(
+        encoding="utf-8"
+    )
+    apply(
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-X",
+        "--set=ON_ERROR_STOP=1",
+        "-U",
+        "omp_admin",
+        "-d",
+        "omp",
+        "-f",
+        "-",
+        input=monitoring,
+    )
+    reference["seconds"] = round(time.monotonic() - started, 2)
+    write_state(state / "current.json", reference)
+    pending.unlink()
+    print(json.dumps({"accepted": True, **reference}))
 
 
 def main():
@@ -206,86 +293,7 @@ def main():
             "sourceRevision": target["sourceRevision"],
             "project": args.project,
         }
-        pending = state / "pending.json"
-        pending.write_text(json.dumps(reference), encoding="utf-8")
-        started = time.monotonic()
-
-        def apply(*arguments, input=None):
-            result = subprocess.run(
-                [*base, *arguments],
-                cwd=root,
-                input=input,
-                capture_output=True,
-                text=True,
-                timeout=900,
-            )
-            if result.returncode:
-                raise PolicyError(
-                    "Deployment stage failed: "
-                    + arguments[0]
-                    + "; signed pending and previous release evidence are preserved"
-                )
-
-        for image in sorted(
-            {item["image"] for item in target["images"]}
-            | set(target["infrastructure"].values())
-        ):
-            scanned = subprocess.run(
-                [
-                    "trivy",
-                    "image",
-                    "--scanners",
-                    "vuln",
-                    "--severity",
-                    "HIGH,CRITICAL",
-                    "--exit-code",
-                    "1",
-                    "--quiet",
-                    image,
-                ],
-                capture_output=True,
-                timeout=600,
-            )
-            if scanned.returncode:
-                raise PolicyError("An image failed the current vulnerability policy")
-        # Checking the archive is mandatory before modifying an existing deployment.
-        if current:
-            apply(
-                "exec",
-                "-T",
-                "--user",
-                "70:2000",
-                "postgres",
-                "/usr/local/bin/omp-pgbackrest",
-                "check",
-            )
-        apply("pull", "--quiet")
-        apply("stop", "--timeout", "30", "inventory-service", "payment-service")
-        apply("up", "-d", "--no-build", "--wait", "--wait-timeout", "600")
-        monitoring = (root / "infrastructure/postgres/monitoring.sql").read_text(
-            encoding="utf-8"
-        )
-        apply(
-            "exec",
-            "-T",
-            "postgres",
-            "psql",
-            "-X",
-            "--set=ON_ERROR_STOP=1",
-            "-U",
-            "omp_admin",
-            "-d",
-            "omp",
-            "-f",
-            "-",
-            input=monitoring,
-        )
-        reference["seconds"] = round(time.monotonic() - started, 2)
-        completed = state / "completed.json"
-        completed.write_text(json.dumps(reference), encoding="utf-8")
-        os.replace(completed, state / "current.json")
-        pending.unlink()
-        print(json.dumps({"accepted": True, **reference}))
+        apply_release(base, root, target, current, state, reference)
 
 
 if __name__ == "__main__":
